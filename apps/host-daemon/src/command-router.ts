@@ -67,6 +67,11 @@ interface CommandLifecycleTiming {
   totalMs: number;
 }
 
+interface CommandExecutionWarningInput {
+  command: HostDaemonCommand;
+  error: unknown;
+}
+
 type ReadCommandFetchedAt = (
   envelope: HostDaemonCommandEnvelope,
 ) => number | undefined;
@@ -106,6 +111,21 @@ function readCommandEnvironmentId(
     return command.environmentId;
   }
   return undefined;
+}
+
+function shouldWarnCommandExecutionFailure(
+  input: CommandExecutionWarningInput,
+): boolean {
+  if (isExpectedCommandDispatchError(input.error)) {
+    return false;
+  }
+  if (
+    input.command.type === "workspace.status" &&
+    getErrorCode(input.error) === "path_not_found"
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export class CommandRouter {
@@ -310,7 +330,12 @@ export class CommandRouter {
       };
     } catch (error) {
       const errorCode = getErrorCode(error);
-      if (!isExpectedCommandDispatchError(error)) {
+      if (
+        shouldWarnCommandExecutionFailure({
+          command: envelope.command,
+          error,
+        })
+      ) {
         this.logger.warn(
           {
             commandId: envelope.id,

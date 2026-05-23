@@ -7,13 +7,14 @@ import {
   type ClientTurnRequestId,
 } from "@bb/domain";
 import type { HostDaemonCommandResultReportWithoutSession } from "@bb/host-daemon-contract";
-import type {
-  CommitOptions,
-  CommitResult,
-  HostWorkspace,
-  ProvisionWorkspaceArgs,
-  SquashMergeOptions,
-  SquashMergeResult,
+import {
+  WorkspaceError,
+  type CommitOptions,
+  type CommitResult,
+  type HostWorkspace,
+  type ProvisionWorkspaceArgs,
+  type SquashMergeOptions,
+  type SquashMergeResult,
 } from "@bb/host-workspace";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CommandRouter } from "../../src/command-router.js";
@@ -366,6 +367,98 @@ describe("CommandRouter", () => {
         errorMessage: `Path does not exist: ${missingPath}`,
         ok: false,
         type: "host.read_file",
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("reports missing host relative file reads without warning", async () => {
+    const parentPath = await makeTempDir("bb-command-router-relative-file-");
+    const rootPath = path.join(parentPath, "STATUS");
+    const reportResult = vi.fn(async () => undefined);
+    const logger = createLogger();
+    const router = new CommandRouter({
+      dataDir: "/tmp/bb-test-data",
+      fetchProjectAttachment: unexpectedProjectAttachmentFetch,
+      reportResult,
+      runtimeManager: new RuntimeManager({
+        provisionWorkspace: async () => createFakeWorkspace("/tmp/env-1"),
+      }),
+      eventSink: noopEventSink,
+      threadStorageRootPath: "/tmp/bb-test-thread-storage",
+      logger,
+    });
+
+    await router.handleCommands([
+      {
+        id: "read-missing-relative-index",
+        cursor: 1,
+        command: {
+          type: "host.read_file_relative",
+          rootPath,
+          path: "index.html",
+          dotfiles: "deny",
+        },
+      },
+    ]);
+
+    expect(reportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandId: "read-missing-relative-index",
+        errorCode: "ENOENT",
+        errorMessage: "Path does not exist: index.html",
+        ok: false,
+        type: "host.read_file_relative",
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("reports missing workspace status paths without warning", async () => {
+    const parentPath = await makeTempDir("bb-command-router-workspace-");
+    const missingPath = path.join(parentPath, "missing-worktree");
+    const reportResult = vi.fn(async () => undefined);
+    const logger = createLogger();
+    const router = new CommandRouter({
+      dataDir: "/tmp/bb-test-data",
+      fetchProjectAttachment: unexpectedProjectAttachmentFetch,
+      reportResult,
+      runtimeManager: new RuntimeManager({
+        provisionWorkspace: async () => {
+          throw new WorkspaceError(
+            "path_not_found",
+            `Managed workspace path does not exist: ${missingPath}`,
+          );
+        },
+      }),
+      eventSink: noopEventSink,
+      threadStorageRootPath: "/tmp/bb-test-thread-storage",
+      logger,
+    });
+
+    await router.handleCommands([
+      {
+        id: "status-missing-workspace",
+        cursor: 1,
+        command: {
+          type: "workspace.status",
+          environmentId: "env-missing",
+          workspaceContext: {
+            workspacePath: missingPath,
+            workspaceProvisionType: "managed-worktree",
+          },
+          mergeBaseBranch: "main",
+        },
+      },
+    ]);
+
+    expect(reportResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandId: "status-missing-workspace",
+        errorCode: "path_not_found",
+        errorMessage: `Managed workspace path does not exist: ${missingPath}`,
+        ok: false,
+        type: "workspace.status",
       }),
     );
     expect(logger.warn).not.toHaveBeenCalled();

@@ -222,6 +222,19 @@ async function resolveReadablePath(
   return realResolvedPath;
 }
 
+async function resolveRootRelativeReadablePath(
+  args: ReadFileForTransportArgs,
+): Promise<string> {
+  try {
+    return await resolveReadablePath(args);
+  } catch (error) {
+    if (error instanceof CommandDispatchError && error.code === "ENOENT") {
+      throw createMissingTargetError(args.resultPath);
+    }
+    throw error;
+  }
+}
+
 /**
  * Read a file's contents at a specific git ref via `git cat-file`. Mirrors
  * `readFileForTransport`'s result shape (same caps, same utf-8/base64
@@ -353,7 +366,7 @@ export async function readRootRelativeFileForTransport(
     resultPath: relativePath.resultPath,
     rootPath: args.rootPath,
   };
-  const readablePath = await resolveReadablePath(readArgs);
+  const readablePath = await resolveRootRelativeReadablePath(readArgs);
   const stat = await fs
     .stat(readablePath)
     .catch((error: unknown) => throwMissingTargetOrRethrow(readArgs, error));

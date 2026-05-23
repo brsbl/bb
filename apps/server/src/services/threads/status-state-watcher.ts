@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { watch, type FSWatcher } from "chokidar";
@@ -87,12 +88,22 @@ interface StartStatusStateFileWatcherArgs {
   rootPath: string;
 }
 
+interface RelativeStatusDataPathArgs {
+  filePath: string;
+  rootPath: string;
+}
+
+interface IsIgnoredStatusDataWatchPathArgs extends RelativeStatusDataPathArgs {
+  stats?: Stats;
+}
+
 export interface StatusStateFileWatcher {
   close(): Promise<void>;
 }
 
 const STATUS_DATA_AWAIT_WRITE_FINISH_MS = 25;
 const STATUS_DATA_AWAIT_WRITE_POLL_MS = 10;
+const STATUS_DATA_WATCH_DEPTH = 2;
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -117,6 +128,46 @@ function isHiddenStatusDataFile(filePath: string): boolean {
   return path.basename(filePath).startsWith(".");
 }
 
+function relativeStatusDataWatchPath(
+  args: RelativeStatusDataPathArgs,
+): string | null {
+  const relativePath = path.relative(args.rootPath, args.filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+  return relativePath;
+}
+
+function isIgnoredStatusDataWatchPath(
+  args: IsIgnoredStatusDataWatchPathArgs,
+): boolean {
+  const relativePath = relativeStatusDataWatchPath(args);
+  if (relativePath === null) {
+    return true;
+  }
+  if (relativePath.length === 0) {
+    return false;
+  }
+  if (isHiddenStatusDataFile(args.filePath)) {
+    return true;
+  }
+
+  const parts = relativePath.split(path.sep);
+  if (parts.length === 1) {
+    return args.stats?.isFile() === true;
+  }
+  if (parts[1] !== STATUS_DATA_DIRECTORY_NAME) {
+    return true;
+  }
+  if (parts.length === 2) {
+    return false;
+  }
+  if (parts.length !== 3 || args.stats?.isDirectory() === true) {
+    return true;
+  }
+  return !args.filePath.endsWith(STATUS_DATA_FILE_EXTENSION);
+}
+
 function parseStatusDataFilePath(
   args: ParseStatusDataFilePathArgs,
 ): StatusDataFilePathParts | null {
@@ -127,12 +178,8 @@ function parseStatusDataFilePath(
     return null;
   }
 
-  const relativePath = path.relative(args.rootPath, args.filePath);
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath)
-  ) {
+  const relativePath = relativeStatusDataWatchPath(args);
+  if (relativePath === null || relativePath.length === 0) {
     return null;
   }
 
@@ -325,12 +372,11 @@ async function handleStatusDataFileUnlink(
 async function handleStatusDataDirectoryAdd(
   args: HandleStatusDataDirectoryAddArgs,
 ): Promise<void> {
-  const relativePath = path.relative(args.rootPath, args.dirPath);
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath)
-  ) {
+  const relativePath = relativeStatusDataWatchPath({
+    filePath: args.dirPath,
+    rootPath: args.rootPath,
+  });
+  if (relativePath === null || relativePath.length === 0) {
     return;
   }
 
@@ -454,8 +500,14 @@ export async function startStatusStateFileWatcher(
       stabilityThreshold: STATUS_DATA_AWAIT_WRITE_FINISH_MS,
       pollInterval: STATUS_DATA_AWAIT_WRITE_POLL_MS,
     },
+    depth: STATUS_DATA_WATCH_DEPTH,
     ignoreInitial: true,
-    ignored: isHiddenStatusDataFile,
+    ignored: (filePath, stats) =>
+      isIgnoredStatusDataWatchPath({
+        filePath,
+        rootPath: args.rootPath,
+        stats,
+      }),
   });
 
   watcher.on("addDir", (dirPath) => {

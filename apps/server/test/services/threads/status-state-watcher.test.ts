@@ -27,6 +27,10 @@ interface TestWatcherContext {
   watcher: Awaited<ReturnType<typeof startStatusStateFileWatcher>>;
 }
 
+interface CreateContextArgs {
+  precreateStatusDataDir: boolean;
+}
+
 interface AtomicWriteArgs {
   content: string;
   key: string;
@@ -47,6 +51,9 @@ interface WaitForBroadcastArgs {
 }
 
 const contexts: TestWatcherContext[] = [];
+const DEFAULT_CREATE_CONTEXT_ARGS: CreateContextArgs = {
+  precreateStatusDataDir: true,
+};
 
 function createMockSocket(): MockSocket {
   const messages: string[] = [];
@@ -78,11 +85,15 @@ function sha256Text(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-async function createContext(): Promise<TestWatcherContext> {
+async function createContext(
+  args: CreateContextArgs = DEFAULT_CREATE_CONTEXT_ARGS,
+): Promise<TestWatcherContext> {
   const rootPath = await fs.mkdtemp(path.join(tmpdir(), "bb-status-watch-"));
-  await fs.mkdir(path.join(rootPath, "thr_watch", "STATUS-data"), {
-    recursive: true,
-  });
+  if (args.precreateStatusDataDir) {
+    await fs.mkdir(path.join(rootPath, "thr_watch", "STATUS-data"), {
+      recursive: true,
+    });
+  }
   const hub = new NotificationHub();
   const socket = createMockSocket();
   const logger = createLogger();
@@ -172,6 +183,32 @@ describe("status state file watcher", () => {
         threadId: "thr_watch",
         key: "tasks",
         value: { done: false },
+        deleted: false,
+        previousValue: null,
+        previousValuePresent: false,
+        version: sha256Text(content),
+        writerClientId: null,
+        operationId: null,
+      },
+    );
+  });
+
+  it("broadcasts writes when the STATUS-data directory is created after startup", async () => {
+    const context = await createContext({ precreateStatusDataDir: false });
+    const content = canonicalizeStatusJson({ createdLate: true });
+    await writeStatusFile({
+      content,
+      key: "late",
+      rootPath: context.rootPath,
+      threadId: "thr_watch",
+    });
+
+    await expect(waitForBroadcast({ socket: context.socket })).resolves.toEqual(
+      {
+        type: "status-data.changed",
+        threadId: "thr_watch",
+        key: "late",
+        value: { createdLate: true },
         deleted: false,
         previousValue: null,
         previousValuePresent: false,
