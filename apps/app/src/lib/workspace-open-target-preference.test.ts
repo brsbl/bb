@@ -42,6 +42,27 @@ describe("resolvePreferredWorkspaceOpenTarget", () => {
         preferredTargetId: null,
         targets: [
           {
+            id: "default-app",
+            kind: "editor",
+            label: "Default App",
+          },
+          {
+            id: "finder",
+            kind: "file-browser",
+            label: "Finder",
+          },
+        ],
+      }),
+    ).toEqual({
+      id: "default-app",
+      kind: "editor",
+      label: "Default App",
+    });
+    expect(
+      resolvePreferredWorkspaceOpenTarget({
+        preferredTargetId: null,
+        targets: [
+          {
             id: "finder",
             kind: "file-browser",
             label: "Finder",

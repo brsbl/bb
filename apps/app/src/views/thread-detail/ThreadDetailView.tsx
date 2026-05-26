@@ -593,7 +593,9 @@ export function ThreadDetailView() {
     threadEnvironmentIsLocal,
   });
   const {
+    canOpenPreferredEditorTarget,
     canOpenPreferredTarget,
+    openPathInPreferredEditorTarget,
     openPathInPreferredTarget,
     openPathInTarget,
     preferredTarget,
@@ -1025,18 +1027,18 @@ export function ThreadDetailView() {
       : undefined;
   const handleOpenFileInEditor = buildOpenInEditorHandler({
     rootPath: localWorkspaceRootPath,
-    canOpenPreferredTarget,
-    openInPreferredTarget: openPathInPreferredTarget,
+    canOpenPreferredTarget: canOpenPreferredEditorTarget,
+    openInPreferredTarget: openPathInPreferredEditorTarget,
   });
   const handleOpenStorageFileInEditor = buildOpenInEditorHandler({
     rootPath: threadEnvironmentIsLocal ? threadStorageRootPath : null,
-    canOpenPreferredTarget,
-    openInPreferredTarget: openPathInPreferredTarget,
+    canOpenPreferredTarget: canOpenPreferredEditorTarget,
+    openInPreferredTarget: openPathInPreferredEditorTarget,
   });
   const handleOpenHostFileInEditor =
-    threadEnvironmentIsLocal && canOpenPreferredTarget
+    threadEnvironmentIsLocal && canOpenPreferredEditorTarget
       ? (path: string) => {
-          void openPathInPreferredTarget({
+          void openPathInPreferredEditorTarget({
             lineNumber: activeHostFileLineNumber,
             path,
           });

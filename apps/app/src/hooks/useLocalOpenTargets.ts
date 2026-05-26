@@ -32,10 +32,15 @@ export interface OpenPathInTargetArgs extends OpenLocalPathRequest {
 export interface OpenPathInPreferredTargetArgs extends OpenLocalPathRequest {}
 
 export interface UseLocalOpenTargetsResult {
+  canOpenPreferredEditorTarget: boolean;
   canOpenPreferredTarget: boolean;
+  openPathInPreferredEditorTarget: (
+    args: OpenPathInPreferredTargetArgs,
+  ) => Promise<boolean>;
   openPathInPreferredTarget: (
     args: OpenPathInPreferredTargetArgs,
   ) => Promise<boolean>;
+  preferredEditorTarget: WorkspaceOpenTarget | null;
   openPathInTarget: (args: OpenPathInTargetArgs) => Promise<boolean>;
   preferredTarget: WorkspaceOpenTarget | null;
   workspaceOpenTargets: WorkspaceOpenTarget[];
@@ -71,6 +76,16 @@ export function useLocalOpenTargets(
       resolvePreferredWorkspaceOpenTarget({
         preferredTargetId,
         targets: workspaceOpenTargets,
+      }),
+    [preferredTargetId, workspaceOpenTargets],
+  );
+  const preferredEditorTarget = useMemo(
+    () =>
+      resolvePreferredWorkspaceOpenTarget({
+        preferredTargetId,
+        targets: workspaceOpenTargets.filter(
+          (target) => target.kind === "editor",
+        ),
       }),
     [preferredTargetId, workspaceOpenTargets],
   );
@@ -140,10 +155,37 @@ export function useLocalOpenTargets(
       preferredTarget,
     ],
   );
+  const openPathInPreferredEditorTarget = useCallback(
+    async (request: OpenPathInPreferredTargetArgs) => {
+      if (!preferredEditorTarget) {
+        appToast.error(LOCAL_OPEN_FAILURE_TITLE, {
+          description: getOpenUnavailableDescription({
+            hasDaemon,
+          }),
+        });
+        return false;
+      }
+
+      return openPathInTarget({
+        lineNumber: request.lineNumber,
+        path: request.path,
+        rememberTarget: false,
+        targetId: preferredEditorTarget.id,
+      });
+    },
+    [
+      hasDaemon,
+      openPathInTarget,
+      preferredEditorTarget,
+    ],
+  );
 
   return {
+    canOpenPreferredEditorTarget: preferredEditorTarget !== null,
     canOpenPreferredTarget: preferredTarget !== null,
+    openPathInPreferredEditorTarget,
     openPathInPreferredTarget,
+    preferredEditorTarget,
     openPathInTarget,
     preferredTarget,
     workspaceOpenTargets,

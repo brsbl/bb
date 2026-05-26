@@ -100,6 +100,7 @@ describe("workspace open targets", () => {
 
     expect(targets.map((target) => target.id)).toEqual([
       "zed",
+      "default-app",
       "finder",
       "terminal",
     ]);
@@ -109,6 +110,34 @@ describe("workspace open targets", () => {
     expect(
       calls.some((call) => call.args.join(" ").includes("com.apple.Terminal")),
     ).toBe(false);
+  });
+
+  it("opens paths with the macOS default app", async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), "bb-workspace-"));
+    const filePath = path.join(workspacePath, "notes.md");
+    const calls: ExecFileCall[] = [];
+    const execFile = createAvailableExecFile({ calls });
+
+    try {
+      await writeFile(filePath, "# Notes\n");
+
+      await openPathInTargetWithRuntime(
+        {
+          lineNumber: 12,
+          path: filePath,
+          targetId: "default-app",
+        },
+        createRuntime({ execFile }),
+      );
+
+      expect(calls.find((call) => call.file === "open")).toEqual({
+        file: "open",
+        args: ["--", filePath],
+      });
+      expect(calls.some((call) => call.file === "which")).toBe(false);
+    } finally {
+      await rm(workspacePath, { force: true, recursive: true });
+    }
   });
 
   it("falls back to application bundle paths when bundle id lookup misses", async () => {

@@ -17,6 +17,7 @@ import xcodeIcon from "@/assets/workspace-open-target-icons/xcode.png";
 import { SplitButton, type SplitButtonAction } from "@/components/ui/split-button.js";
 
 const WORKSPACE_OPEN_TARGET_ICONS: Record<WorkspaceOpenTargetId, string> = {
+  "default-app": finderIcon,
   vscode: vscodeIcon,
   cursor: cursorIcon,
   "sublime-text": sublimeTextIcon,

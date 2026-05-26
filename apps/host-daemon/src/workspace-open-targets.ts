@@ -54,12 +54,21 @@ export interface WorkspaceOpenTargetRuntime {
   platform: NodeJS.Platform;
 }
 
-interface MacWorkspaceOpenTargetDefinition {
+interface MacDefaultOpenTargetDefinition {
+  openMode: "default-app";
+}
+
+interface MacApplicationOpenTargetDefinition {
   appName: string;
   bundleIds: string[];
   builtIn: boolean;
   lineOpenCommand?: MacLineOpenCommandDefinition;
+  openMode: "application";
 }
+
+type MacWorkspaceOpenTargetDefinition =
+  | MacApplicationOpenTargetDefinition
+  | MacDefaultOpenTargetDefinition;
 
 interface WorkspaceOpenTargetDefinition {
   fileOpenBehavior: "direct" | "containing-directory";
@@ -106,6 +115,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "VS Code",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Visual Studio Code",
       bundleIds: ["com.microsoft.VSCode"],
       builtIn: false,
@@ -121,6 +131,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Cursor",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Cursor",
       // ToDesktop bundle IDs are generated; keep app-name path fallback below.
       bundleIds: ["com.todesktop.230313mzl4w4u92"],
@@ -137,6 +148,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Sublime Text",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Sublime Text",
       bundleIds: ["com.sublimetext.4", "com.sublimetext.3"],
       builtIn: false,
@@ -152,6 +164,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Zed",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Zed",
       bundleIds: ["dev.zed.Zed"],
       builtIn: false,
@@ -167,6 +180,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Windsurf",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Windsurf",
       bundleIds: ["com.exafunction.windsurf"],
       builtIn: false,
@@ -182,9 +196,35 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Antigravity",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Antigravity",
       bundleIds: ["com.google.antigravity", "com.googlelabs.antigravity"],
       builtIn: false,
+    },
+  },
+  {
+    id: "xcode",
+    kind: "editor",
+    label: "Xcode",
+    fileOpenBehavior: "direct",
+    macos: {
+      openMode: "application",
+      appName: "Xcode",
+      bundleIds: ["com.apple.dt.Xcode"],
+      builtIn: false,
+      lineOpenCommand: {
+        executable: "xed",
+        toArgs: (args) => ["-l", String(args.lineNumber), args.path],
+      },
+    },
+  },
+  {
+    id: "default-app",
+    kind: "editor",
+    label: "Default App",
+    fileOpenBehavior: "direct",
+    macos: {
+      openMode: "default-app",
     },
   },
   {
@@ -193,6 +233,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Finder",
     fileOpenBehavior: "direct",
     macos: {
+      openMode: "application",
       appName: "Finder",
       bundleIds: ["com.apple.finder"],
       builtIn: true,
@@ -204,6 +245,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Terminal",
     fileOpenBehavior: "containing-directory",
     macos: {
+      openMode: "application",
       appName: "Terminal",
       bundleIds: ["com.apple.Terminal"],
       builtIn: true,
@@ -215,6 +257,7 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "iTerm2",
     fileOpenBehavior: "containing-directory",
     macos: {
+      openMode: "application",
       appName: "iTerm",
       bundleIds: ["com.googlecode.iterm2"],
       builtIn: false,
@@ -226,24 +269,10 @@ const WORKSPACE_OPEN_TARGET_DEFINITIONS: WorkspaceOpenTargetDefinition[] = [
     label: "Ghostty",
     fileOpenBehavior: "containing-directory",
     macos: {
+      openMode: "application",
       appName: "Ghostty",
       bundleIds: ["com.mitchellh.ghostty"],
       builtIn: false,
-    },
-  },
-  {
-    id: "xcode",
-    kind: "editor",
-    label: "Xcode",
-    fileOpenBehavior: "direct",
-    macos: {
-      appName: "Xcode",
-      bundleIds: ["com.apple.dt.Xcode"],
-      builtIn: false,
-      lineOpenCommand: {
-        executable: "xed",
-        toArgs: (args) => ["-l", String(args.lineNumber), args.path],
-      },
     },
   },
 ];
@@ -287,6 +316,10 @@ function getMacApplicationCandidatePaths(
   definition: WorkspaceOpenTargetDefinition,
   runtime: WorkspaceOpenTargetRuntime,
 ): string[] {
+  if (definition.macos.openMode === "default-app") {
+    return [];
+  }
+
   const appBundleName = `${definition.macos.appName}.app`;
   return runtime.applicationDirectories.map((directory) =>
     path.join(directory, appBundleName),
@@ -333,6 +366,10 @@ async function isMacTargetAvailable(
   definition: WorkspaceOpenTargetDefinition,
   runtime: WorkspaceOpenTargetRuntime,
 ): Promise<boolean> {
+  if (definition.macos.openMode === "default-app") {
+    return true;
+  }
+
   if (definition.macos.builtIn) {
     return true;
   }
@@ -449,6 +486,10 @@ async function maybeResolveMacLineOpenInvocation(
     return null;
   }
 
+  if (args.definition.macos.openMode === "default-app") {
+    return null;
+  }
+
   const lineOpenCommand = args.definition.macos.lineOpenCommand;
   if (!lineOpenCommand) {
     return null;
@@ -479,16 +520,24 @@ async function resolveMacOpenInvocation(
     return lineOpenInvocation;
   }
 
+  const openPath = resolveTargetOpenPath({
+    definition: args.definition,
+    existingPath: args.existingPath,
+  });
+  if (args.definition.macos.openMode === "default-app") {
+    return {
+      file: "open",
+      args: ["--", openPath],
+    };
+  }
+
   return {
     file: "open",
     args: [
       "-a",
       args.definition.macos.appName,
       "--",
-      resolveTargetOpenPath({
-        definition: args.definition,
-        existingPath: args.existingPath,
-      }),
+      openPath,
     ],
   };
 }

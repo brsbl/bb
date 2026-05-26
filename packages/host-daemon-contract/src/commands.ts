@@ -26,7 +26,7 @@ import {
 } from "@bb/replay-capture/schema";
 import { z } from "zod";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 24 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 25 as const;
 
 export const FILE_LIST_QUERY_MAX_LENGTH = 256;
 export const FILE_LIST_LIMIT_MAX = 10_000;

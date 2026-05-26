@@ -17,6 +17,7 @@ export const DEFAULT_EPHEMERAL_HOST_DAEMON_LOCAL_HEALTH_VALUE =
 export const DEFAULT_EPHEMERAL_HOST_DAEMON_LOCAL_PORT = 9111;
 
 export const workspaceOpenTargetIdValues = [
+  "default-app",
   "vscode",
   "cursor",
   "sublime-text",

@@ -292,6 +292,72 @@ describe("useLocalOpenTargets", () => {
     });
   });
 
+  it("opens editor requests in an editor target when the stored workspace target is Finder", async () => {
+    window.localStorage.setItem(WORKSPACE_OPEN_TARGET_STORAGE_KEY, "finder");
+    const state: LocalOpenTargetsFetchState = {
+      daemonStatus: {
+        connected: true,
+        hostId: "host-1",
+        protocolVersion: HOST_DAEMON_PROTOCOL_VERSION,
+        serverUrl: "http://localhost:3334",
+        supportsNativeFolderPicker: false,
+        platform: "darwin",
+      },
+      hostDaemonPort: 4123,
+      workspaceOpenTargets: [
+        { id: "default-app", kind: "editor", label: "Default App" },
+        { id: "finder", kind: "file-browser", label: "Finder" },
+      ],
+      workspaceOpenTargetsStatus: 200,
+    };
+    const openTargetRequests: Array<
+      ReturnType<typeof openInTargetRequestSchema.parse>
+    > = [];
+    installLocalOpenTargetsFetchRoutes(state, openTargetRequests);
+    const modules = await importFreshLocalOpenTargetsModules();
+    const latestSnapshot: { current: LocalOpenTargetsSnapshot | null } = {
+      current: null,
+    };
+    await act(async () => {
+      render(
+        <LocalOpenTargetsCapture
+          modules={modules}
+          onSnapshot={(snapshot) => {
+            latestSnapshot.current = snapshot;
+          }}
+        />,
+        { wrapper: createSuspenseWrapper() },
+      );
+    });
+
+    await waitFor(() => {
+      const localOpenTargets = requireLocalOpenTargetsSnapshot(
+        latestSnapshot.current,
+      ).localOpenTargets;
+      expect(localOpenTargets.preferredTarget?.label).toBe("Finder");
+      expect(localOpenTargets.preferredEditorTarget?.label).toBe("Default App");
+    });
+
+    await act(async () => {
+      await requireLocalOpenTargetsSnapshot(
+        latestSnapshot.current,
+      ).localOpenTargets.openPathInPreferredEditorTarget({
+        lineNumber: 27,
+        path: "/tmp/workspace/file.md",
+      });
+    });
+
+    await waitFor(() => {
+      expect(openTargetRequests).toEqual([
+        {
+          lineNumber: 27,
+          path: "/tmp/workspace/file.md",
+          targetId: "default-app",
+        },
+      ]);
+    });
+  });
+
   it("stores an explicitly selected target for future opens", async () => {
     const state: LocalOpenTargetsFetchState = {
       daemonStatus: {

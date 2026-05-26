@@ -74,6 +74,11 @@ describe("host-daemon local schemas", () => {
       contract.workspaceOpenTargetsResponseSchema.parse({
         targets: [
           {
+            id: "default-app",
+            kind: "editor",
+            label: "Default App",
+          },
+          {
             id: "finder",
             kind: "file-browser",
             label: "Finder",
@@ -87,6 +92,11 @@ describe("host-daemon local schemas", () => {
       }),
     ).toEqual({
       targets: [
+        {
+          id: "default-app",
+          kind: "editor",
+          label: "Default App",
+        },
         {
           id: "finder",
           kind: "file-browser",
