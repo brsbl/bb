@@ -220,6 +220,16 @@ export async function requireWorkspaceEnvironment(
     return existing;
   }
 
+  // A destroyed environment's worktree is gone. Reconnecting it here would
+  // re-provision a dead path and re-subscribe an FSEvents watcher on every
+  // poll, so refuse instead of resurrecting it.
+  if (runtimeManager.isEnvironmentDestroyed(args.environmentId)) {
+    throw new ExpectedCommandDispatchError(
+      "environment_destroyed",
+      `Environment ${args.environmentId} has been destroyed`,
+    );
+  }
+
   return runtimeManager.ensureEnvironment({
     environmentId: args.environmentId,
     personalWorkspaceRoot: getPersonalWorkspaceRoot(args.dataDir),

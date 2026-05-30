@@ -600,6 +600,129 @@ describe("RuntimeManager", () => {
     expect(workspace.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it("tombstones a destroyed environment so it is reported destroyed", async () => {
+    const stopWatchingStatus = vi.fn(() => undefined);
+    const { hostWatcher } = createFakeHostWatcher({
+      watchWorkspaceImplementation: (_args) => stopWatchingStatus,
+    });
+    const manager = new RuntimeManager({
+      hostWatcher,
+      provisionWorkspace: createProvisionWorkspaceMock("/tmp/env-1"),
+      createRuntime: vi.fn(() => createFakeRuntime()),
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(false);
+
+    await manager.destroyEnvironment("env-1");
+
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(true);
+    expect(manager.get("env-1")).toBeUndefined();
+  });
+
+  it("records a tombstone when destroying an environment with no live runtime", async () => {
+    const manager = new RuntimeManager({
+      provisionWorkspace: createProvisionWorkspaceMock("/tmp/missing"),
+      createRuntime: vi.fn(() => createFakeRuntime()),
+    });
+
+    await manager.destroyEnvironment("env-missing");
+
+    expect(manager.isEnvironmentDestroyed("env-missing")).toBe(true);
+  });
+
+  it("clears the destroyed tombstone when an environment is explicitly re-provisioned", async () => {
+    const manager = new RuntimeManager({
+      provisionWorkspace: createProvisionWorkspaceMock("/tmp/env-1"),
+      createRuntime: vi.fn(() => createFakeRuntime()),
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    await manager.destroyEnvironment("env-1");
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(true);
+
+    await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(false);
+    expect(manager.get("env-1")).toBeDefined();
+  });
+
+  it("reconciles live environments by dropping watchers and runtimes for ones no longer live", async () => {
+    const stopWatchingStatusLive = vi.fn(() => undefined);
+    const stopWatchingStatusStale = vi.fn(() => undefined);
+    const runtimes: AgentRuntime[] = [];
+    const { hostWatcher } = createFakeHostWatcher({
+      watchWorkspaceImplementation: vi
+        .fn<WatchWorkspaceImplementation>()
+        .mockImplementationOnce((_args) => stopWatchingStatusLive)
+        .mockImplementationOnce((_args) => stopWatchingStatusStale),
+    });
+    const manager = new RuntimeManager({
+      hostWatcher,
+      provisionWorkspace: vi.fn(async (args: ProvisionWorkspaceArgs) =>
+        createFakeWorkspace(getProvisionWorkspacePath(args)),
+      ),
+      createRuntime: vi.fn(() => {
+        const runtime = createFakeRuntime();
+        runtimes.push(runtime);
+        return runtime;
+      }),
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-live",
+      workspacePath: "/tmp/env-live",
+    });
+    await manager.ensureEnvironment({
+      environmentId: "env-stale",
+      workspacePath: "/tmp/env-stale",
+    });
+
+    await manager.reconcileLiveEnvironments(new Set(["env-live"]));
+
+    expect(manager.get("env-live")).toBeDefined();
+    expect(manager.get("env-stale")).toBeUndefined();
+    expect(stopWatchingStatusLive).not.toHaveBeenCalled();
+    expect(stopWatchingStatusStale).toHaveBeenCalledTimes(1);
+    expect(manager.isEnvironmentDestroyed("env-stale")).toBe(true);
+    expect(manager.isEnvironmentDestroyed("env-live")).toBe(false);
+    expect(runtimes[0]?.shutdown).not.toHaveBeenCalled();
+    expect(runtimes[1]?.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not drop environments with active work during reconcile, even when not listed live", async () => {
+    const stopWatchingStatus = vi.fn(() => undefined);
+    const { hostWatcher } = createFakeHostWatcher({
+      watchWorkspaceImplementation: (_args) => stopWatchingStatus,
+    });
+    const manager = new RuntimeManager({
+      hostWatcher,
+      provisionWorkspace: createProvisionWorkspaceMock("/tmp/env-busy"),
+      createRuntime: vi.fn(() => createFakeRuntime()),
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-busy",
+      workspacePath: "/tmp/env-busy",
+    });
+    manager.markThreadActive("env-busy", "thr-busy", "provider-thread-busy");
+
+    await manager.reconcileLiveEnvironments(new Set());
+
+    expect(manager.get("env-busy")).toBeDefined();
+    expect(stopWatchingStatus).not.toHaveBeenCalled();
+    expect(manager.isEnvironmentDestroyed("env-busy")).toBe(false);
+  });
+
   it("installs the workspace status watcher once and reports workspace status changes", async () => {
     const stopWatchingStatus = vi.fn(() => undefined);
     let watchWorkspaceArgs: WatchWorkspaceArgs | undefined;

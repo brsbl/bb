@@ -8,6 +8,7 @@ import parcelWatcher from "@parcel/watcher";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDeferredPromise } from "@bb/test-helpers";
 import { watchWorkspaceStatus as watchWorkspaceStatusImpl } from "../src/watch-status.js";
+import { WorkspaceStatusWatcher } from "../src/workspace-status-watcher.js";
 
 type WatchWorkspaceStatus = typeof watchWorkspaceStatusImpl;
 type WatchWorkspaceStatusArgs = Parameters<WatchWorkspaceStatus>[1];
@@ -434,11 +435,7 @@ describe.sequential("watchWorkspaceStatus", () => {
       const firstEventAt = Date.now();
       const eventIntervalMs = 60;
       const earlyFlushGuardMs = 180;
-      for (
-        let elapsedMs = 0;
-        elapsedMs < 600;
-        elapsedMs += eventIntervalMs
-      ) {
+      for (let elapsedMs = 0; elapsedMs < 600; elapsedMs += eventIntervalMs) {
         emitWorkspaceRootEvents([
           {
             path: path.join(repoPath, "README.md"),
@@ -488,11 +485,7 @@ describe.sequential("watchWorkspaceStatus", () => {
           type: "update",
         },
       ]);
-      await waitForCallCount(
-        () => callbackCount,
-        1,
-        WATCH_TEST_TIMEOUT_MS,
-      );
+      await waitForCallCount(() => callbackCount, 1, WATCH_TEST_TIMEOUT_MS);
       expect(callbackCount).toBe(1);
       expect(watchErrors).toHaveLength(1);
       expect(watchErrors[0]).toContain(repoPath);
@@ -506,11 +499,7 @@ describe.sequential("watchWorkspaceStatus", () => {
           type: "update",
         },
       ]);
-      await waitForCallCount(
-        () => callbackCount,
-        2,
-        WATCH_TEST_TIMEOUT_MS,
-      );
+      await waitForCallCount(() => callbackCount, 2, WATCH_TEST_TIMEOUT_MS);
       expect(callbackCount).toBe(2);
       expect(watchErrors).toHaveLength(1);
     } finally {
@@ -844,6 +833,56 @@ describe.sequential("watchWorkspaceStatus", () => {
       expect(getWorkspaceSubscriptionAttemptCount()).toBeGreaterThan(1);
     } finally {
       stopWatching();
+    }
+  });
+
+  it("gives up workspace subscriptions after a bounded number of retries", async () => {
+    const repoPath = await initRepo();
+    const workspaceRootPath = normalizeWatchPath(repoPath);
+    let workspaceRootSubscribeCount = 0;
+    vi.spyOn(parcelWatcher, "subscribe").mockImplementation(
+      async (...watchArgs: ParcelWatcherSubscribeArgs) => {
+        if (isWorkspaceRootSubscription(watchArgs, repoPath)) {
+          workspaceRootSubscribeCount += 1;
+        }
+        throw new Error("workspace subscription unavailable");
+      },
+    );
+
+    const maxRetryAttempts = 3;
+    const watchErrors: string[] = [];
+    const watcher = new WorkspaceStatusWatcher({
+      cwd: repoPath,
+      debounceMs: 10,
+      maxRetryAttempts,
+      maxRetryDelayMs: 20,
+      maxWaitMs: 50,
+      retryDelayMs: 5,
+      onChange: () => undefined,
+      onWatchError: (error) => {
+        if (normalizeWatchPath(error.rootPath) === workspaceRootPath) {
+          watchErrors.push(error.message);
+        }
+      },
+    });
+    watcher.start();
+
+    try {
+      await waitForCallCount(
+        () => workspaceRootSubscribeCount,
+        maxRetryAttempts + 1,
+        WATCH_TEST_TIMEOUT_MS,
+      );
+      // Bounded retry: after the attempt budget is exhausted the watcher must
+      // stop re-subscribing instead of looping forever against a dead path.
+      await ensureCallCountStays(
+        () => workspaceRootSubscribeCount,
+        maxRetryAttempts + 1,
+      );
+      expect(workspaceRootSubscribeCount).toBe(maxRetryAttempts + 1);
+      expect(watchErrors.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      watcher.dispose();
     }
   });
 

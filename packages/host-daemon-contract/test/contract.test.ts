@@ -1398,6 +1398,7 @@ describe("host-daemon session schemas", () => {
             threadId: "thr_123",
           },
         ],
+        liveEnvironmentIds: ["env_123"],
       }),
     ).toMatchObject({
       sessionId: "session_123",
@@ -1407,6 +1408,7 @@ describe("host-daemon session schemas", () => {
           threadId: "thr_123",
         },
       ],
+      liveEnvironmentIds: ["env_123"],
     });
 
     expect(() =>
@@ -1415,6 +1417,7 @@ describe("host-daemon session schemas", () => {
         heartbeatIntervalMs: 5_000,
         leaseTimeoutMs: 30_000,
         trackedThreadTargets: [],
+        liveEnvironmentIds: [],
         threadHighWaterMarks: { thr_123: 10 },
       }),
     ).toThrow();

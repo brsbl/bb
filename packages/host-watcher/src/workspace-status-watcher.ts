@@ -20,8 +20,11 @@ const WORKSPACE_STATUS_WATCH_DEBOUNCE_MS = 75;
 const WORKSPACE_STATUS_WATCH_MAX_WAIT_MS = 500;
 const WORKSPACE_STATUS_WATCH_RETRY_DELAY_MS = 250;
 const WORKSPACE_STATUS_WATCH_MAX_RETRY_DELAY_MS = 30_000;
-const FSEVENTS_DROPPED_EVENTS_RESCAN_MESSAGE =
-  "File system must be re-scanned";
+// A subscription that never succeeds (e.g. a removed worktree whose path is
+// gone for good) must not be retried forever. Give up after a bounded number of
+// attempts; the daemon owns re-establishing watches for live environments.
+const WORKSPACE_STATUS_WATCH_MAX_RETRY_ATTEMPTS = 60;
+const FSEVENTS_DROPPED_EVENTS_RESCAN_MESSAGE = "File system must be re-scanned";
 
 type ParcelWatcherSubscribe = typeof parcelWatcher.subscribe;
 type ParcelWatcherCallback = Parameters<ParcelWatcherSubscribe>[1];
@@ -34,6 +37,7 @@ type ParcelWatcherEventBatch = Parameters<ParcelWatcherCallback>[1];
 interface WorkspaceStatusWatcherArgs extends WorkspaceStatusWatchArgs {
   cwd: string;
   debounceMs: number;
+  maxRetryAttempts: number;
   maxRetryDelayMs: number;
   maxWaitMs: number;
   retryDelayMs: number;
@@ -199,6 +203,11 @@ export class WorkspaceStatusWatcher {
     if (this.disposed || this.metadataStartRetryTimer !== null) {
       return;
     }
+    if (this.metadataRetryAttempt >= this.args.maxRetryAttempts) {
+      // Bounded retry: stop probing for git metadata once the attempt budget is
+      // exhausted instead of looping forever against a path that never resolves.
+      return;
+    }
     this.metadataRetryAttempt += 1;
     this.metadataStartRetryTimer = setTimeout(
       () => {
@@ -222,6 +231,18 @@ export class WorkspaceStatusWatcher {
       return;
     }
     const retryAttempt = (this.retryAttempts.get(spec.rootPath) ?? 0) + 1;
+    if (retryAttempt > this.args.maxRetryAttempts) {
+      // Bounded retry: a spec that never becomes watchable (e.g. a worktree that
+      // was removed for good) is abandoned instead of retried forever. Report
+      // once (deduped per root path) so the give-up is observable.
+      this.reportWatchError(
+        spec,
+        new Error(
+          `Workspace status watch gave up after ${this.args.maxRetryAttempts} attempts: ${spec.rootPath}`,
+        ),
+      );
+      return;
+    }
     this.retryAttempts.set(spec.rootPath, retryAttempt);
     const retryTimer = setTimeout(
       () => {
@@ -384,6 +405,7 @@ export function createWorkspaceStatusWatcher(
   return new WorkspaceStatusWatcher({
     cwd: args.cwd,
     debounceMs: WORKSPACE_STATUS_WATCH_DEBOUNCE_MS,
+    maxRetryAttempts: WORKSPACE_STATUS_WATCH_MAX_RETRY_ATTEMPTS,
     maxRetryDelayMs: WORKSPACE_STATUS_WATCH_MAX_RETRY_DELAY_MS,
     maxWaitMs: WORKSPACE_STATUS_WATCH_MAX_WAIT_MS,
     onChange: args.onChange,

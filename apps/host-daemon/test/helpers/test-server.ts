@@ -92,6 +92,7 @@ export interface CreateTestServerOptions {
   heartbeatIntervalMs?: number;
   interactiveRequestFailures?: number;
   leaseTimeoutMs?: number;
+  liveEnvironmentIds?: string[];
   requireTurnStartedForInteractiveRequests?: boolean;
   requireTurnStartedForToolCalls?: boolean;
   trackedThreadTargets?: HostDaemonTrackedThreadTarget[];
@@ -256,6 +257,7 @@ export async function createTestServer(
         heartbeatIntervalMs: options.heartbeatIntervalMs ?? 25,
         leaseTimeoutMs: options.leaseTimeoutMs ?? 1_000,
         trackedThreadTargets: options.trackedThreadTargets ?? [],
+        liveEnvironmentIds: options.liveEnvironmentIds ?? [],
       },
       201,
     );

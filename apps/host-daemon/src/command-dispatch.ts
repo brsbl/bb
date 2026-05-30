@@ -343,6 +343,14 @@ const commandHandlers: CommandHandlerMap = {
       if (error instanceof WorkspaceError && error.code === "path_not_found") {
         return {};
       }
+      // The daemon already tore this environment down; a repeated destroy is a
+      // no-op success rather than a resurrection attempt.
+      if (
+        error instanceof ExpectedCommandDispatchError &&
+        error.code === "environment_destroyed"
+      ) {
+        return {};
+      }
       throw error;
     }
     return {};

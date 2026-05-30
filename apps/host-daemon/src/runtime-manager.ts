@@ -218,6 +218,10 @@ export class RuntimeManager {
   private readonly baseShellEnv;
   private readonly entries = new Map<string, RuntimeEntry>();
   private readonly pendingEntries = new Map<string, Promise<RuntimeEntry>>();
+  // Environments this daemon has torn down. They must never be resurrected by a
+  // later workspace.* command, otherwise the daemon would re-provision a dead
+  // worktree and re-subscribe an FSEvents watcher against it on every poll.
+  private readonly destroyedEnvironmentIds = new Set<string>();
   private readonly trackedThreadStorageTargets = new Map<
     string,
     ThreadStorageTarget
@@ -361,6 +365,10 @@ export class RuntimeManager {
 
   get(environmentId: string): RuntimeEntry | undefined {
     return this.entries.get(environmentId);
+  }
+
+  isEnvironmentDestroyed(environmentId: string): boolean {
+    return this.destroyedEnvironmentIds.has(environmentId);
   }
 
   async getOrAwait(environmentId: string): Promise<RuntimeEntry | undefined> {
@@ -528,6 +536,11 @@ export class RuntimeManager {
   }
 
   async ensureEnvironment(args: EnsureEnvironmentArgs): Promise<RuntimeEntry> {
+    // Establishing a runtime for an environment means the server considers it
+    // live again (e.g. an explicit environment.provision). Lift any tombstone so
+    // the entry and its watcher are allowed to exist.
+    this.destroyedEnvironmentIds.delete(args.environmentId);
+
     const existing = this.entries.get(args.environmentId);
     if (existing) {
       await this.applyExistingEnvironmentProvision({
@@ -575,6 +588,11 @@ export class RuntimeManager {
   }
 
   async destroyEnvironment(environmentId: string): Promise<void> {
+    // Tombstone first so the environment can never be resurrected by a later
+    // workspace.* command, even when there is currently no in-memory entry
+    // (e.g. a destroy retried after the runtime was already torn down).
+    this.destroyedEnvironmentIds.add(environmentId);
+
     const existing = this.entries.get(environmentId);
     const pending = this.pendingEntries.get(environmentId);
     const entry = existing ?? (pending ? await pending : undefined);
@@ -589,6 +607,43 @@ export class RuntimeManager {
     this.stopWatchingThreadStorageIfNoTrackedThreads();
     await entry.runtime.shutdown();
     await entry.workspace.destroy();
+  }
+
+  /**
+   * Reconciles the in-memory runtime/watch set against the server's
+   * authoritative set of live (non-destroyed) environments, invoked on every
+   * session open. Drops the watcher and runtime for any idle environment the
+   * server no longer considers live — environments destroyed while this daemon
+   * was disconnected, whose environment.destroy command never reached it. Those
+   * stale entries are tombstoned so they cannot be resurrected. Environments
+   * with active threads or terminals are never dropped here; their lifecycle is
+   * owned by explicit stop/destroy commands, guarding against transient gaps in
+   * the live set.
+   */
+  async reconcileLiveEnvironments(
+    liveEnvironmentIds: ReadonlySet<string>,
+  ): Promise<void> {
+    const staleEntries = [...this.entries.values()].filter((entry) => {
+      if (liveEnvironmentIds.has(entry.environmentId)) {
+        return false;
+      }
+      const hasActiveThread = [...entry.threads.values()].some(
+        (thread) => thread.status === "active",
+      );
+      return !hasActiveThread && entry.terminals.size === 0;
+    });
+
+    for (const entry of staleEntries) {
+      this.destroyedEnvironmentIds.add(entry.environmentId);
+      this.entries.delete(entry.environmentId);
+      this.removeTrackedThreadStorageTargetsForEnvironment(entry.environmentId);
+      this.stopWatchingStatus(entry);
+    }
+    this.stopWatchingThreadStorageIfNoTrackedThreads();
+
+    await Promise.allSettled(
+      staleEntries.map((entry) => entry.runtime.shutdown()),
+    );
   }
 
   async evictIdleEnvironments(): Promise<string[]> {

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import type {
   DiscoveredWorkspaceProperties,
   EnvironmentChangeKind,
@@ -94,6 +94,33 @@ export function listEnvironments(db: DbConnection, projectId?: string) {
       .all();
   }
   return db.select().from(environments).all();
+}
+
+export interface ListLiveEnvironmentIdsOnHostArgs {
+  hostId: string;
+}
+
+/**
+ * Returns the ids of every non-destroyed environment owned by a host. The host
+ * daemon uses this on session open to reconcile its in-memory watch/runtime set
+ * against the server's authoritative liveness, dropping watchers for
+ * environments that were destroyed while the daemon was disconnected.
+ */
+export function listLiveEnvironmentIdsOnHost(
+  db: EnvironmentReadConnection,
+  args: ListLiveEnvironmentIdsOnHostArgs,
+): string[] {
+  return db
+    .select({ id: environments.id })
+    .from(environments)
+    .where(
+      and(
+        eq(environments.hostId, args.hostId),
+        ne(environments.status, "destroyed"),
+      ),
+    )
+    .all()
+    .map((row) => row.id);
 }
 
 export function listEnvironmentsByIds(

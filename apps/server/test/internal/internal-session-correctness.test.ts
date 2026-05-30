@@ -13,6 +13,7 @@ import {
   buildHostDaemonWebSocketAuthorizationHeader,
   buildHostDaemonWebSocketProtocols,
   createHostDaemonClient,
+  hostDaemonSessionOpenResponseSchema,
 } from "@bb/host-daemon-contract";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../src/errors.js";
@@ -787,6 +788,56 @@ describe("internal session correctness", () => {
       ).toBe(false);
     } finally {
       vi.useRealTimers();
+      await harness.cleanup();
+    }
+  });
+
+  it("reports only non-destroyed environments as live on session open", async () => {
+    const harness = await createTestAppHarness();
+    try {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-live-environments",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const liveEnvironment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/live-environment",
+        status: "ready",
+      });
+      const destroyedEnvironment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/destroyed-environment",
+        status: "destroyed",
+      });
+
+      const response = await harness.app.request("/internal/session/open", {
+        method: "POST",
+        headers: internalAuthHeaders(harness, {
+          hostId: host.id,
+          hostType: host.type,
+        }),
+        body: JSON.stringify({
+          hostId: host.id,
+          instanceId: "instance-live-environments",
+          hostName: host.name,
+          hostType: host.type,
+          dataDir: "/tmp/host-daemon-live-environments",
+          protocolVersion: HOST_DAEMON_PROTOCOL_VERSION,
+          activeThreads: [],
+        }),
+      });
+
+      expect(response.status).toBe(201);
+      const body = hostDaemonSessionOpenResponseSchema.parse(
+        await readJson(response),
+      );
+      expect(body.liveEnvironmentIds).toContain(liveEnvironment.id);
+      expect(body.liveEnvironmentIds).not.toContain(destroyedEnvironment.id);
+    } finally {
       await harness.cleanup();
     }
   });

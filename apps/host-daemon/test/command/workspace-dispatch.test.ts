@@ -108,6 +108,68 @@ describe("workspace command dispatch", () => {
     ]);
   });
 
+  it("refuses to resurrect a destroyed environment for workspace.status", async () => {
+    const harness = createHarness({ workspacePath: "/tmp/env-destroyed" });
+
+    await dispatchCommand(
+      {
+        type: "environment.destroy",
+        environmentId: "env-destroyed",
+        workspaceContext: {
+          workspacePath: "/tmp/env-destroyed",
+          workspaceProvisionType: "unmanaged",
+        },
+      },
+      harness.dispatchOptions(),
+    );
+    expect(harness.workspaceState.destroyed).toBe(true);
+
+    const provisionsAfterDestroy = harness.provisions.length;
+    const statusReadsAfterDestroy = harness.workspaceState.statusReads;
+
+    await expect(
+      dispatchCommand(
+        {
+          type: "workspace.status",
+          environmentId: "env-destroyed",
+          workspaceContext: {
+            workspacePath: "/tmp/env-destroyed",
+            workspaceProvisionType: "unmanaged",
+          },
+        },
+        harness.dispatchOptions(),
+      ),
+    ).rejects.toMatchObject({ code: "environment_destroyed" });
+
+    // No resurrection: the destroyed environment is never re-provisioned and its
+    // workspace status is never read again, so no new watcher can be installed.
+    expect(harness.provisions.length).toBe(provisionsAfterDestroy);
+    expect(harness.workspaceState.statusReads).toBe(statusReadsAfterDestroy);
+  });
+
+  it("treats a repeated environment.destroy as idempotent success", async () => {
+    const harness = createHarness({
+      workspacePath: "/tmp/env-destroyed-twice",
+    });
+    const destroyCommand = {
+      type: "environment.destroy" as const,
+      environmentId: "env-destroyed-twice",
+      workspaceContext: {
+        workspacePath: "/tmp/env-destroyed-twice",
+        workspaceProvisionType: "unmanaged" as const,
+      },
+    };
+
+    await dispatchCommand(destroyCommand, harness.dispatchOptions());
+    const provisionsAfterFirstDestroy = harness.provisions.length;
+
+    await expect(
+      dispatchCommand(destroyCommand, harness.dispatchOptions()),
+    ).resolves.toEqual({});
+    // The second destroy must not re-provision (resurrect) the workspace.
+    expect(harness.provisions.length).toBe(provisionsAfterFirstDestroy);
+  });
+
   it("covers host.list_files", async () => {
     const tempDir = await makeTempDir("bb-dispatch-host-list-files-");
     await fs.writeFile(path.join(tempDir, "PREFERENCES.md"), "hello");
@@ -377,7 +439,9 @@ describe("workspace command dispatch", () => {
   });
 
   it("hides host.read_file_relative dotfiles when dotfiles are denied", async () => {
-    const tempDir = await makeTempDir("bb-dispatch-host-read-relative-dotfile-");
+    const tempDir = await makeTempDir(
+      "bb-dispatch-host-read-relative-dotfile-",
+    );
     await fs.writeFile(path.join(tempDir, ".env"), "secret");
     const harness = createHarness();
 

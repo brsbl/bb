@@ -83,6 +83,12 @@ export const hostDaemonSessionOpenResponseSchema = z
     heartbeatIntervalMs: z.number().int().positive(),
     leaseTimeoutMs: z.number().int().positive(),
     trackedThreadTargets: z.array(hostDaemonTrackedThreadTargetSchema),
+    // Ids of every non-destroyed environment the server owns for this host. The
+    // daemon reconciles its in-memory watch/runtime set against this list on
+    // session open, dropping watchers for environments destroyed while it was
+    // disconnected so it stops re-subscribing FSEvents watchers against dead
+    // worktrees.
+    liveEnvironmentIds: z.array(z.string().min(1)),
   })
   .strict();
 export type HostDaemonSessionOpenResponse = z.infer<

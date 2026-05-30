@@ -132,6 +132,7 @@ function createFetchRecorder(
           heartbeatIntervalMs: 30000,
           leaseTimeoutMs: 90000,
           trackedThreadTargets: [],
+          liveEnvironmentIds: [],
         },
         { status: 201 },
       );
@@ -570,6 +571,7 @@ describe("createHostDaemonApp", () => {
             heartbeatIntervalMs: 30000,
             leaseTimeoutMs: 90000,
             trackedThreadTargets: [],
+            liveEnvironmentIds: [],
           },
           { status: 201 },
         );

@@ -717,6 +717,17 @@ export async function createHostDaemonApp(
     onTerminalMessage: (message) => terminalManager.handleMessage(message),
     onSessionOpened: (session) => {
       sessionState.value = session.sessionId;
+      void runtimeManager
+        .reconcileLiveEnvironments(new Set(session.liveEnvironmentIds))
+        .catch((error) => {
+          options.logger.warn(
+            {
+              sessionId: session.sessionId,
+              ...runtimeErrorLogFields(error),
+            },
+            "Failed to reconcile live environments after session opened",
+          );
+        });
       runtimeManager.replaceTrackedThreadStorageTargets(
         session.trackedThreadTargets,
       );

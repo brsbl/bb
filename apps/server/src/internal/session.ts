@@ -1,5 +1,6 @@
 import {
   getActiveSession,
+  listLiveEnvironmentIdsOnHost,
   listThreadEnvironmentAssignmentsOnHost,
   openSession,
   upsertHost,
@@ -108,12 +109,17 @@ export function registerInternalSessionRoutes(app: Hono, deps: AppDeps): void {
             threadId: target.threadId,
           }));
 
+          const liveEnvironmentIds = listLiveEnvironmentIdsOnHost(deps.db, {
+            hostId: daemon.hostId,
+          });
+
           return context.json(
             {
               sessionId: session.id,
               heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
               leaseTimeoutMs: LEASE_TIMEOUT_MS,
               trackedThreadTargets,
+              liveEnvironmentIds,
             },
             201,
           );
