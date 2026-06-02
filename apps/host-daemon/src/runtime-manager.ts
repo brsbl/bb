@@ -619,10 +619,22 @@ export class RuntimeManager {
    * with active threads or terminals are never dropped here; their lifecycle is
    * owned by explicit stop/destroy commands, guarding against transient gaps in
    * the live set.
+   *
+   * Conversely, any tombstoned environment the server now reports live is
+   * healed (its tombstone is lifted): a destroy whose teardown threw leaves the
+   * env tombstoned here while the server reverts it to ready, which would
+   * otherwise wedge every workspace.* command on `environment_destroyed` until
+   * a thread/terminal happened to re-provision it.
    */
   async reconcileLiveEnvironments(
     liveEnvironmentIds: ReadonlySet<string>,
   ): Promise<void> {
+    for (const environmentId of [...this.destroyedEnvironmentIds]) {
+      if (liveEnvironmentIds.has(environmentId)) {
+        this.destroyedEnvironmentIds.delete(environmentId);
+      }
+    }
+
     const staleEntries = [...this.entries.values()].filter((entry) => {
       if (liveEnvironmentIds.has(entry.environmentId)) {
         return false;

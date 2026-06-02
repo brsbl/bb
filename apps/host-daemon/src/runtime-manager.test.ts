@@ -723,6 +723,42 @@ describe("RuntimeManager", () => {
     expect(manager.isEnvironmentDestroyed("env-busy")).toBe(false);
   });
 
+  it("lifts the tombstone for an environment the server reports live again during reconcile", async () => {
+    const stopWatchingStatus = vi.fn(() => undefined);
+    const { hostWatcher, watchWorkspace } = createFakeHostWatcher({
+      watchWorkspaceImplementation: (_args) => stopWatchingStatus,
+    });
+    const manager = new RuntimeManager({
+      hostWatcher,
+      provisionWorkspace: createProvisionWorkspaceMock("/tmp/env-1"),
+      createRuntime: vi.fn(() => createFakeRuntime()),
+    });
+
+    await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    await manager.destroyEnvironment("env-1");
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(true);
+    expect(watchWorkspace).toHaveBeenCalledTimes(1);
+
+    // A destroy whose teardown threw leaves the env tombstoned here while the
+    // server reverts it to ready; reconcile must heal it so it stops returning
+    // environment_destroyed for an env the server considers live.
+    await manager.reconcileLiveEnvironments(new Set(["env-1"]));
+    expect(manager.isEnvironmentDestroyed("env-1")).toBe(false);
+
+    // Watchable again: a reconnecting workspace command re-provisions the env
+    // and installs a fresh watcher.
+    const entry = await manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    expect(entry.environmentId).toBe("env-1");
+    expect(manager.get("env-1")).toBeDefined();
+    expect(watchWorkspace).toHaveBeenCalledTimes(2);
+  });
+
   it("installs the workspace status watcher once and reports workspace status changes", async () => {
     const stopWatchingStatus = vi.fn(() => undefined);
     let watchWorkspaceArgs: WatchWorkspaceArgs | undefined;
