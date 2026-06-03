@@ -84,6 +84,16 @@ function recordReplayThreadMetadata(
   });
 }
 
+function isMissingThreadProviderAssociationError(
+  error: unknown,
+  threadId: string,
+): boolean {
+  return (
+    error instanceof Error &&
+    error.message === `No provider associated with thread "${threadId}"`
+  );
+}
+
 /**
  * Translate runtime-shape execution options (which carry permissionEscalation
  * details and no source field) into the server-shape used by stored client
@@ -271,7 +281,13 @@ const commandHandlers: CommandHandlerMap = {
       command.environmentId,
       options.runtimeManager,
     );
-    await entry.runtime.stopThread({ threadId: command.threadId });
+    try {
+      await entry.runtime.stopThread({ threadId: command.threadId });
+    } catch (error) {
+      if (!isMissingThreadProviderAssociationError(error, command.threadId)) {
+        throw error;
+      }
+    }
     // Stop completion finalizes server-side thread state. Flush provider
     // events first so buffered lifecycle events cannot arrive after that.
     await options.eventSink.flush();

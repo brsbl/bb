@@ -781,6 +781,30 @@ describe("thread command dispatch", () => {
     expect(harness.manager.listActiveThreads()).toEqual([]);
   });
 
+  it("treats thread.stop as complete when provider identity is already detached", async () => {
+    const harness = createHarness();
+    await harness.manager.ensureEnvironment({
+      environmentId: "env-1",
+      workspacePath: "/tmp/env-1",
+    });
+    harness.manager.markThreadActive("env-1", "thread-1", "provider-1");
+    harness.runtime.stopThread = async () => {
+      throw new Error('No provider associated with thread "thread-1"');
+    };
+
+    const result = await dispatchCommand(
+      {
+        type: "thread.stop",
+        environmentId: "env-1",
+        threadId: "thread-1",
+      },
+      harness.dispatchOptions(),
+    );
+
+    expect(result).toEqual({});
+    expect(harness.manager.listActiveThreads()).toEqual([]);
+  });
+
   it("creates the environment runtime for archive commands when needed", async () => {
     const harness = createHarness({ workspacePath: "/tmp/recreated-env" });
 
