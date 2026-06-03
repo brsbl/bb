@@ -9,6 +9,7 @@ import {
   AppPageHeader,
   HEADER_ICON_BUTTON_CLASS,
 } from "@/components/layout/AppPageHeader";
+import { MACOS_WINDOW_NO_DRAG_CLASS } from "@/lib/bb-desktop";
 import { resolveShowPanelControl } from "@/components/secondary-panel/panelToggleControlState";
 import type { ThreadGitActionDialogTarget } from "@/components/dialogs/ThreadGitActionDialog";
 
@@ -71,7 +72,9 @@ export function ThreadDetailHeader({
       {!isManagerThread && isManagedThread ? (
         <Pill variant="outline">managed</Pill>
       ) : null}
-      {actionsMenu}
+      {actionsMenu ? (
+        <span className={MACOS_WINDOW_NO_DRAG_CLASS}>{actionsMenu}</span>
+      ) : null}
     </>
   );
 

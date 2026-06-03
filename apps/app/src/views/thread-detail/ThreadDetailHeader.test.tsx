@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MACOS_WINDOW_NO_DRAG_CLASS } from "@/lib/bb-desktop";
 import { ThreadDetailHeader } from "./ThreadDetailHeader";
 
 vi.mock("@/components/ui/hooks/use-compact-viewport.js", () => ({
@@ -14,6 +16,7 @@ vi.mock("@/components/ui/sidebar.js", () => ({
 }));
 
 interface RenderHeaderOverrides {
+  actionsMenu?: ReactNode;
   isSecondaryPanelOpen?: boolean;
   onToggleSecondaryPanel?: () => void;
 }
@@ -21,7 +24,7 @@ interface RenderHeaderOverrides {
 function renderHeader(overrides: RenderHeaderOverrides = {}) {
   const noop = () => {};
   const props = {
-    actionsMenu: null,
+    actionsMenu: overrides.actionsMenu ?? null,
     activeTerminalCount: 0,
     isManagedThread: false,
     isManagerThread: false,
@@ -70,5 +73,23 @@ describe("ThreadDetailHeader panel toggle", () => {
     expect(
       screen.queryByRole("button", { name: "Restore conversation" }),
     ).toBeNull();
+  });
+});
+
+describe("ThreadDetailHeader actions menu", () => {
+  it("keeps the title menu out of the macOS drag region", () => {
+    renderHeader({
+      actionsMenu: (
+        <button type="button" aria-label="Thread actions">
+          Actions
+        </button>
+      ),
+    });
+
+    const button = screen.getByRole("button", { name: "Thread actions" });
+
+    expect(button.parentElement?.className).toContain(
+      MACOS_WINDOW_NO_DRAG_CLASS,
+    );
   });
 });
