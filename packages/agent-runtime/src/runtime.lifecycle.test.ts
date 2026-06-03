@@ -16,10 +16,12 @@ import {
   findLastRecordedCommand,
   fullRuntimeOptions,
   wait,
+  waitForRuntimeState,
   waitForThreadAgentMessageText,
   waitForThreadTurnCompleted,
   waitForThreadTurnStarted,
 } from "./test/runtime-test-harness.js";
+import type { AgentRuntimeProcessExitInfo } from "./types.js";
 
 describe("createAgentRuntime lifecycle", () => {
   let tmpDir: string;
@@ -982,6 +984,359 @@ rl.on("line", (line) => {
         text: "after restart",
         threadId: "t1",
       });
+
+      await runtime.shutdown();
+    });
+
+    it("treats a provider exit during a restart-provider stop as an expected shutdown", async () => {
+      // Mirror codex's app-server exiting while it handles turn/interrupt: the
+      // provider acknowledges nothing and exits while the stop request is still
+      // in flight.
+      const stopExitScript = join(tmpDir, "stop-exit-provider.cjs");
+      writeFileSync(
+        stopExitScript,
+        `const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          if (msg.method === "initialize") {
+            process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\\n");
+          } else if (msg.method === "thread/start") {
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: msg.id,
+              result: { providerThreadId: "prov-stop" }
+            }) + "\\n");
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", method: "thread/identity",
+              params: { threadId: msg.params?.threadId, providerThreadId: "prov-stop" }
+            }) + "\\n");
+          } else if (msg.method === "thread/stop") {
+            // Exit while the stop request is in flight, never responding.
+            setTimeout(() => process.exit(0), 10);
+          }
+        });`,
+      );
+
+      const exits: AgentRuntimeProcessExitInfo[] = [];
+      const adapter = createFakeAdapter(stopExitScript);
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => {},
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        onProcessExit: (info) => {
+          exits.push(info);
+        },
+        adapterFactory: () => ({
+          ...adapter,
+          buildCommandPlan(command): ProviderCommandPlan {
+            const plan = adapter.buildCommandPlan(command);
+            if (command.type === "thread/stop" && plan.kind === "request") {
+              const processEffect: ProviderCommandProcessEffect =
+                "restart-provider";
+              return { ...plan, processEffect };
+            }
+            return plan;
+          },
+        }),
+      });
+
+      await runtime.startThread({
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+
+      // The stop must resolve even though the provider exits mid-interrupt
+      // instead of replying — the restart is the intended outcome, not a crash.
+      await expect(
+        runtime.stopThread({ threadId: "t1" }),
+      ).resolves.toBeUndefined();
+      expect(runtime.listRunningProviders()).toEqual([]);
+
+      await waitForRuntimeState({
+        label: "provider process exit callback",
+        predicate: () => exits.length === 1,
+      });
+      // The exit is reported as expected, so the runtime manager does not raise a
+      // provider-crash error for an intentional stop.
+      expect(exits[0]).toEqual(
+        expect.objectContaining({ providerId: "fake", expected: true }),
+      );
+
+      await runtime.shutdown();
+    });
+
+    it("treats a signal-killed provider during a restart-provider stop as expected", async () => {
+      // Codex can also die by signal while handling the interrupt. A signal exit
+      // leaves exitCode null but sets signalCode, so the exited check must cover
+      // both.
+      const stopSignalScript = join(tmpDir, "stop-signal-provider.cjs");
+      writeFileSync(
+        stopSignalScript,
+        `const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          if (msg.method === "initialize") {
+            process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\\n");
+          } else if (msg.method === "thread/start") {
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: msg.id,
+              result: { providerThreadId: "prov-stop" }
+            }) + "\\n");
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", method: "thread/identity",
+              params: { threadId: msg.params?.threadId, providerThreadId: "prov-stop" }
+            }) + "\\n");
+          } else if (msg.method === "thread/stop") {
+            // Die by signal while the stop request is in flight (exitCode null).
+            setTimeout(() => process.kill(process.pid, "SIGKILL"), 10);
+          }
+        });`,
+      );
+
+      const exits: AgentRuntimeProcessExitInfo[] = [];
+      const adapter = createFakeAdapter(stopSignalScript);
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => {},
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        onProcessExit: (info) => {
+          exits.push(info);
+        },
+        adapterFactory: () => ({
+          ...adapter,
+          buildCommandPlan(command): ProviderCommandPlan {
+            const plan = adapter.buildCommandPlan(command);
+            if (command.type === "thread/stop" && plan.kind === "request") {
+              const processEffect: ProviderCommandProcessEffect =
+                "restart-provider";
+              return { ...plan, processEffect };
+            }
+            return plan;
+          },
+        }),
+      });
+
+      await runtime.startThread({
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+
+      await expect(
+        runtime.stopThread({ threadId: "t1" }),
+      ).resolves.toBeUndefined();
+      expect(runtime.listRunningProviders()).toEqual([]);
+
+      await waitForRuntimeState({
+        label: "provider process exit callback",
+        predicate: () => exits.length === 1,
+      });
+      expect(exits[0]).toEqual(
+        expect.objectContaining({
+          providerId: "fake",
+          expected: true,
+          signal: "SIGKILL",
+        }),
+      );
+
+      await runtime.shutdown();
+    });
+
+    it("clears the expected-shutdown mark when a restart-provider stop fails while the provider stays alive", async () => {
+      // The interrupt is rejected by a protocol error, not a process exit, and
+      // the provider keeps running. The stop must surface the error AND must not
+      // leave the provider poisoned so a later unrelated crash is suppressed.
+      const stopRejectScript = join(tmpDir, "stop-reject-provider.cjs");
+      writeFileSync(
+        stopRejectScript,
+        `const rl = require("readline").createInterface({ input: process.stdin });
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          if (msg.method === "initialize") {
+            process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\\n");
+          } else if (msg.method === "thread/start") {
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: msg.id,
+              result: { providerThreadId: "prov-stop" }
+            }) + "\\n");
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", method: "thread/identity",
+              params: { threadId: msg.params?.threadId, providerThreadId: "prov-stop" }
+            }) + "\\n");
+          } else if (msg.method === "thread/stop") {
+            // Reject the interrupt while staying alive...
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: msg.id,
+              error: { code: -32000, message: "interrupt failed" }
+            }) + "\\n");
+            // ...then crash later for an unrelated reason.
+            setTimeout(() => process.exit(7), 100);
+          }
+        });`,
+      );
+
+      const exits: AgentRuntimeProcessExitInfo[] = [];
+      const adapter = createFakeAdapter(stopRejectScript);
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => {},
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        onProcessExit: (info) => {
+          exits.push(info);
+        },
+        adapterFactory: () => ({
+          ...adapter,
+          buildCommandPlan(command): ProviderCommandPlan {
+            const plan = adapter.buildCommandPlan(command);
+            if (command.type === "thread/stop" && plan.kind === "request") {
+              const processEffect: ProviderCommandProcessEffect =
+                "restart-provider";
+              return { ...plan, processEffect };
+            }
+            return plan;
+          },
+        }),
+      });
+
+      await runtime.startThread({
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+
+      // A non-exit interrupt failure must be surfaced, not swallowed.
+      await expect(runtime.stopThread({ threadId: "t1" })).rejects.toThrow(
+        /interrupt failed/,
+      );
+
+      // The later, unrelated exit must NOT be suppressed as an expected shutdown.
+      await waitForRuntimeState({
+        label: "unrelated provider exit",
+        predicate: () => exits.length === 1,
+      });
+      expect(exits[0]).toEqual(
+        expect.objectContaining({
+          providerId: "fake",
+          expected: false,
+          code: 7,
+        }),
+      );
+
+      await runtime.shutdown();
+    });
+
+    it("keeps a concurrent stop's expected-shutdown mark when an overlapping restart-provider stop fails", async () => {
+      // Two restart-provider stops overlap on the same provider process. Stop B
+      // (t2) fails with a protocol error while the process is alive and clears
+      // its own mark; Stop A (t1) then causes the intended process exit. A's
+      // mark must survive B's failure so the exit is still reported as expected.
+      const overlapScript = join(tmpDir, "stop-overlap-provider.cjs");
+      writeFileSync(
+        overlapScript,
+        `const rl = require("readline").createInterface({ input: process.stdin });
+        let started = 0;
+        rl.on("line", (line) => {
+          const msg = JSON.parse(line);
+          if (msg.method === "initialize") {
+            process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }) + "\\n");
+          } else if (msg.method === "thread/start") {
+            started += 1;
+            const providerThreadId = "prov-" + started;
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", id: msg.id, result: { providerThreadId }
+            }) + "\\n");
+            process.stdout.write(JSON.stringify({
+              jsonrpc: "2.0", method: "thread/identity",
+              params: { threadId: msg.params?.threadId, providerThreadId }
+            }) + "\\n");
+          } else if (msg.method === "thread/stop") {
+            if (msg.params?.threadId === "t2") {
+              // Stop B fails without exiting, then the process exits for Stop A.
+              process.stdout.write(JSON.stringify({
+                jsonrpc: "2.0", id: msg.id,
+                error: { code: -32000, message: "interrupt failed" }
+              }) + "\\n");
+              setTimeout(() => process.exit(0), 50);
+            }
+            // Stop A (t1): held open; the scheduled exit interrupts it.
+          }
+        });`,
+      );
+
+      const exits: AgentRuntimeProcessExitInfo[] = [];
+      const adapter = createFakeAdapter(overlapScript);
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => {},
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        onProcessExit: (info) => {
+          exits.push(info);
+        },
+        adapterFactory: () => ({
+          ...adapter,
+          buildCommandPlan(command): ProviderCommandPlan {
+            const plan = adapter.buildCommandPlan(command);
+            if (command.type === "thread/stop" && plan.kind === "request") {
+              const processEffect: ProviderCommandProcessEffect =
+                "restart-provider";
+              return { ...plan, processEffect };
+            }
+            return plan;
+          },
+        }),
+      });
+
+      await runtime.startThread({
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+      await runtime.startThread({
+        environmentId: "env-1",
+        threadId: "t2",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+      // Both threads share one provider process.
+      expect(runtime.listRunningProviders()).toEqual(["fake"]);
+
+      const stopA = runtime.stopThread({ threadId: "t1" });
+      const stopB = runtime.stopThread({ threadId: "t2" });
+
+      // Stop B fails (protocol error) and clears only its own mark.
+      await expect(stopB).rejects.toThrow(/interrupt failed/);
+      // Stop A's intended exit must still be expected — B must not have erased it.
+      await expect(stopA).resolves.toBeUndefined();
+      expect(runtime.listRunningProviders()).toEqual([]);
+
+      await waitForRuntimeState({
+        label: "provider process exit callback",
+        predicate: () => exits.length === 1,
+      });
+      expect(exits[0]).toEqual(
+        expect.objectContaining({ providerId: "fake", expected: true }),
+      );
 
       await runtime.shutdown();
     });

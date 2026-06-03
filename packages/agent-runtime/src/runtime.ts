@@ -32,7 +32,9 @@ import {
   type RuntimeProviderRequestKind,
 } from "./runtime-provider-requests.js";
 import {
+  hasChildProcessExited,
   RuntimeProviderProcessManager,
+  type ProviderShutdownToken,
   type RuntimeProviderProcess,
 } from "./runtime-provider-process.js";
 import {
@@ -1021,23 +1023,51 @@ function createAgentRuntimeInternal(
         turnReplayFilter.clearThread(threadId);
         return;
       }
-      await sendJsonRpcRequest({
-        child: proc.child,
-        message: cmd,
-        pending: proc.pending,
-        getNextId: () => nextRequestId++,
-        resultSchema: ignoredJsonRpcResultSchema,
-      });
-      emitAcceptedCommandEvents({
-        command: adapterCommand,
-        proc,
-        providerId: pid,
-        rawMethod: cmd.method,
-        sourceThreadId: threadId,
-      });
+
+      // A restart-provider stop tears the provider process down immediately
+      // after the interrupt, so the process exiting *while the interrupt is in
+      // flight* is the restart we asked for — not a crash. Mark the shutdown
+      // expected up front so the exit is not surfaced as a provider-crash error,
+      // and tolerate the in-flight request rejecting because the process is
+      // already gone.
+      const restartsProvider = cmd.processEffect === "restart-provider";
+      const shutdownToken: ProviderShutdownToken | null = restartsProvider
+        ? providerProcesses.markProviderShutdownExpected({ providerId: pid })
+        : null;
+      try {
+        await sendJsonRpcRequest({
+          child: proc.child,
+          message: cmd,
+          pending: proc.pending,
+          getNextId: () => nextRequestId++,
+          resultSchema: ignoredJsonRpcResultSchema,
+        });
+        emitAcceptedCommandEvents({
+          command: adapterCommand,
+          proc,
+          providerId: pid,
+          rawMethod: cmd.method,
+          sourceThreadId: threadId,
+        });
+      } catch (error) {
+        if (!(restartsProvider && hasChildProcessExited(proc.child))) {
+          // The interrupt failed for a reason other than the provider exiting
+          // (e.g. a protocol/JSON-RPC error) while the process is still live, so
+          // undo only this stop's expected-shutdown mark — otherwise a later
+          // unrelated exit would be silently treated as expected. Concurrent
+          // stops keep their own marks. Then surface the error.
+          if (shutdownToken) {
+            providerProcesses.clearProviderShutdownExpected({
+              providerId: pid,
+              token: shutdownToken,
+            });
+          }
+          throw error;
+        }
+      }
       turnState.clearThread(threadId);
       turnReplayFilter.clearThread(threadId);
-      if (cmd.processEffect === "restart-provider") {
+      if (restartsProvider) {
         await providerProcesses.shutdownProvider({ providerId: pid });
       }
     },

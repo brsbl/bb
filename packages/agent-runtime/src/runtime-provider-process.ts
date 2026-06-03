@@ -20,10 +20,26 @@ import {
 import type { RuntimeProviderIdentityState } from "./runtime-thread-identity.js";
 import type { AgentRuntimeOptions, AgentRuntimeSkillRoot } from "./types.js";
 
+/**
+ * Opaque handle identifying a single caller's expected-shutdown mark. Each
+ * `markProviderShutdownExpected` call mints a fresh token so overlapping callers
+ * can each clear only their own mark without disturbing another caller's.
+ */
+export type ProviderShutdownToken = symbol;
+
+function createProviderShutdownToken(): ProviderShutdownToken {
+  return Symbol("provider-shutdown-expected");
+}
+
 export interface RuntimeProviderProcess {
   adapter: ProviderAdapter;
   child: ChildProcess;
-  expectedShutdown: boolean;
+  /**
+   * Outstanding expected-shutdown marks. A process exit is treated as expected
+   * when this set is non-empty; it is consumed (cleared) on exit. A set rather
+   * than a boolean so concurrent callers cannot clear each other's mark.
+   */
+  expectedShutdownTokens: Set<ProviderShutdownToken>;
   identity: RuntimeProviderIdentityState;
   interactiveRequestScope: string;
   pending: Map<string | number, PendingJsonRpcRequest>;
@@ -63,6 +79,15 @@ export interface EnsureRuntimeProviderArgs {
 export interface ShutdownRuntimeProviderArgs {
   providerId: string;
   timeoutMs?: number;
+}
+
+export interface ProviderShutdownExpectedArgs {
+  providerId: string;
+}
+
+export interface ClearProviderShutdownExpectedArgs {
+  providerId: string;
+  token: ProviderShutdownToken;
 }
 
 interface CleanupFailedStartupArgs {
@@ -188,11 +213,46 @@ export class RuntimeProviderProcessManager {
       return;
     }
 
-    providerProcess.expectedShutdown = true;
+    providerProcess.expectedShutdownTokens.add(createProviderShutdownToken());
     await this.terminateProviderProcess({
       providerProcess,
       timeoutMs: args.timeoutMs,
     });
+  }
+
+  /**
+   * Marks the provider's next process exit as an expected shutdown without
+   * terminating it, returning a token the caller passes to
+   * {@link clearProviderShutdownExpected} to undo only its own mark. Callers that
+   * are about to tear a provider down (for example a restart-provider stop) use
+   * this so an exit while their request is still in flight is treated as the
+   * intended shutdown rather than an unexpected crash. Returns `null` when the
+   * provider is gone or already exited (nothing to mark or later clear).
+   */
+  markProviderShutdownExpected(
+    args: ProviderShutdownExpectedArgs,
+  ): ProviderShutdownToken | null {
+    const providerProcess = this.processes.get(args.providerId);
+    if (!providerProcess || hasChildProcessExited(providerProcess.child)) {
+      return null;
+    }
+    const token = createProviderShutdownToken();
+    providerProcess.expectedShutdownTokens.add(token);
+    return token;
+  }
+
+  /**
+   * Undoes a single {@link markProviderShutdownExpected} mark when the
+   * anticipated teardown did not happen, so a later unrelated exit is not
+   * silently treated as an expected shutdown. Only the matching token is
+   * removed, leaving any concurrent caller's mark intact.
+   */
+  clearProviderShutdownExpected(args: ClearProviderShutdownExpectedArgs): void {
+    const providerProcess = this.processes.get(args.providerId);
+    if (!providerProcess) {
+      return;
+    }
+    providerProcess.expectedShutdownTokens.delete(args.token);
   }
 
   async shutdown(): Promise<void> {
@@ -263,7 +323,7 @@ export class RuntimeProviderProcessManager {
     const providerProcess: RuntimeProviderProcess = {
       child,
       adapter,
-      expectedShutdown: false,
+      expectedShutdownTokens: new Set(),
       interactiveRequestScope: randomUUID(),
       identity: this.args.createProviderIdentityState(providerId),
       pending: new Map(),
@@ -324,7 +384,9 @@ export class RuntimeProviderProcessManager {
     }
 
     this.processes.delete(args.providerId);
-    args.providerProcess.expectedShutdown = true;
+    args.providerProcess.expectedShutdownTokens.add(
+      createProviderShutdownToken(),
+    );
     for (const [, pending] of args.providerProcess.pending) {
       pending.reject(args.startupError);
     }
@@ -445,6 +507,15 @@ export class RuntimeProviderProcessManager {
   }
 }
 
+/**
+ * Whether a child process has terminated, covering both normal exits
+ * (`exitCode`) and signal terminations (`signalCode`). Node reports a
+ * signal-killed child with a null `exitCode` and a set `signalCode`.
+ */
+export function hasChildProcessExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
 function formatProviderStderr(stderrChunks: readonly string[]): string | null {
   const stderr = stderrChunks.join("\n").trim();
   if (stderr.length === 0) {
@@ -456,8 +527,10 @@ function formatProviderStderr(stderrChunks: readonly string[]): string | null {
 function consumeExpectedProviderProcessShutdown(
   providerProcess: RuntimeProviderProcess,
 ): boolean {
-  const expected = providerProcess.expectedShutdown;
-  providerProcess.expectedShutdown = false;
+  // The process exits once, so any outstanding mark (from this or a concurrent
+  // caller) makes the exit expected; clear them all.
+  const expected = providerProcess.expectedShutdownTokens.size > 0;
+  providerProcess.expectedShutdownTokens.clear();
   return expected;
 }
 
