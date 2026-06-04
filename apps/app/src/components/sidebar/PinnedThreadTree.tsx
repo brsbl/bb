@@ -89,7 +89,10 @@ interface SortablePinnedRootItemProps {
   selectedThreadId?: string;
 }
 
-interface PinnedRootItemProps extends Omit<SortablePinnedRootItemProps, "disabled"> {
+interface PinnedRootItemProps extends Omit<
+  SortablePinnedRootItemProps,
+  "disabled"
+> {
   consumeClickSuppression?: () => boolean;
 }
 
@@ -171,6 +174,7 @@ const PinnedRootItem = memo(function PinnedRootItem({
       selectedThreadId={selectedThreadId}
       variant="section"
       isManagerCollapsed={collapsedManagerIds.has(item.group.managerThread.id)}
+      collapsedManagerIds={collapsedManagerIds}
       collapsedEnvironmentIds={collapsedEnvironmentIds}
       onProjectSelect={onProjectSelect}
       onToggleManagerCollapsed={onToggleManagerCollapsed}
@@ -242,6 +246,7 @@ const SortablePinnedRootItem = memo(function SortablePinnedRootItem({
       selectedThreadId={selectedThreadId}
       variant="section"
       isManagerCollapsed={collapsedManagerIds.has(item.group.managerThread.id)}
+      collapsedManagerIds={collapsedManagerIds}
       collapsedEnvironmentIds={collapsedEnvironmentIds}
       onProjectSelect={onProjectSelect}
       onToggleManagerCollapsed={onToggleManagerCollapsed}
@@ -265,8 +270,9 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
   isPinnedReorderPending = false,
   onReorderPinnedRoot,
 }: PinnedThreadTreeProps) {
-  const [optimisticPinnedRootOrder, setOptimisticPinnedRootOrder] =
-    useState<PinnedRootOrderEntry[] | null>(null);
+  const [optimisticPinnedRootOrder, setOptimisticPinnedRootOrder] = useState<
+    PinnedRootOrderEntry[] | null
+  >(null);
   const renderedRootItems = useMemo(() => {
     if (!optimisticPinnedRootOrder) {
       return rootItems;
@@ -289,7 +295,9 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
     [renderedRootItems],
   );
   const reorderDisabled =
-    isPinnedReorderPending || !onReorderPinnedRoot || renderedRootItems.length < 2;
+    isPinnedReorderPending ||
+    !onReorderPinnedRoot ||
+    renderedRootItems.length < 2;
   const {
     beginDragClickSuppression,
     clearDragClickSuppressionSoon,
@@ -306,9 +314,12 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-  const handleDragStart = useCallback((_event: DragStartEvent) => {
-    beginDragClickSuppression();
-  }, [beginDragClickSuppression]);
+  const handleDragStart = useCallback(
+    (_event: DragStartEvent) => {
+      beginDragClickSuppression();
+    },
+    [beginDragClickSuppression],
+  );
   const handleDragCancel = useCallback(() => {
     clearDragClickSuppressionSoon();
   }, [clearDragClickSuppressionSoon]);

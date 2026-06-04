@@ -20,8 +20,20 @@ interface BuildPinnedSidebarStateArgs {
 }
 
 interface BuildPinnedManagerGroupArgs {
-  children: readonly ThreadListEntry[];
+  descendants: readonly ThreadListEntry[];
   managerThread: ThreadListEntry;
+}
+
+interface CollectManagedDescendantsArgs {
+  childrenByManagerId: ReadonlyMap<string, readonly ThreadListEntry[]>;
+  managerThreadId: string;
+  visitedManagerIds: ReadonlySet<string>;
+}
+
+interface HasPinnedManagerAncestorArgs {
+  pinnedManagerThreadIds: ReadonlySet<string>;
+  thread: ThreadListEntry;
+  threadsById: ReadonlyMap<string, ThreadListEntry>;
 }
 
 function compareByPinnedFallback(
@@ -56,10 +68,10 @@ function comparePinnedRoots(
 }
 
 function buildPinnedManagerGroup({
-  children,
+  descendants,
   managerThread,
 }: BuildPinnedManagerGroupArgs): ManagerThreadGroup {
-  const groups = buildProjectThreadGroups([managerThread, ...children]);
+  const groups = buildProjectThreadGroups([managerThread, ...descendants]);
   const group = groups.managerThreadGroups[0];
   if (group) {
     return group;
@@ -75,9 +87,62 @@ function buildPinnedManagerGroup({
   };
 }
 
+function collectManagedDescendants({
+  childrenByManagerId,
+  managerThreadId,
+  visitedManagerIds,
+}: CollectManagedDescendantsArgs): ThreadListEntry[] {
+  if (visitedManagerIds.has(managerThreadId)) {
+    return [];
+  }
+
+  const nextVisitedManagerIds = new Set(visitedManagerIds);
+  nextVisitedManagerIds.add(managerThreadId);
+  const descendants: ThreadListEntry[] = [];
+
+  for (const child of childrenByManagerId.get(managerThreadId) ?? []) {
+    descendants.push(child);
+    if (child.type === "manager") {
+      descendants.push(
+        ...collectManagedDescendants({
+          childrenByManagerId,
+          managerThreadId: child.id,
+          visitedManagerIds: nextVisitedManagerIds,
+        }),
+      );
+    }
+  }
+
+  return descendants;
+}
+
+function hasPinnedManagerAncestor({
+  pinnedManagerThreadIds,
+  thread,
+  threadsById,
+}: HasPinnedManagerAncestorArgs): boolean {
+  const visitedThreadIds = new Set<string>();
+  let parentThreadId = thread.parentThreadId;
+
+  while (parentThreadId !== null) {
+    if (visitedThreadIds.has(parentThreadId)) {
+      return false;
+    }
+    if (pinnedManagerThreadIds.has(parentThreadId)) {
+      return true;
+    }
+
+    visitedThreadIds.add(parentThreadId);
+    parentThreadId = threadsById.get(parentThreadId)?.parentThreadId ?? null;
+  }
+
+  return false;
+}
+
 export function buildPinnedSidebarState({
   threads,
 }: BuildPinnedSidebarStateArgs): PinnedSidebarState {
+  const threadsById = new Map(threads.map((thread) => [thread.id, thread]));
   const explicitlyPinnedThreads = threads.filter(
     (thread) => thread.pinnedAt !== null,
   );
@@ -89,7 +154,7 @@ export function buildPinnedSidebarState({
   const childrenByManagerId = new Map<string, ThreadListEntry[]>();
 
   for (const thread of threads) {
-    if (thread.type !== "standard" || thread.parentThreadId === null) {
+    if (thread.parentThreadId === null) {
       continue;
     }
     const managerChildren = childrenByManagerId.get(thread.parentThreadId);
@@ -104,16 +169,23 @@ export function buildPinnedSidebarState({
     explicitlyPinnedThreads.map((thread) => thread.id),
   );
   for (const managerThreadId of pinnedManagerThreadIds) {
-    for (const child of childrenByManagerId.get(managerThreadId) ?? []) {
-      effectivePinnedThreadIds.add(child.id);
+    for (const descendant of collectManagedDescendants({
+      childrenByManagerId,
+      managerThreadId,
+      visitedManagerIds: new Set(),
+    })) {
+      effectivePinnedThreadIds.add(descendant.id);
     }
   }
 
   const visiblePinnedRoots = explicitlyPinnedThreads
     .filter(
       (thread) =>
-        thread.parentThreadId === null ||
-        !pinnedManagerThreadIds.has(thread.parentThreadId),
+        !hasPinnedManagerAncestor({
+          pinnedManagerThreadIds,
+          thread,
+          threadsById,
+        }),
     )
     .sort(comparePinnedRoots);
 
@@ -124,7 +196,11 @@ export function buildPinnedSidebarState({
         ? {
             kind: "manager",
             group: buildPinnedManagerGroup({
-              children: childrenByManagerId.get(thread.id) ?? [],
+              descendants: collectManagedDescendants({
+                childrenByManagerId,
+                managerThreadId: thread.id,
+                visitedManagerIds: new Set(),
+              }),
               managerThread: thread,
             }),
           }

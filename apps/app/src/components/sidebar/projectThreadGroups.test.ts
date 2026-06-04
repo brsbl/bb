@@ -42,25 +42,37 @@ function createThread(
   };
 }
 
-type ItemSummary = string | { env: string; threads: string[] };
+type ItemSummary =
+  | string
+  | { env: string; threads: string[] }
+  | { manager: string; items: ItemSummary[] };
 
 function summarizeItems(items: readonly ProjectThreadItem[]): ItemSummary[] {
-  return items.map((item) =>
-    item.kind === "thread"
-      ? item.thread.id
-      : {
-          env: item.group.environmentId,
-          threads: item.group.threads.map((thread) => thread.id),
-        },
-  );
+  return items.map((item) => {
+    if (item.kind === "thread") {
+      return item.thread.id;
+    }
+    if (item.kind === "manager") {
+      return {
+        manager: item.group.managerThread.id,
+        items: summarizeItems(item.group.managedItems),
+      };
+    }
+    return {
+      env: item.group.environmentId,
+      threads: item.group.threads.map((thread) => thread.id),
+    };
+  });
 }
 
 function looseThreadIds(items: readonly ProjectThreadItem[]): string[] {
   return items.map((item) => {
     if (item.kind !== "thread") {
-      throw new Error(
-        `expected thread item, got env group ${item.group.environmentId}`,
-      );
+      const itemDescription =
+        item.kind === "environment"
+          ? `env group ${item.group.environmentId}`
+          : `manager group ${item.group.managerThread.id}`;
+      throw new Error(`expected thread item, got ${itemDescription}`);
     }
     return item.thread.id;
   });
@@ -135,6 +147,54 @@ describe("buildProjectThreadGroups", () => {
       "orphan-child",
       "root-old",
     ]);
+  });
+
+  it("nests manager threads assigned to another manager", () => {
+    const groups = buildProjectThreadGroups([
+      createThread({
+        id: "parent-manager",
+        type: "manager",
+        createdAt: 100,
+        latestAttentionAt: 100,
+      }),
+      createThread({
+        id: "child-manager",
+        type: "manager",
+        parentThreadId: "parent-manager",
+        createdAt: 90,
+        latestAttentionAt: 90,
+      }),
+      createThread({
+        id: "nested-standard",
+        parentThreadId: "child-manager",
+        createdAt: 80,
+        latestAttentionAt: 80,
+      }),
+      createThread({
+        id: "parent-standard",
+        parentThreadId: "parent-manager",
+        createdAt: 70,
+        latestAttentionAt: 70,
+      }),
+      createThread({
+        id: "orphan-manager",
+        type: "manager",
+        parentThreadId: "missing-manager",
+        createdAt: 60,
+        latestAttentionAt: 60,
+      }),
+    ]);
+
+    expect(
+      groups.managerThreadGroups.map((group) => group.managerThread.id),
+    ).toEqual(["parent-manager", "orphan-manager"]);
+    expect(
+      summarizeItems(groups.managerThreadGroups[0]?.managedItems ?? []),
+    ).toEqual([
+      { manager: "child-manager", items: ["nested-standard"] },
+      "parent-standard",
+    ]);
+    expect(groups.managerThreadGroups[0]?.stats.managedChildCount).toBe(2);
   });
 
   it("sorts unmanaged standard threads with active rows before inactive attention recency", () => {

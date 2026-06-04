@@ -23,7 +23,8 @@ export interface EnvironmentThreadGroup {
 // rather than two parallel arrays.
 export type ProjectThreadItem =
   | { kind: "thread"; thread: ThreadListEntry }
-  | { kind: "environment"; group: EnvironmentThreadGroup };
+  | { kind: "environment"; group: EnvironmentThreadGroup }
+  | { kind: "manager"; group: ManagerThreadGroup };
 
 export interface ManagerThreadGroup {
   managerThread: ThreadListEntry;
@@ -47,6 +48,18 @@ function isWorktreeDisplayKind(
 interface KnownManagerParentArgs {
   managerThreadIds: ReadonlySet<string>;
   thread: ThreadListEntry;
+}
+
+interface BuildManagerThreadGroupArgs {
+  childrenByManagerId: ReadonlyMap<string, readonly ThreadListEntry[]>;
+  managerThread: ThreadListEntry;
+  visitedManagerIds: ReadonlySet<string>;
+}
+
+interface BuildSortedProjectThreadItemsArgs {
+  childrenByManagerId: ReadonlyMap<string, readonly ThreadListEntry[]>;
+  threads: readonly ThreadListEntry[];
+  visitedManagerIds: ReadonlySet<string>;
 }
 
 function compareByCreatedAtDescending(
@@ -97,7 +110,9 @@ function compareStandardThreads(
 }
 
 function representativeThread(item: ProjectThreadItem): ThreadListEntry {
-  return item.kind === "thread" ? item.thread : item.group.threads[0];
+  if (item.kind === "thread") return item.thread;
+  if (item.kind === "manager") return item.group.managerThread;
+  return item.group.threads[0];
 }
 
 function compareProjectThreadItems(
@@ -110,7 +125,9 @@ function compareProjectThreadItems(
   );
 }
 
-function buildSortedItems(threads: ThreadListEntry[]): ProjectThreadItem[] {
+function buildSortedItems(
+  threads: readonly ThreadListEntry[],
+): ProjectThreadItem[] {
   const { environmentThreadGroups, looseThreads } =
     bucketWorktreeEnvironmentGroups(threads);
   const items: ProjectThreadItem[] = [
@@ -128,11 +145,68 @@ function getKnownManagerParentId({
   managerThreadIds,
   thread,
 }: KnownManagerParentArgs): string | null {
-  if (thread.type !== "standard") return null;
   if (thread.parentThreadId === null) return null;
+  if (thread.parentThreadId === thread.id) return null;
   if (!managerThreadIds.has(thread.parentThreadId)) return null;
 
   return thread.parentThreadId;
+}
+
+function buildSortedProjectThreadItems({
+  childrenByManagerId,
+  threads,
+  visitedManagerIds,
+}: BuildSortedProjectThreadItemsArgs): ProjectThreadItem[] {
+  const leafThreads: ThreadListEntry[] = [];
+  const managerItems: ProjectThreadItem[] = [];
+
+  for (const thread of threads) {
+    if (thread.type !== "manager") {
+      leafThreads.push(thread);
+      continue;
+    }
+
+    if (visitedManagerIds.has(thread.id)) {
+      leafThreads.push(thread);
+      continue;
+    }
+
+    managerItems.push({
+      kind: "manager",
+      group: buildManagerThreadGroup({
+        childrenByManagerId,
+        managerThread: thread,
+        visitedManagerIds,
+      }),
+    });
+  }
+
+  const items = [...buildSortedItems(leafThreads), ...managerItems];
+  items.sort(compareProjectThreadItems);
+  return items;
+}
+
+function buildManagerThreadGroup({
+  childrenByManagerId,
+  managerThread,
+  visitedManagerIds,
+}: BuildManagerThreadGroupArgs): ManagerThreadGroup {
+  const nextVisitedManagerIds = new Set(visitedManagerIds);
+  nextVisitedManagerIds.add(managerThread.id);
+  const children = childrenByManagerId.get(managerThread.id) ?? [];
+
+  return {
+    managerThread,
+    managedItems: buildSortedProjectThreadItems({
+      childrenByManagerId,
+      threads: children,
+      visitedManagerIds: nextVisitedManagerIds,
+    }),
+    stats: {
+      managedChildCount: children.length,
+      managedChildActivity: getCollapsedChildActivity(children),
+    },
+  };
 }
 
 export function buildProjectThreadGroups(
@@ -150,33 +224,33 @@ export function buildProjectThreadGroups(
   }
 
   for (const thread of projectThreads) {
-    if (thread.type !== "standard") continue;
-
     const managerId = getKnownManagerParentId({ managerThreadIds, thread });
-    if (managerId === null) {
-      unmanagedStandardThreads.push(thread);
+    if (managerId !== null) {
+      childrenByManagerId.get(managerId)?.push(thread);
       continue;
     }
 
-    childrenByManagerId.get(managerId)?.push(thread);
+    if (thread.type === "standard") {
+      unmanagedStandardThreads.push(thread);
+    }
   }
 
-  const managerThreadGroups: ManagerThreadGroup[] = managerThreads.map(
-    (managerThread) => {
-      const children = childrenByManagerId.get(managerThread.id) ?? [];
-      return {
-        managerThread,
-        managedItems: buildSortedItems(children),
-        stats: {
-          managedChildCount: children.length,
-          managedChildActivity: getCollapsedChildActivity(children),
-        },
-      };
-    },
+  const rootManagerThreads = managerThreads.filter(
+    (managerThread) =>
+      getKnownManagerParentId({
+        managerThreadIds,
+        thread: managerThread,
+      }) === null,
   );
 
   return {
-    managerThreadGroups,
+    managerThreadGroups: rootManagerThreads.map((managerThread) =>
+      buildManagerThreadGroup({
+        childrenByManagerId,
+        managerThread,
+        visitedManagerIds: new Set(),
+      }),
+    ),
     unmanagedItems: buildSortedItems(unmanagedStandardThreads),
   };
 }
@@ -192,7 +266,7 @@ interface BucketWorktreeEnvironmentGroupsResult {
 // that are siblings in the same render context (project-level or under a
 // single manager).
 function bucketWorktreeEnvironmentGroups(
-  threads: ThreadListEntry[],
+  threads: readonly ThreadListEntry[],
 ): BucketWorktreeEnvironmentGroupsResult {
   const threadsByEnvironmentId = new Map<string, ThreadListEntry[]>();
   for (const thread of threads) {
