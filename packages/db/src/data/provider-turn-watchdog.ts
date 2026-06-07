@@ -5,7 +5,10 @@ import {
   providerTurnWatchdogActivityEventTypeValues,
   providerTurnWatchdogThreadScopedActivityEventTypeValues,
 } from "@bb/domain";
-import type { ProviderTurnWatchdogActivityEventType } from "@bb/domain";
+import type {
+  ProviderTurnWatchdogActivityEventType,
+  ProviderTurnWatchdogOpenItem,
+} from "@bb/domain";
 import type { DbQueryConnection } from "../connection.js";
 import { environments, events, pendingInteractions, threads } from "../schema.js";
 
@@ -13,6 +16,12 @@ export interface ListProviderTurnIdleWatchdogCandidatesArgs {
   idleThresholdMs: number;
   limit: number;
   now: number;
+}
+
+export interface ListProviderTurnIdleWatchdogOpenItemsArgs {
+  limit: number;
+  threadId: string;
+  turnId: string;
 }
 
 export interface ProviderTurnIdleWatchdogCandidateRow {
@@ -27,6 +36,18 @@ export interface ProviderTurnIdleWatchdogCandidateRow {
   providerId: string;
   providerThreadId: string | null;
   threadId: string;
+}
+
+interface ProviderTurnIdleWatchdogOpenItemRow {
+  command: string | null;
+  cwd: string | null;
+  itemId: string | null;
+  itemKind: string | null;
+  latestActivityAt: number | null;
+  latestActivityEventType: string | null;
+  latestActivitySequence: number | null;
+  startedAt: number | null;
+  startedSequence: number;
 }
 
 const activityEventTypeSqlList = sql.join(
@@ -104,9 +125,19 @@ function parseNonNegativeInteger(
   return value;
 }
 
-function parsePositiveInteger(value: number, fieldName: string): number {
-  if (!Number.isInteger(value) || value <= 0) {
+function parsePositiveInteger(
+  value: number | null,
+  fieldName: string,
+): number {
+  if (value === null || !Number.isInteger(value) || value <= 0) {
     throw new Error(`Provider turn watchdog candidate invalid ${fieldName}`);
+  }
+  return value;
+}
+
+function parseNullableNonEmptyString(value: string | null): string | null {
+  if (value === null || value.length === 0) {
+    return null;
   }
   return value;
 }
@@ -144,6 +175,34 @@ function parseProviderTurnIdleWatchdogCandidateRow(
     providerId: row.providerId,
     providerThreadId: row.providerThreadId,
     threadId: row.threadId,
+  };
+}
+
+function parseProviderTurnIdleWatchdogOpenItemRow(
+  row: ProviderTurnIdleWatchdogOpenItemRow,
+): ProviderTurnWatchdogOpenItem {
+  return {
+    itemId: parseNonEmptyString(row.itemId, "openItem.itemId"),
+    itemKind: parseNonEmptyString(row.itemKind, "openItem.itemKind"),
+    startedAt: parseNonNegativeInteger(row.startedAt, "openItem.startedAt"),
+    startedSequence: parsePositiveInteger(
+      row.startedSequence,
+      "openItem.startedSequence",
+    ),
+    latestActivityAt: parseNonNegativeInteger(
+      row.latestActivityAt,
+      "openItem.latestActivityAt",
+    ),
+    latestActivitySequence: parsePositiveInteger(
+      row.latestActivitySequence,
+      "openItem.latestActivitySequence",
+    ),
+    latestActivityEventType: parseNonEmptyString(
+      row.latestActivityEventType,
+      "openItem.latestActivityEventType",
+    ),
+    command: parseNullableNonEmptyString(row.command),
+    cwd: parseNullableNonEmptyString(row.cwd),
   };
 }
 
@@ -253,4 +312,78 @@ export function listProviderTurnIdleWatchdogCandidates(
     .all();
 
   return rows.map(parseProviderTurnIdleWatchdogCandidateRow);
+}
+
+/**
+ * Lists turn-scoped items that started during an active turn and do not have a
+ * matching item/completed row. Used only for watchdog diagnostics after a
+ * candidate is selected, so it cannot change which turns the watchdog stops.
+ */
+export function listProviderTurnIdleWatchdogOpenItems(
+  db: DbQueryConnection,
+  args: ListProviderTurnIdleWatchdogOpenItemsArgs,
+): ProviderTurnWatchdogOpenItem[] {
+  const latestActivityAtSql = sql<number | null>`(
+    SELECT latest_open_item_activity.created_at
+    FROM events AS latest_open_item_activity
+    WHERE latest_open_item_activity.thread_id = ${events.threadId}
+      AND latest_open_item_activity.turn_id = ${events.turnId}
+      AND latest_open_item_activity.item_id = ${events.itemId}
+    ORDER BY latest_open_item_activity.sequence DESC
+    LIMIT 1
+  )`;
+  const latestActivitySequenceSql = sql<number | null>`(
+    SELECT latest_open_item_activity.sequence
+    FROM events AS latest_open_item_activity
+    WHERE latest_open_item_activity.thread_id = ${events.threadId}
+      AND latest_open_item_activity.turn_id = ${events.turnId}
+      AND latest_open_item_activity.item_id = ${events.itemId}
+    ORDER BY latest_open_item_activity.sequence DESC
+    LIMIT 1
+  )`;
+  const latestActivityEventTypeSql = sql<string | null>`(
+    SELECT latest_open_item_activity.type
+    FROM events AS latest_open_item_activity
+    WHERE latest_open_item_activity.thread_id = ${events.threadId}
+      AND latest_open_item_activity.turn_id = ${events.turnId}
+      AND latest_open_item_activity.item_id = ${events.itemId}
+    ORDER BY latest_open_item_activity.sequence DESC
+    LIMIT 1
+  )`;
+
+  const rows = db
+    .select({
+      command: sql<string | null>`json_extract(${events.data}, '$.item.command')`,
+      cwd: sql<string | null>`json_extract(${events.data}, '$.item.cwd')`,
+      itemId: events.itemId,
+      itemKind: events.itemKind,
+      latestActivityAt: latestActivityAtSql,
+      latestActivityEventType: latestActivityEventTypeSql,
+      latestActivitySequence: latestActivitySequenceSql,
+      startedAt: events.createdAt,
+      startedSequence: events.sequence,
+    })
+    .from(events)
+    .where(
+      and(
+        eq(events.threadId, args.threadId),
+        eq(events.turnId, args.turnId),
+        eq(events.type, "item/started"),
+        isNotNull(events.itemId),
+        isNotNull(events.itemKind),
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM events AS completed_open_item
+          WHERE completed_open_item.thread_id = ${events.threadId}
+            AND completed_open_item.turn_id = ${events.turnId}
+            AND completed_open_item.item_id = ${events.itemId}
+            AND completed_open_item.type = 'item/completed'
+        )`,
+      ),
+    )
+    .orderBy(asc(events.sequence))
+    .limit(args.limit)
+    .all();
+
+  return rows.map(parseProviderTurnIdleWatchdogOpenItemRow);
 }

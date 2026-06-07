@@ -275,6 +275,83 @@ describe("provider turn watchdog", () => {
     }
   });
 
+  it("records open turn items on the watchdog diagnostic event", async () => {
+    const context = await createWatchdogTestContext();
+    try {
+      const lastActivityAt =
+        WATCHDOG_NOW - PROVIDER_TURN_IDLE_WATCHDOG_THRESHOLD_MS - 1;
+      seedActiveTurn({
+        context,
+        startedAt: lastActivityAt - 10_000,
+        acceptedAt: lastActivityAt - 9_000,
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 3,
+        type: "item/started",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt - 8_000,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          item: {
+            type: "commandExecution",
+            id: "call-dev-server",
+            command: "pnpm --filter @moss/desktop dev",
+            cwd: "/workspace/moss",
+            status: "pending",
+            approvalStatus: null,
+          },
+        },
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 4,
+        type: "item/commandExecution/outputDelta",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          itemId: "call-dev-server",
+          delta: "Dev server ready",
+        },
+      });
+
+      const result = runProviderTurnWatchdogSweep(context.harness.deps, {
+        now: WATCHDOG_NOW,
+      });
+
+      expect(result.interruptedThreadIds).toEqual([context.threadId]);
+      const watchdogEvents = listWatchdogEvents(context);
+      expect(watchdogEvents).toHaveLength(1);
+      const watchdogData = systemProviderTurnWatchdogEventDataSchema.parse(
+        JSON.parse(watchdogEvents[0]?.data ?? "{}"),
+      );
+      expect(watchdogData).toMatchObject({
+        lastActivityEventSequence: 4,
+        lastActivityEventType: "item/commandExecution/outputDelta",
+      });
+      expect(watchdogData.openItems).toEqual([
+        {
+          itemId: "call-dev-server",
+          itemKind: "commandExecution",
+          startedAt: lastActivityAt - 8_000,
+          startedSequence: 3,
+          latestActivityAt: lastActivityAt,
+          latestActivitySequence: 4,
+          latestActivityEventType: "item/commandExecution/outputDelta",
+          command: "pnpm --filter @moss/desktop dev",
+          cwd: "/workspace/moss",
+        },
+      ]);
+    } finally {
+      await context.harness.cleanup();
+    }
+  });
+
   it("waits while the active turn has a pending interaction", async () => {
     const context = await createWatchdogTestContext();
     try {

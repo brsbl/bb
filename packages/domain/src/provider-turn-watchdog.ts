@@ -40,6 +40,25 @@ export type ProviderTurnWatchdogThreadScopedActivityEventType = Extract<
   ThreadOnlyThreadEventType
 >;
 
+export const providerTurnWatchdogOpenItemSchema = z.object({
+  itemId: z.string().min(1),
+  itemKind: z.string().min(1),
+  startedAt: z.number().int().nonnegative(),
+  startedSequence: z.number().int().positive(),
+  latestActivityAt: z.number().int().nonnegative(),
+  latestActivitySequence: z.number().int().positive(),
+  /**
+   * Diagnostic label only. A plain string keeps persisted watchdog events
+   * readable even when the provider event list changes later.
+   */
+  latestActivityEventType: z.string().min(1),
+  command: z.string().min(1).nullable(),
+  cwd: z.string().min(1).nullable(),
+});
+export type ProviderTurnWatchdogOpenItem = z.infer<
+  typeof providerTurnWatchdogOpenItemSchema
+>;
+
 /**
  * Activity event types the watchdog also counts when persisted thread-scoped
  * (turn_id NULL): exactly the activity event types whose scope policy is
@@ -84,6 +103,7 @@ export const systemProviderTurnWatchdogEventDataSchema = z.object({
   providerId: z.string().min(1),
   providerThreadId: z.string().min(1).nullable(),
   firedAt: z.number().int().nonnegative(),
+  openItems: z.array(providerTurnWatchdogOpenItemSchema).default([]),
 });
 export type SystemProviderTurnWatchdogEventData = z.infer<
   typeof systemProviderTurnWatchdogEventDataSchema

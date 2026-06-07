@@ -1,6 +1,12 @@
-import { listProviderTurnIdleWatchdogCandidates } from "@bb/db";
+import {
+  listProviderTurnIdleWatchdogCandidates,
+  listProviderTurnIdleWatchdogOpenItems,
+} from "@bb/db";
 import type { ProviderTurnIdleWatchdogCandidateRow } from "@bb/db";
-import type { SystemProviderTurnWatchdogEventData } from "@bb/domain";
+import type {
+  ProviderTurnWatchdogOpenItem,
+  SystemProviderTurnWatchdogEventData,
+} from "@bb/domain";
 import { threadScope } from "@bb/domain";
 import type { AppDeps } from "../../types.js";
 import { appendThreadEvent } from "./thread-events.js";
@@ -8,6 +14,7 @@ import { requestThreadStop } from "./thread-lifecycle.js";
 
 export const PROVIDER_TURN_IDLE_WATCHDOG_THRESHOLD_MS = 15 * 60_000;
 export const PROVIDER_TURN_IDLE_WATCHDOG_BATCH_SIZE = 25;
+export const PROVIDER_TURN_IDLE_WATCHDOG_OPEN_ITEM_LIMIT = 5;
 
 export type ProviderTurnWatchdogSweepDeps = Pick<
   AppDeps,
@@ -27,6 +34,7 @@ export interface RunProviderTurnWatchdogSweepResult {
 interface BuildProviderTurnWatchdogEventDataArgs {
   idleThresholdMs: number;
   now: number;
+  openItems: ProviderTurnWatchdogOpenItem[];
 }
 
 function buildProviderTurnWatchdogEventData(
@@ -45,6 +53,7 @@ function buildProviderTurnWatchdogEventData(
     providerId: candidate.providerId,
     providerThreadId: candidate.providerThreadId,
     firedAt: args.now,
+    openItems: args.openItems,
   };
 }
 
@@ -63,9 +72,15 @@ export function runProviderTurnWatchdogSweep(
   const interruptedThreadIds: string[] = [];
 
   for (const candidate of candidates) {
+    const openItems = listProviderTurnIdleWatchdogOpenItems(deps.db, {
+      limit: PROVIDER_TURN_IDLE_WATCHDOG_OPEN_ITEM_LIMIT,
+      threadId: candidate.threadId,
+      turnId: candidate.activeTurnId,
+    });
     const data = buildProviderTurnWatchdogEventData(candidate, {
       idleThresholdMs,
       now,
+      openItems,
     });
 
     try {
@@ -91,6 +106,9 @@ export function runProviderTurnWatchdogSweep(
           idleThresholdMs,
           lastActivityEventSequence: candidate.lastActivityEventSequence,
           lastActivityEventType: candidate.lastActivityEventType,
+          openItemCount: openItems.length,
+          primaryOpenItemCommand: openItems[0]?.command ?? null,
+          primaryOpenItemKind: openItems[0]?.itemKind ?? null,
           providerId: candidate.providerId,
           providerThreadId: candidate.providerThreadId,
           threadId: candidate.threadId,

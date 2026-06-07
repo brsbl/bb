@@ -6,6 +6,7 @@ import type {
   OwnershipChangeOperationAction,
   ProviderErrorInfo,
   ProviderTurnWatchdogActivityEventType,
+  ProviderTurnWatchdogOpenItem,
   TerminalClientTurnRequestStatus,
   ThreadEventFileChange,
   ThreadEventItemStatus,
@@ -123,6 +124,7 @@ interface SystemProviderTurnWatchdogEventArgs {
   lastActivityEventAt?: number;
   lastActivityEventSequence?: number;
   lastActivityEventType?: ProviderTurnWatchdogActivityEventType;
+  openItems?: ProviderTurnWatchdogOpenItem[];
   providerId?: string;
   providerThreadId?: string | null;
   seq: number;
@@ -397,6 +399,7 @@ function systemProviderTurnWatchdogEvent({
   lastActivityEventAt = 100,
   lastActivityEventSequence = 2,
   lastActivityEventType = "turn/input/accepted",
+  openItems = [],
   providerId = "codex",
   providerThreadId = "provider-thread-1",
   seq,
@@ -418,6 +421,7 @@ function systemProviderTurnWatchdogEvent({
       providerId,
       providerThreadId,
       firedAt: firedAt ?? seq,
+      openItems,
     },
     meta: {
       id: `event-${seq}`,
@@ -1330,6 +1334,38 @@ describe("buildThreadTimelineFromEvents", () => {
         status: "error",
         title: "Provider turn stopped responding",
         detail: "No provider activity for 901s after turn/input/accepted",
+      }),
+    ]);
+  });
+
+  it("renders open command diagnostics in provider watchdog rows", () => {
+    const rows = buildTimelineRows([
+      systemProviderTurnWatchdogEvent({
+        seq: 1,
+        openItems: [
+          {
+            itemId: "call-dev-server",
+            itemKind: "commandExecution",
+            startedAt: 10,
+            startedSequence: 3,
+            latestActivityAt: 100,
+            latestActivitySequence: 4,
+            latestActivityEventType: "item/commandExecution/outputDelta",
+            command: "pnpm --filter @moss/desktop dev",
+            cwd: "/workspace/moss",
+          },
+        ],
+      }),
+    ]);
+
+    expect(collectSystemRows(rows)).toEqual([
+      expect.objectContaining({
+        systemKind: "operation",
+        operationKind: "generic",
+        status: "error",
+        title: "Provider turn stopped responding",
+        detail:
+          "No provider activity for 901s after turn/input/accepted\nOpen command still running: pnpm --filter @moss/desktop dev",
       }),
     ]);
   });

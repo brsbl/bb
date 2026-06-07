@@ -1,4 +1,5 @@
 import type {
+  ProviderTurnWatchdogOpenItem,
   ThreadEvent,
   SystemThreadProvisioningStatus,
   SystemThreadInterruptedReason,
@@ -36,6 +37,10 @@ type PermissionGrantLifecycleEvent = Extract<
 type UserQuestionLifecycleEvent = Extract<
   ThreadEvent,
   { type: "system/userQuestion/lifecycle" }
+>;
+type ProviderTurnWatchdogEvent = Extract<
+  ThreadEvent,
+  { type: "system/provider-turn-watchdog" }
 >;
 
 function providerDisplayName(providerId: string): string {
@@ -113,6 +118,41 @@ function threadInterruptedTitle(reason: SystemThreadInterruptedReason): string {
     default:
       return assertNever(reason);
   }
+}
+
+function truncateDiagnosticText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function providerTurnWatchdogOpenItemLabel(
+  item: ProviderTurnWatchdogOpenItem,
+): string {
+  if (item.itemKind === "commandExecution" && item.command !== null) {
+    return `Open command still running: ${truncateDiagnosticText(
+      item.command,
+      160,
+    )}`;
+  }
+  return `Open ${item.itemKind} still running: ${item.itemId}`;
+}
+
+function providerTurnWatchdogDetail(
+  decoded: ProviderTurnWatchdogEvent,
+): string {
+  const base = `No provider activity for ${Math.round(
+    decoded.elapsedMs / 1_000,
+  )}s after ${decoded.lastActivityEventType}`;
+  const commandItem = decoded.openItems.find(
+    (item) => item.itemKind === "commandExecution" && item.command !== null,
+  );
+  const openItem = commandItem ?? decoded.openItems[0];
+  if (!openItem) {
+    return base;
+  }
+  return `${base}\n${providerTurnWatchdogOpenItemLabel(openItem)}`;
 }
 
 function ownershipChangeOperationTitle(
@@ -438,9 +478,7 @@ export function parseOperationMessage(
     return op(decoded, meta, "provider-turn-watchdog", {
       opType: "operation",
       title: "Provider turn stopped responding",
-      detail: `No provider activity for ${Math.round(
-        decoded.elapsedMs / 1_000,
-      )}s after ${decoded.lastActivityEventType}`,
+      detail: providerTurnWatchdogDetail(decoded),
       status: "error",
     });
   }

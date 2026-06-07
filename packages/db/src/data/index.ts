@@ -240,9 +240,13 @@ export type {
   UpdateEnvironmentMetadataInput,
 } from "./environments.js";
 
-export { listProviderTurnIdleWatchdogCandidates } from "./provider-turn-watchdog.js";
+export {
+  listProviderTurnIdleWatchdogCandidates,
+  listProviderTurnIdleWatchdogOpenItems,
+} from "./provider-turn-watchdog.js";
 export type {
   ListProviderTurnIdleWatchdogCandidatesArgs,
+  ListProviderTurnIdleWatchdogOpenItemsArgs,
   ProviderTurnIdleWatchdogCandidateRow,
 } from "./provider-turn-watchdog.js";
 
