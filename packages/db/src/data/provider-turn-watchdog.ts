@@ -231,6 +231,12 @@ function parseProviderTurnIdleWatchdogOpenItemRow(
  * command is queued) are excluded explicitly; without that guard a
  * thread-scoped event could anchor a candidate whose NULL activeTurnId throws
  * in row parsing and aborts the entire sweep batch.
+ *
+ * Open foreground command executions are also excluded. Once a command has
+ * started, provider silence is expected until the host reports command output
+ * or completion; command-specific stale-progress policy should own those
+ * failures instead of the provider-idle watchdog misclassifying them as a
+ * detached provider.
  */
 export function listProviderTurnIdleWatchdogCandidates(
   db: DbQueryConnection,
@@ -304,6 +310,23 @@ export function listProviderTurnIdleWatchdogCandidates(
           WHERE active_interaction.thread_id = ${threads.id}
             AND active_interaction.turn_id = ${activeTurnIdSql}
             AND active_interaction.status IN ('pending', 'resolving')
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM events AS open_command
+          WHERE open_command.thread_id = ${threads.id}
+            AND open_command.turn_id = ${activeTurnIdSql}
+            AND open_command.type = 'item/started'
+            AND open_command.item_kind = 'commandExecution'
+            AND open_command.item_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM events AS completed_command
+              WHERE completed_command.thread_id = open_command.thread_id
+                AND completed_command.turn_id = open_command.turn_id
+                AND completed_command.item_id = open_command.item_id
+                AND completed_command.type = 'item/completed'
+            )
         )`,
       ),
     )

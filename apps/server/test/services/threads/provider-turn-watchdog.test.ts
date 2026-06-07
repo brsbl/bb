@@ -275,7 +275,7 @@ describe("provider turn watchdog", () => {
     }
   });
 
-  it("records open turn items on the watchdog diagnostic event", async () => {
+  it("does not stop a provider turn while a command execution item is still open", async () => {
     const context = await createWatchdogTestContext();
     try {
       const lastActivityAt =
@@ -324,6 +324,73 @@ describe("provider turn watchdog", () => {
         now: WATCHDOG_NOW,
       });
 
+      expect(result.interruptedThreadIds).toEqual([]);
+      expect(listWatchdogEvents(context)).toHaveLength(0);
+      expect(
+        context.harness.db
+          .select()
+          .from(hostDaemonCommands)
+          .orderBy(desc(hostDaemonCommands.createdAt))
+          .all(),
+      ).toHaveLength(0);
+    } finally {
+      await context.harness.cleanup();
+    }
+  });
+
+  it("records open non-command turn items on the watchdog diagnostic event", async () => {
+    const context = await createWatchdogTestContext();
+    try {
+      const lastActivityAt =
+        WATCHDOG_NOW - PROVIDER_TURN_IDLE_WATCHDOG_THRESHOLD_MS - 1;
+      seedActiveTurn({
+        context,
+        startedAt: lastActivityAt - 10_000,
+        acceptedAt: lastActivityAt - 9_000,
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 3,
+        type: "item/started",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt - 8_000,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          item: {
+            type: "fileChange",
+            id: "file-change-still-open",
+            changes: [
+              {
+                path: "src/index.ts",
+                kind: "update",
+              },
+            ],
+            status: "pending",
+            approvalStatus: null,
+          },
+        },
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 4,
+        type: "item/fileChange/outputDelta",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          itemId: "file-change-still-open",
+          delta: "Applying patch",
+        },
+      });
+
+      const result = runProviderTurnWatchdogSweep(context.harness.deps, {
+        now: WATCHDOG_NOW,
+      });
+
       expect(result.interruptedThreadIds).toEqual([context.threadId]);
       const watchdogEvents = listWatchdogEvents(context);
       expect(watchdogEvents).toHaveLength(1);
@@ -332,21 +399,94 @@ describe("provider turn watchdog", () => {
       );
       expect(watchdogData).toMatchObject({
         lastActivityEventSequence: 4,
-        lastActivityEventType: "item/commandExecution/outputDelta",
+        lastActivityEventType: "item/fileChange/outputDelta",
       });
       expect(watchdogData.openItems).toEqual([
         {
-          itemId: "call-dev-server",
-          itemKind: "commandExecution",
+          itemId: "file-change-still-open",
+          itemKind: "fileChange",
           startedAt: lastActivityAt - 8_000,
           startedSequence: 3,
           latestActivityAt: lastActivityAt,
           latestActivitySequence: 4,
-          latestActivityEventType: "item/commandExecution/outputDelta",
-          command: "pnpm --filter @moss/desktop dev",
-          cwd: "/workspace/moss",
+          latestActivityEventType: "item/fileChange/outputDelta",
+          command: null,
+          cwd: null,
         },
       ]);
+    } finally {
+      await context.harness.cleanup();
+    }
+  });
+
+  it("stops a provider turn after a command execution item completes and activity goes stale", async () => {
+    const context = await createWatchdogTestContext();
+    try {
+      const lastActivityAt =
+        WATCHDOG_NOW - PROVIDER_TURN_IDLE_WATCHDOG_THRESHOLD_MS - 1;
+      seedActiveTurn({
+        context,
+        startedAt: lastActivityAt - 10_000,
+        acceptedAt: lastActivityAt - 9_000,
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 3,
+        type: "item/started",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt - 8_000,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          item: {
+            type: "commandExecution",
+            id: "call-finished-command",
+            command: "pnpm test",
+            cwd: "/workspace/bb",
+            status: "pending",
+            approvalStatus: null,
+          },
+        },
+      });
+      seedEvent(context.harness.deps, {
+        threadId: context.threadId,
+        environmentId: context.environmentId,
+        providerThreadId: PROVIDER_THREAD_ID,
+        sequence: 4,
+        type: "item/completed",
+        scope: turnScope(ACTIVE_TURN_ID),
+        createdAt: lastActivityAt,
+        data: {
+          providerThreadId: PROVIDER_THREAD_ID,
+          item: {
+            type: "commandExecution",
+            id: "call-finished-command",
+            command: "pnpm test",
+            cwd: "/workspace/bb",
+            status: "completed",
+            approvalStatus: null,
+            aggregatedOutput: "Tests passed",
+            exitCode: 0,
+            durationMs: 8_000,
+          },
+        },
+      });
+
+      const result = runProviderTurnWatchdogSweep(context.harness.deps, {
+        now: WATCHDOG_NOW,
+      });
+
+      expect(result.interruptedThreadIds).toEqual([context.threadId]);
+      const watchdogEvents = listWatchdogEvents(context);
+      expect(watchdogEvents).toHaveLength(1);
+      const watchdogData = systemProviderTurnWatchdogEventDataSchema.parse(
+        JSON.parse(watchdogEvents[0]?.data ?? "{}"),
+      );
+      expect(watchdogData).toMatchObject({
+        lastActivityEventSequence: 4,
+        lastActivityEventType: "item/completed",
+      });
     } finally {
       await context.harness.cleanup();
     }
