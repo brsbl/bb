@@ -309,6 +309,12 @@ describe("localRequestOriginKey", () => {
     expect(localRequestOriginKey("http://localhost:5173/")).not.toBe(
       localRequestOriginKey("http://127.0.0.1:5173/"),
     );
+    expect(localRequestOriginKey("http://localhost.:5173/")).not.toBe(
+      localRequestOriginKey("http://localhost:5173/"),
+    );
+    expect(localRequestOriginKey("http://app.localhost.:5173/")).not.toBe(
+      localRequestOriginKey("http://app.localhost:5173/"),
+    );
   });
 
   it("returns null for public, private, and unsupported URLs", () => {
@@ -522,6 +528,7 @@ describe("shouldBlockBrowserRequest", () => {
       "http://localhost:5173/api",
       "http://127.0.0.1:3000/api",
       "https://localhost:3000/api",
+      "http://localhost.:3000/api",
     ]) {
       expect(
         shouldBlockBrowserRequest({

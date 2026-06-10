@@ -246,6 +246,11 @@ function clearEntryPendingMainFrameNavigation(entry: BrowserViewEntry): void {
   entry.pendingMainFrameNavigationInitiatorOriginKey = null;
 }
 
+function clearEntryPendingLocalNavigationState(entry: BrowserViewEntry): void {
+  entry.pendingTrustedLocalTopLevelOriginKey = null;
+  clearEntryPendingMainFrameNavigation(entry);
+}
+
 function prepareEntryForTrustedTopLevelLoad(
   entry: BrowserViewEntry,
   url: string,
@@ -258,7 +263,7 @@ function prepareEntryForTrustedTopLevelLoad(
     entry.pendingTrustedLocalTopLevelOriginKey = localRequestOriginKey(url);
     return true;
   }
-  clearEntryLocalOriginState(entry);
+  clearEntryPendingLocalNavigationState(entry);
   return true;
 }
 
@@ -282,8 +287,35 @@ function clearBlockedLocalTopLevelLoad(
   url: string,
 ): void {
   if (localRequestOriginKey(url) !== null) {
-    clearEntryLocalOriginState(entry);
+    clearEntryPendingLocalNavigationState(entry);
   }
+}
+
+function historyNavigationTargetUrl(
+  entry: BrowserViewEntry,
+  offset: number,
+): string | null {
+  const history = entry.view.webContents.navigationHistory;
+  const targetEntry = history.getEntryAtIndex(history.getActiveIndex() + offset);
+  return typeof targetEntry?.url === "string" ? targetEntry.url : null;
+}
+
+function prepareEntryForHistoryNavigation(
+  entry: BrowserViewEntry,
+  offset: number,
+): void {
+  const targetUrl = historyNavigationTargetUrl(entry, offset);
+  const targetOriginKey =
+    targetUrl === null ? null : localRequestOriginKey(targetUrl);
+  if (
+    targetOriginKey !== null &&
+    targetOriginKey === entry.currentMainFrameLocalOriginKey
+  ) {
+    clearEntryPendingMainFrameNavigation(entry);
+    entry.pendingTrustedLocalTopLevelOriginKey = targetOriginKey;
+    return;
+  }
+  clearEntryPendingLocalNavigationState(entry);
 }
 
 function shouldBlockEntryTopLevelRequest(
@@ -616,6 +648,9 @@ export function createDesktopBrowserViewManager(
       "did-fail-load",
       (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
         if (!isMainFrame || errorCode === ERR_ABORTED) {
+          if (isMainFrame && errorCode === ERR_ABORTED) {
+            clearEntryPendingLocalNavigationState(entry);
+          }
           return;
         }
         clearBlockedLocalTopLevelLoad(entry, validatedURL);
@@ -672,7 +707,8 @@ export function createDesktopBrowserViewManager(
     }
     entry.lastErrorText = null;
     entry.view.webContents.loadURL(url).catch(() => {
-      // Surfaced through `did-fail-load`; swallow the rejection.
+      clearEntryPendingLocalNavigationState(entry);
+      // Usually surfaced through `did-fail-load`; swallow the rejection.
     });
   }
 
@@ -733,6 +769,7 @@ export function createDesktopBrowserViewManager(
     goBack({ hostWindow, tabId }) {
       withEntry({ hostWindow, tabId }, (entry) => {
         if (entry.view.webContents.navigationHistory.canGoBack()) {
+          prepareEntryForHistoryNavigation(entry, -1);
           entry.view.webContents.navigationHistory.goBack();
         }
       });
@@ -740,6 +777,7 @@ export function createDesktopBrowserViewManager(
     goForward({ hostWindow, tabId }) {
       withEntry({ hostWindow, tabId }, (entry) => {
         if (entry.view.webContents.navigationHistory.canGoForward()) {
+          prepareEntryForHistoryNavigation(entry, 1);
           entry.view.webContents.navigationHistory.goForward();
         }
       });
@@ -761,6 +799,7 @@ export function createDesktopBrowserViewManager(
     },
     stop({ hostWindow, tabId }) {
       withEntry({ hostWindow, tabId }, (entry) => {
+        clearEntryPendingLocalNavigationState(entry);
         entry.view.webContents.stop();
       });
     },

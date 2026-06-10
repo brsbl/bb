@@ -17,6 +17,8 @@ describe("looksLikeUrl", () => {
     expect(looksLikeUrl("example.com")).toBe(true);
     expect(looksLikeUrl("news.ycombinator.com")).toBe(true);
     expect(looksLikeUrl("example.com:8080/path")).toBe(true);
+    expect(looksLikeUrl("8.8.8.8")).toBe(true);
+    expect(looksLikeUrl("8.8.8.8:443/path")).toBe(true);
     expect(looksLikeUrl("localhost:3000")).toBe(true);
     expect(looksLikeUrl("localhost:3000?debug=1")).toBe(true);
     expect(looksLikeUrl("foo.localhost:3000/path")).toBe(true);
@@ -67,6 +69,10 @@ describe("resolveBrowserAddressInput", () => {
     );
     expect(resolveBrowserAddressInput("example.com:8080/path")).toBe(
       "https://example.com:8080/path",
+    );
+    expect(resolveBrowserAddressInput("8.8.8.8")).toBe("https://8.8.8.8");
+    expect(resolveBrowserAddressInput("1.1.1.1/dns-query")).toBe(
+      "https://1.1.1.1/dns-query",
     );
   });
 

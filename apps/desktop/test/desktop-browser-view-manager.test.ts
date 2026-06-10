@@ -189,11 +189,13 @@ const electronMock = vi.hoisted(() => {
   };
 
   class FakeWebContents {
+    public activeHistoryIndex = 0;
     public canGoBackResult = false;
     public canGoForwardResult = false;
     public destroyed = false;
     public readonly goBackCalls: string[] = [];
     public readonly goForwardCalls: string[] = [];
+    public historyEntries: Array<{ title: string; url: string }> = [];
     public readonly id: number;
     public readonly loadURLCalls: string[] = [];
     public readonly pendingCaptureResolvers: Array<
@@ -222,6 +224,11 @@ const electronMock = vi.hoisted(() => {
     public readonly navigationHistory = {
       canGoBack: (): boolean => this.canGoBackResult,
       canGoForward: (): boolean => this.canGoForwardResult,
+      getActiveIndex: (): number => this.activeHistoryIndex,
+      getEntryAtIndex: (
+        index: number,
+      ): { title: string; url: string } | null =>
+        this.historyEntries[index] ?? null,
       goBack: (): void => {
         this.goBackCalls.push("goBack");
       },
@@ -663,6 +670,104 @@ describe("DesktopBrowserViewManager", () => {
     ).toBe(true);
   });
 
+  it("clears pending local approval after an aborted main-frame local load", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 62,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "https://example.com/",
+    });
+    const view = requireFakeView(0);
+    view.webContents.emitDidNavigate("https://example.com/");
+
+    manager.navigate({
+      hostWindow,
+      request: {
+        tabId: "browser:a",
+        url: "http://localhost:5173/",
+      },
+    });
+
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(false);
+
+    view.webContents.emitDidFailLoad({
+      errorCode: -3,
+      errorDescription: "Aborted",
+      isMainFrame: true,
+      validatedURL: "http://localhost:5173/",
+    });
+
+    expect(view.webContents.emitWillNavigate("http://localhost:5173/")).toBe(
+      true,
+    );
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(true);
+  });
+
+  it("clears pending local approval when a local load is stopped", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 63,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "https://example.com/",
+    });
+    const view = requireFakeView(0);
+    view.webContents.emitDidNavigate("https://example.com/");
+
+    manager.navigate({
+      hostWindow,
+      request: {
+        tabId: "browser:a",
+        url: "http://localhost:5173/",
+      },
+    });
+
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(false);
+
+    manager.stop({ hostWindow, tabId: "browser:a" });
+
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(true);
+  });
+
   it("allows trusted reloads of the current local main frame", () => {
     const manager = createDesktopBrowserViewManager({
       partition: "persist:test",
@@ -801,13 +906,36 @@ describe("DesktopBrowserViewManager", () => {
     const view = requireFakeView(0);
     view.webContents.emitDidNavigate("http://localhost:5173/");
     view.webContents.emitDidNavigate("https://example.com/");
+    view.webContents.historyEntries = [
+      { title: "Local", url: "http://localhost:5173/" },
+      { title: "Public", url: "https://example.com/" },
+    ];
+    view.webContents.activeHistoryIndex = 1;
     view.webContents.canGoBackResult = true;
-    view.webContents.canGoForwardResult = true;
 
     manager.goBack({ hostWindow, tabId: "browser:a" });
-    manager.goForward({ hostWindow, tabId: "browser:a" });
 
     expect(view.webContents.goBackCalls).toEqual(["goBack"]);
+    expect(view.webContents.emitWillNavigate("http://localhost:5173/")).toBe(
+      true,
+    );
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(true);
+
+    view.webContents.historyEntries = [
+      { title: "Public", url: "https://example.com/" },
+      { title: "Local", url: "http://localhost:5173/" },
+    ];
+    view.webContents.activeHistoryIndex = 0;
+    view.webContents.canGoForwardResult = true;
+
+    manager.goForward({ hostWindow, tabId: "browser:a" });
+
     expect(view.webContents.goForwardCalls).toEqual(["goForward"]);
     expect(view.webContents.emitWillNavigate("http://localhost:5173/")).toBe(
       true,
@@ -819,6 +947,63 @@ describe("DesktopBrowserViewManager", () => {
         webContentsId: view.webContents.id,
       }),
     ).toBe(true);
+  });
+
+  it("allows same-origin local back and forward history", () => {
+    const manager = createDesktopBrowserViewManager({
+      partition: "persist:test",
+    });
+    const hostWindow = new FakeHostWindow({
+      contentBounds: { width: 700, height: 450 },
+      webContentsId: 64,
+    });
+
+    attachBrowserTab({
+      manager,
+      hostWindow,
+      tabId: "browser:a",
+      url: "http://localhost:5173/route-b",
+    });
+    const view = requireFakeView(0);
+    view.webContents.emitDidNavigate("http://localhost:5173/route-b");
+    view.webContents.historyEntries = [
+      { title: "Route A", url: "http://localhost:5173/route-a" },
+      { title: "Route B", url: "http://localhost:5173/route-b" },
+    ];
+    view.webContents.activeHistoryIndex = 1;
+    view.webContents.canGoBackResult = true;
+
+    manager.goBack({ hostWindow, tabId: "browser:a" });
+
+    expect(view.webContents.goBackCalls).toEqual(["goBack"]);
+    expect(
+      view.webContents.emitWillNavigate("http://localhost:5173/route-a"),
+    ).toBe(false);
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/route-a",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(false);
+
+    view.webContents.emitDidNavigate("http://localhost:5173/route-a");
+    view.webContents.activeHistoryIndex = 0;
+    view.webContents.canGoForwardResult = true;
+
+    manager.goForward({ hostWindow, tabId: "browser:a" });
+
+    expect(view.webContents.goForwardCalls).toEqual(["goForward"]);
+    expect(
+      view.webContents.emitWillNavigate("http://localhost:5173/route-b"),
+    ).toBe(false);
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/route-b",
+        resourceType: "mainFrame",
+        webContentsId: view.webContents.id,
+      }),
+    ).toBe(false);
   });
 
   it("allows same-origin local subresources and blocks cross-port loopback requests", () => {
@@ -863,6 +1048,21 @@ describe("DesktopBrowserViewManager", () => {
         frameOrigin: "http://localhost:5173",
       }),
     ).toBe(true);
+    expect(
+      view.webContents.emitWillFrameNavigate(
+        "http://localhost:38886/",
+        true,
+        "http://localhost:5173",
+      ),
+    ).toBe(true);
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/app.js",
+        resourceType: "script",
+        webContentsId: view.webContents.id,
+        frameOrigin: "http://localhost:5173",
+      }),
+    ).toBe(false);
   });
 
   it("blocks localhost requests from public iframes inside a local page", () => {
@@ -898,6 +1098,14 @@ describe("DesktopBrowserViewManager", () => {
         frameOrigin: "http://localhost:5173",
       }),
     ).toBe(true);
+    expect(
+      browserRequestBlocked({
+        url: "http://localhost:5173/app.js",
+        resourceType: "script",
+        webContentsId: view.webContents.id,
+        frameOrigin: "http://localhost:5173",
+      }),
+    ).toBe(false);
     expect(
       browserRequestBlocked({
         url: "http://localhost:5173/api",

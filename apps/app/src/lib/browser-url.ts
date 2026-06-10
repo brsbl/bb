@@ -111,18 +111,15 @@ function isBlockedBareHost(host: string): boolean {
   return host.endsWith(".local") || isBlockedIpv4Host(host);
 }
 
-function isNumericDottedHost(host: string): boolean {
-  const parts = host.split(".");
-  return (
-    parts.length > 1 && parts.every((part) => DECIMAL_OCTET_PATTERN.test(part))
-  );
-}
-
 function isPublicBareHost(host: string): boolean {
+  const ipv4 = parseIpv4Octets(host);
+  if (ipv4 !== null) {
+    return !isIpv4LoopbackHost(host) && !isBlockedIpv4Host(host);
+  }
+
   return (
     !isBareLoopbackHost(host) &&
     !isBlockedBareHost(host) &&
-    !isNumericDottedHost(host) &&
     DOTTED_HOSTNAME_PATTERN.test(host)
   );
 }

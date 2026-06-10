@@ -58,6 +58,7 @@ export interface ShouldBlockBrowserRequestArgs {
 interface ParsedBrowserRequestUrl {
   protocol: string;
   host: string;
+  originHost: string;
   port: string;
 }
 
@@ -194,6 +195,21 @@ function normalizeBrowserRequestHost(rawHost: string): string | null {
   return host.length === 0 ? null : host;
 }
 
+function normalizeBrowserOriginHost(rawHost: string): string | null {
+  let host = rawHost.trim().toLowerCase();
+  if (host.length === 0) {
+    return null;
+  }
+  if (host.startsWith("[") && host.endsWith("]")) {
+    host = host.slice(1, -1);
+  }
+  const zoneIndex = host.indexOf("%");
+  if (zoneIndex !== -1) {
+    host = host.slice(0, zoneIndex);
+  }
+  return host.length === 0 ? null : host;
+}
+
 function isLocalhostName(host: string): boolean {
   return host === "localhost" || host.endsWith(".localhost");
 }
@@ -210,10 +226,11 @@ function parseBrowserRequestUrl(url: string): ParsedBrowserRequestUrl | null {
     return null;
   }
   const host = normalizeBrowserRequestHost(parsed.hostname);
-  if (host === null) {
+  const originHost = normalizeBrowserOriginHost(parsed.hostname);
+  if (host === null || originHost === null) {
     return null;
   }
-  return { protocol: parsed.protocol, host, port: parsed.port };
+  return { protocol: parsed.protocol, host, originHost, port: parsed.port };
 }
 
 function isGuardedRequestProtocol(protocol: string): boolean {
@@ -336,7 +353,7 @@ export function localRequestOriginKey(url: string): string | null {
   if (protocolClass === null) {
     return null;
   }
-  return `${protocolClass}|${parsed.host}|${parsed.port}`;
+  return `${protocolClass}|${parsed.originHost}|${parsed.port}`;
 }
 
 /**
