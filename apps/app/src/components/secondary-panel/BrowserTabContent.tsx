@@ -15,10 +15,17 @@ import type {
 } from "@bb/server-contract";
 import { clampBbDesktopBrowserViewBounds } from "@bb/server-contract";
 import { Icon } from "@/components/ui/icon.js";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip.js";
 import { getDesktopBrowserApi } from "@/lib/bb-desktop";
 import {
   getBrowserUrlSecurity,
   resolveBrowserAddressInput,
+  type BrowserUrlSecurity,
 } from "@/lib/browser-url";
 import { useBrowserHistory } from "@/lib/browser-history";
 import { BROWSER_VIEW_BOUNDS_SYNC_EVENT } from "@/lib/browser-view-bounds-sync";
@@ -69,6 +76,10 @@ interface NavButtonProps {
   label: string;
   disabled?: boolean;
   onClick: () => void;
+}
+
+interface BrowserSecurityIndicatorProps {
+  security: BrowserUrlSecurity;
 }
 
 interface BrowserViewBoundsFromElementArgs {
@@ -152,6 +163,50 @@ function NavButton({ icon, label, disabled, onClick }: NavButtonProps) {
   );
 }
 
+function BrowserSecurityIndicator({ security }: BrowserSecurityIndicatorProps) {
+  const indicator =
+    security === "secure"
+      ? {
+          icon: "Lock" as const,
+          className: "text-success",
+          label: "Secure connection",
+          tooltip: "HTTPS connection. Traffic is encrypted.",
+        }
+      : security === "insecure"
+        ? {
+            icon: "AlertTriangle" as const,
+            className: "text-warning",
+            label: "Connection not secure",
+            tooltip:
+              "HTTP connection. Traffic is not encrypted; localhost pages are still isolated by bb's local-request sandbox.",
+          }
+        : {
+            icon: "Search" as const,
+            className: "text-muted-foreground",
+            label: "Address or search",
+            tooltip: "Enter a URL or search query.",
+          };
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex shrink-0 items-center">
+            <Icon
+              name={indicator.icon}
+              className={`size-3.5 shrink-0 ${indicator.className}`}
+              aria-label={indicator.label}
+            />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" className="max-w-72">
+          {indicator.tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function BrowserChrome({
   addressDraft,
   isEditing,
@@ -193,25 +248,7 @@ function BrowserChrome({
       />
       <form onSubmit={onSubmit} className="min-w-0 flex-1">
         <div className="flex h-8 items-center gap-2 rounded-full border border-border bg-background px-3">
-          {security === "secure" ? (
-            <Icon
-              name="Lock"
-              className="size-3.5 shrink-0 text-success"
-              aria-label="Secure connection"
-            />
-          ) : security === "insecure" ? (
-            <Icon
-              name="AlertTriangle"
-              className="size-3.5 shrink-0 text-warning"
-              aria-label="Connection not secure"
-            />
-          ) : (
-            <Icon
-              name="Search"
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-          )}
+          <BrowserSecurityIndicator security={security} />
           <input
             type="text"
             value={addressValue}
