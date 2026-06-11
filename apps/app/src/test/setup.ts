@@ -4,13 +4,15 @@
  * Shared vitest setup.
  *
  * jsdom doesn't implement `window.matchMedia`, `ResizeObserver`,
- * `IntersectionObserver`, or `Element.scrollIntoView`. Several of our hooks and
+ * `IntersectionObserver`, or element scroll helpers. Several of our hooks and
  * detail blocks (`useMediaQuery`, `useHoverPopover`, `ToolCallDetailBlock`
- * overflow probe, `GitDiffCard` sticky-header sentinel,
+ * overflow probe, `GitDiffCard` sticky-header sentinel, timeline sticky scroll,
  * `SecondaryPanelTabStrip` active-tab auto-scroll) reach for them during mount;
  * without polyfills they throw in every test that indirectly renders such a
  * component.
  */
+
+type ElementScrollToInput = ScrollToOptions | number | undefined;
 if (typeof window !== "undefined" && typeof jsdom !== "undefined") {
   /**
    * Node 26 defines global storage accessors. Vitest keeps existing globals
@@ -53,6 +55,28 @@ if (
   typeof Element.prototype.scrollIntoView !== "function"
 ) {
   Element.prototype.scrollIntoView = function scrollIntoViewPolyfill() {};
+}
+
+if (
+  typeof Element !== "undefined" &&
+  typeof Element.prototype.scrollTo !== "function"
+) {
+  Element.prototype.scrollTo = function scrollToPolyfill(
+    xOrOptions?: ElementScrollToInput,
+    y?: number,
+  ): void {
+    if (
+      typeof xOrOptions === "object" &&
+      xOrOptions !== null &&
+      typeof xOrOptions.top === "number"
+    ) {
+      this.scrollTop = xOrOptions.top;
+      return;
+    }
+    if (typeof y === "number") {
+      this.scrollTop = y;
+    }
+  };
 }
 
 if (

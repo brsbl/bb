@@ -368,12 +368,7 @@ function CodexPlusMenuRow() {
     <NewThreadStoryRow
       id="story-new-thread-plus-codex"
       actionsMenu={
-        <StoryActionsMenu
-          shortcut="$"
-          showPlan
-          showGoal
-          apps={storyApps}
-        />
+        <StoryActionsMenu shortcut="$" showPlan showGoal apps={storyApps} />
       }
     />
   );

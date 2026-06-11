@@ -1,10 +1,11 @@
 import type { SystemProviderInfo } from "@bb/server-contract";
 
-export type TestSystemProviderCapabilities =
-  SystemProviderInfo["capabilities"];
+export type TestSystemProviderCapabilities = SystemProviderInfo["capabilities"];
 
-export interface TestSystemProviderOverrides
-  extends Omit<Partial<SystemProviderInfo>, "capabilities"> {
+export interface TestSystemProviderOverrides extends Omit<
+  Partial<SystemProviderInfo>,
+  "capabilities"
+> {
   capabilities?: Partial<TestSystemProviderCapabilities>;
 }
 

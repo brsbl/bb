@@ -82,9 +82,7 @@ interface PickerOption<T extends string> {
   icon?: ComponentType<{ className?: string }>;
 }
 
-type ThreadCreationOptionsScope =
-  | "new-thread"
-  | "component-local";
+type ThreadCreationOptionsScope = "new-thread" | "component-local";
 
 interface UsePromptModelReasoningOptions {
   enabled?: boolean;
@@ -104,8 +102,7 @@ interface UseNewThreadCreationOptions extends UsePromptModelReasoningOptions {
   scope?: "new-thread";
 }
 
-interface UseComponentLocalCreationOptions
-  extends UsePromptModelReasoningOptions {
+interface UseComponentLocalCreationOptions extends UsePromptModelReasoningOptions {
   scope: "component-local";
 }
 
@@ -370,7 +367,9 @@ function resolveCreateExecutionInputSource({
   hasStoredValue,
   hasValue,
   touched,
-}: ResolveCreateExecutionInputSourceArgs): ExecutionInputFieldSource | undefined {
+}: ResolveCreateExecutionInputSourceArgs):
+  | ExecutionInputFieldSource
+  | undefined {
   if (!hasValue) {
     return undefined;
   }
@@ -428,8 +427,7 @@ function buildExecutionInputSources({
       storedValues.serviceTier !== "" &&
       storedValues.serviceTier === effectiveValues.serviceTier,
     hasValue: effectiveValues.serviceTier !== undefined,
-    touched:
-      forcesExplicitExecutionFields || touchedFields.has("serviceTier"),
+    touched: forcesExplicitExecutionFields || touchedFields.has("serviceTier"),
   });
   const reasoningLevelSource = resolveCreateExecutionInputSource({
     hasStoredValue: usesStoredValues && storedValues.reasoningLevel !== "",
@@ -449,9 +447,7 @@ function buildExecutionInputSources({
       ...(modelSource ? { model: modelSource } : {}),
       ...(serviceTierSource ? { serviceTier: serviceTierSource } : {}),
       ...(reasoningLevelSource ? { reasoningLevel: reasoningLevelSource } : {}),
-      ...(permissionModeSource
-        ? { permissionMode: permissionModeSource }
-        : {}),
+      ...(permissionModeSource ? { permissionMode: permissionModeSource } : {}),
     };
   }
 
@@ -460,9 +456,7 @@ function buildExecutionInputSources({
     ...(modelSource ? { model: modelSource } : {}),
     ...(serviceTierSource ? { serviceTier: serviceTierSource } : {}),
     ...(reasoningLevelSource ? { reasoningLevel: reasoningLevelSource } : {}),
-    ...(permissionModeSource
-      ? { permissionMode: permissionModeSource }
-      : {}),
+    ...(permissionModeSource ? { permissionMode: permissionModeSource } : {}),
   };
 }
 
@@ -610,26 +604,21 @@ export function useThreadCreationOptions(
     usesLocalThreadSelections,
   ]);
 
-  const rawSelectedProviderId =
-    usesStoredCreateSelections
-      ? storedProviderId || renderedThreadSelections.selectedProviderId
-      : renderedThreadSelections.selectedProviderId;
-  const rawSelectedModel =
-    usesStoredCreateSelections
-      ? storedSelectedModel || renderedThreadSelections.selectedModel
-      : renderedThreadSelections.selectedModel;
-  const rawServiceTier =
-    usesStoredCreateSelections
-      ? storedServiceTier || renderedThreadSelections.serviceTier
-      : renderedThreadSelections.serviceTier;
-  const rawReasoningLevel =
-    usesStoredCreateSelections
-      ? storedReasoningLevel || renderedThreadSelections.reasoningLevel
-      : renderedThreadSelections.reasoningLevel;
-  const rawPermissionMode =
-    usesStoredCreateSelections
-      ? storedPermissionMode || renderedThreadSelections.permissionMode
-      : renderedThreadSelections.permissionMode;
+  const rawSelectedProviderId = usesStoredCreateSelections
+    ? storedProviderId || renderedThreadSelections.selectedProviderId
+    : renderedThreadSelections.selectedProviderId;
+  const rawSelectedModel = usesStoredCreateSelections
+    ? storedSelectedModel || renderedThreadSelections.selectedModel
+    : renderedThreadSelections.selectedModel;
+  const rawServiceTier = usesStoredCreateSelections
+    ? storedServiceTier || renderedThreadSelections.serviceTier
+    : renderedThreadSelections.serviceTier;
+  const rawReasoningLevel = usesStoredCreateSelections
+    ? storedReasoningLevel || renderedThreadSelections.reasoningLevel
+    : renderedThreadSelections.reasoningLevel;
+  const rawPermissionMode = usesStoredCreateSelections
+    ? storedPermissionMode || renderedThreadSelections.permissionMode
+    : renderedThreadSelections.permissionMode;
   const rawEnvironmentSelectionValue =
     scope === "new-thread"
       ? (rootComposeReuseValue ??

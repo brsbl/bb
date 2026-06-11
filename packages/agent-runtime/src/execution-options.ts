@@ -56,8 +56,7 @@ export function assertProviderSupportsExecutionOptions(
   }
 
   if (
-    args.options.submissionMode.planMode ===
-      DEFAULT_SUBMISSION_MODE.planMode &&
+    args.options.submissionMode.planMode === DEFAULT_SUBMISSION_MODE.planMode &&
     args.options.submissionMode.goalMode === DEFAULT_SUBMISSION_MODE.goalMode
   ) {
     return;

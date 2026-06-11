@@ -118,9 +118,12 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", async () => {
   };
 });
 
-vi.mock("@/components/thread/pending-interactions/ThreadPendingInteractionBanner", () => ({
-  ThreadPendingInteractionBanner: () => <div>Pending interaction</div>,
-}));
+vi.mock(
+  "@/components/thread/pending-interactions/ThreadPendingInteractionBanner",
+  () => ({
+    ThreadPendingInteractionBanner: () => <div>Pending interaction</div>,
+  }),
+);
 
 vi.mock("@/components/promptbox/banner/ThreadPromptContextBanner", () => ({
   ThreadPromptContextBanner: () => null,
@@ -212,7 +215,9 @@ vi.mock("@/hooks/useThreadCreationOptions", () => ({
     modelLoadError: null,
     modelOptions: [{ label: "GPT-5", value: "gpt-5" }],
     permissionMode: "workspace-write" satisfies PermissionMode,
-    permissionModeOptions: [{ label: "Workspace Write", value: "workspace-write" }],
+    permissionModeOptions: [
+      { label: "Workspace Write", value: "workspace-write" },
+    ],
     providerOptions: [{ label: "Codex", value: "codex" }],
     reasoningLevel: "medium" satisfies ReasoningLevel,
     reasoningOptions: [{ label: "Medium", value: "medium" }],
@@ -281,10 +286,12 @@ function setupCompactViewport(): void {
   });
 }
 
-function renderPromptArea(args: {
-  apps?: readonly AppSummary[];
-  onOpenApp?: (applicationId: string) => void;
-} = {}) {
+function renderPromptArea(
+  args: {
+    apps?: readonly AppSummary[];
+    onOpenApp?: (applicationId: string) => void;
+  } = {},
+) {
   render(
     <ThreadDetailPromptArea
       apps={args.apps ?? []}
@@ -360,7 +367,9 @@ describe("ThreadDetailPromptArea prompt actions", () => {
     renderPromptArea();
 
     openDesktopMenu();
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Plan mode" }));
+    fireEvent.click(
+      screen.getByRole("menuitemcheckbox", { name: "Plan mode" }),
+    );
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "Submit follow-up" }));
 

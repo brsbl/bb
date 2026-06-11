@@ -51,8 +51,7 @@ function listRunNotificationTexts(
 ): string[] {
   return listEvents(harness.deps.db, { threadId })
     .filter(
-      (row) =>
-        row.type === "client/turn/requested" && row.data.includes(runId),
+      (row) => row.type === "client/turn/requested" && row.data.includes(runId),
     )
     .map((row) => row.data);
 }
@@ -107,9 +106,9 @@ describe("workflow run pending manager notifications", () => {
       expect(requireRun(harness, run.id).pendingManagerNotification).toBe(
         "paused",
       );
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(0);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        0,
+      );
 
       // The daemon's hub socket attaches: the socket-attach trigger drains.
       registerTestHostRpcCapture(harness.deps, {
@@ -130,9 +129,9 @@ describe("workflow run pending manager notifications", () => {
       // The intent was consumed: further sweeps deliver nothing.
       runWorkflowRunPendingNotificationSweep(harness.deps);
       await settleDeferredDelivery();
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(1);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        1,
+      );
     });
   });
 
@@ -160,9 +159,9 @@ describe("workflow run pending manager notifications", () => {
       // the intent survives.
       runWorkflowRunPendingNotificationSweep(harness.deps);
       await settleDeferredDelivery();
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(0);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        0,
+      );
       expect(requireRun(harness, run.id).pendingManagerNotification).toBe(
         "paused",
       );
@@ -206,9 +205,7 @@ describe("workflow run pending manager notifications", () => {
         hostId: fixture.hostId,
       });
       expect(requireRun(harness, run.id).status).toBe("running");
-      expect(
-        requireRun(harness, run.id).pendingManagerNotification,
-      ).toBeNull();
+      expect(requireRun(harness, run.id).pendingManagerNotification).toBeNull();
 
       registerTestHostRpcCapture(harness.deps, {
         hostId: fixture.hostId,
@@ -216,9 +213,9 @@ describe("workflow run pending manager notifications", () => {
       });
       runWorkflowRunPendingNotificationSweep(harness.deps);
       await settleDeferredDelivery();
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(0);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        0,
+      );
     });
   });
 
@@ -246,9 +243,9 @@ describe("workflow run pending manager notifications", () => {
       // Exactly one: nothing further to deliver.
       runWorkflowRunPendingNotificationSweep(harness.deps);
       await settleDeferredDelivery();
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(1);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        1,
+      );
     });
   });
 
@@ -338,9 +335,9 @@ describe("workflow run pending manager notifications", () => {
       seedSession(harness.deps, fixture.hostId);
       runWorkflowRunPendingNotificationSweep(harness.deps);
       await settleDeferredDelivery();
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(0);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        0,
+      );
     });
   });
 
@@ -409,9 +406,9 @@ describe("workflow run pending manager notifications", () => {
       expect(requireRun(harness, run.id).pendingManagerNotification).toBe(
         "paused",
       );
-      expect(
-        listRunNotificationTexts(harness, thread.id, run.id),
-      ).toHaveLength(0);
+      expect(listRunNotificationTexts(harness, thread.id, run.id)).toHaveLength(
+        0,
+      );
 
       // The manager's start RPC settles (the runtime came up); the next
       // sweep delivers exactly once.
@@ -445,9 +442,7 @@ describe("workflow run pending manager notifications", () => {
         activeWorkflowRunIds: [],
         hostId: fixture.hostId,
       });
-      expect(requireRun(harness, interruptedRun.id).status).toBe(
-        "interrupted",
-      );
+      expect(requireRun(harness, interruptedRun.id).status).toBe("interrupted");
       expect(
         requireRun(harness, interruptedRun.id).pendingManagerNotification,
       ).toBeNull();

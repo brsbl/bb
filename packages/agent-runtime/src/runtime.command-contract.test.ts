@@ -379,7 +379,19 @@ rl.on("line", (line) => {
   if (message.method === "turn/start") {
     fs.writeFileSync(turnStartLogPath, JSON.stringify(message.params), "utf8");
     send({ jsonrpc: "2.0", id: message.id, result: {} });
+    return;
   }
+
+  if (message.method === "thread/goal/clear") {
+    send({ jsonrpc: "2.0", id: message.id, result: {} });
+    return;
+  }
+
+  send({
+    jsonrpc: "2.0",
+    id: message.id,
+    error: { code: -32601, message: "Method not found: " + message.method },
+  });
 });
 `,
       "utf8",

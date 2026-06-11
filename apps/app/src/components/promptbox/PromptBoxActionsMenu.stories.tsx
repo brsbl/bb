@@ -48,7 +48,10 @@ const MANY_APPS: readonly AppSummary[] = Array.from(
       name: `Team App ${appNumber}`,
       entry: { path: "index.html", kind: "html" },
       capabilities: ["data"],
-      icon: { kind: "builtin", name: appNumber % 2 === 0 ? "GridView" : "ListTodo" },
+      icon: {
+        kind: "builtin",
+        name: appNumber % 2 === 0 ? "GridView" : "ListTodo",
+      },
       source: null,
     } satisfies AppSummary;
   },

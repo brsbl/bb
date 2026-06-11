@@ -106,7 +106,12 @@ const EXTRACTION_PROMPT =
  *  faults). Everything else — max-turns, context-window-exceeded, policy,
  *  billing, bad-request, … — is terminal for the agent. */
 const RETRYABLE_PROVIDER_ERROR_CATEGORIES: ReadonlySet<ProviderErrorCategory> =
-  new Set(["connection-failed", "overloaded", "rate-limit", "stream-disconnected"]);
+  new Set([
+    "connection-failed",
+    "overloaded",
+    "rate-limit",
+    "stream-disconnected",
+  ]);
 
 const WORKFLOW_USER_QUESTION_FREE_TEXT =
   "This agent runs autonomously inside a bb workflow; no user is available to answer. Proceed with your best judgment.";
@@ -195,7 +200,10 @@ interface AgentSession {
   forwardProgress: boolean;
   finalMessageText: string | null;
   deltaText: string;
-  lastProviderError: { message: string; category?: ProviderErrorCategory } | null;
+  lastProviderError: {
+    message: string;
+    category?: ProviderErrorCategory;
+  } | null;
   stallTimer: NodeJS.Timeout | null;
   stalled: boolean;
   /** Set when the session was killed outside a turn waiter (abort, provider
@@ -266,7 +274,9 @@ function formatProviderProcessExitMessage(
   info: AgentRuntimeProcessExitInfo,
 ): string {
   const status =
-    info.signal !== null ? `signal ${info.signal}` : `code ${info.code ?? "unknown"}`;
+    info.signal !== null
+      ? `signal ${info.signal}`
+      : `code ${info.code ?? "unknown"}`;
   return `Provider "${info.providerId}" process exited ${
     info.expected ? "during shutdown" : "unexpectedly"
   } (${status})`;
@@ -291,7 +301,9 @@ function toolProgressName(item: ThreadEventItem): string | null {
 
 export class WorkflowAgentExecutor implements Worker {
   private readonly options: WorkflowAgentExecutorOptions;
-  private readonly createRuntime: (options: AgentRuntimeOptions) => AgentRuntime;
+  private readonly createRuntime: (
+    options: AgentRuntimeOptions,
+  ) => AgentRuntime;
   private readonly entries = new Map<string, RuntimeEntry>();
   private readonly inflight = new Set<Promise<void>>();
   private readonly defaultModels = new Map<WorkflowAgentProviderId, string>();
@@ -312,7 +324,10 @@ export class WorkflowAgentExecutor implements Worker {
     this.agentStorageRoot = join(options.runDir, "agent-storage");
   }
 
-  async runAgent(spec: AgentSpec, context: WorkerContext): Promise<AgentResult> {
+  async runAgent(
+    spec: AgentSpec,
+    context: WorkerContext,
+  ): Promise<AgentResult> {
     if (this.shuttingDown) {
       throw new AgentInterrupted("workflow agent executor is shut down");
     }
@@ -412,7 +427,9 @@ export class WorkflowAgentExecutor implements Worker {
     // each one costs a dedicated provider process (fixed cwd per runtime),
     // while shared-cwd agents reuse the run's existing processes.
     const gateToken = useWorktree
-      ? await this.options.providerProcessGate.acquire({ signal: context.signal })
+      ? await this.options.providerProcessGate.acquire({
+          signal: context.signal,
+        })
       : null;
     try {
       if (context.signal.aborted) throw new AgentInterrupted();
@@ -523,7 +540,8 @@ export class WorkflowAgentExecutor implements Worker {
   }): Promise<AgentResult> {
     const { entry, session, spec } = args;
     const model =
-      spec.model ?? (await this.resolveDefaultModel(entry, session, spec.provider));
+      spec.model ??
+      (await this.resolveDefaultModel(entry, session, spec.provider));
     const execOptions = buildWorkflowExecutionOptions({ spec, model });
     const schema = spec.schema;
 
@@ -560,7 +578,11 @@ export class WorkflowAgentExecutor implements Worker {
       forwardProgress: true,
     });
     if (schema === undefined) {
-      return { text: workingText, status: "completed", usage: { ...session.usage } };
+      return {
+        text: workingText,
+        status: "completed",
+        usage: { ...session.usage },
+      };
     }
     if (spec.provider === "claude-code") {
       const structured = tryParseStructured(workingText);
@@ -579,7 +601,9 @@ export class WorkflowAgentExecutor implements Worker {
       entry,
       session,
       text:
-        spec.provider === "codex" ? EXTRACTION_PROMPT : buildPiExtractionPrompt(schema),
+        spec.provider === "codex"
+          ? EXTRACTION_PROMPT
+          : buildPiExtractionPrompt(schema),
       execOptions,
       forwardProgress: false,
       ...(spec.provider === "codex"
@@ -612,7 +636,8 @@ export class WorkflowAgentExecutor implements Worker {
       throw this.mapRuntimeCallError(error, session);
     }
     const model =
-      models.models.find((candidate) => candidate.isDefault) ?? models.models[0];
+      models.models.find((candidate) => candidate.isDefault) ??
+      models.models[0];
     if (!model) {
       throw new AgentError({
         provider: providerId,
@@ -734,12 +759,17 @@ export class WorkflowAgentExecutor implements Worker {
         .stopThread({ threadId: session.threadId })
         .catch(() => undefined);
     };
-    args.context.signal.addEventListener("abort", session.onAbort, { once: true });
+    args.context.signal.addEventListener("abort", session.onAbort, {
+      once: true,
+    });
     args.entry.sessions.set(threadId, session);
     return session;
   }
 
-  private async closeSession(entry: RuntimeEntry, session: AgentSession): Promise<void> {
+  private async closeSession(
+    entry: RuntimeEntry,
+    session: AgentSession,
+  ): Promise<void> {
     entry.sessions.delete(session.threadId);
     session.context.signal.removeEventListener("abort", session.onAbort);
     this.clearStallTimer(session);
@@ -816,7 +846,8 @@ export class WorkflowAgentExecutor implements Worker {
       ...(this.options.bridgeBundleDir !== undefined
         ? { bridgeBundleDir: this.options.bridgeBundleDir }
         : {}),
-      onEvent: (event) => withEntry((entry) => this.handleRuntimeEvent(entry, event)),
+      onEvent: (event) =>
+        withEntry((entry) => this.handleRuntimeEvent(entry, event)),
       onToolCall: async () => ({
         contentItems: [
           {
@@ -826,11 +857,13 @@ export class WorkflowAgentExecutor implements Worker {
         ],
         success: false,
       }),
-      onInteractiveRequest: (request) => this.resolveInteractiveRequest(request),
+      onInteractiveRequest: (request) =>
+        this.resolveInteractiveRequest(request),
       ...(this.options.onStderr !== undefined
         ? { onStderr: this.options.onStderr }
         : {}),
-      onProcessExit: (info) => withEntry((entry) => this.handleProcessExit(entry, info)),
+      onProcessExit: (info) =>
+        withEntry((entry) => this.handleProcessExit(entry, info)),
     };
   }
 
@@ -890,7 +923,10 @@ export class WorkflowAgentExecutor implements Worker {
           inputTokens: event.tokenUsage.total.inputTokens,
           outputTokens: event.tokenUsage.total.outputTokens,
         };
-        this.emitProgress(session, { kind: "usage", usage: { ...session.usage } });
+        this.emitProgress(session, {
+          kind: "usage",
+          usage: { ...session.usage },
+        });
         break;
       case "provider/error":
         session.lastProviderError = {
@@ -908,7 +944,10 @@ export class WorkflowAgentExecutor implements Worker {
     }
   }
 
-  private handleCompletedItem(session: AgentSession, item: ThreadEventItem): void {
+  private handleCompletedItem(
+    session: AgentSession,
+    item: ThreadEventItem,
+  ): void {
     if (item.type === "agentMessage") {
       session.finalMessageText = item.text;
       // Providers that stream deltas already forwarded this text; only emit
@@ -931,7 +970,8 @@ export class WorkflowAgentExecutor implements Worker {
       kind: "tool-result",
       id: item.id,
       name,
-      ...(item.type === "commandExecution" && item.aggregatedOutput !== undefined
+      ...(item.type === "commandExecution" &&
+      item.aggregatedOutput !== undefined
         ? { output: item.aggregatedOutput }
         : {}),
       ...("status" in item ? { isError: item.status === "failed" } : {}),
@@ -962,7 +1002,9 @@ export class WorkflowAgentExecutor implements Worker {
       // provider reports) map to AgentInterrupted; our own stall-watchdog
       // interrupt is a retryable provider fault instead.
       waiter.reject(
-        session.stalled ? this.buildStalledTurnError(session) : new AgentInterrupted(),
+        session.stalled
+          ? this.buildStalledTurnError(session)
+          : new AgentInterrupted(),
       );
       return;
     }
@@ -976,7 +1018,8 @@ export class WorkflowAgentExecutor implements Worker {
           session.lastProviderError?.message ??
           "provider turn failed",
         retryable:
-          category !== undefined && RETRYABLE_PROVIDER_ERROR_CATEGORIES.has(category),
+          category !== undefined &&
+          RETRYABLE_PROVIDER_ERROR_CATEGORIES.has(category),
         // Failed turns still bill into the run budget.
         usage: { ...session.usage },
       }),
@@ -1115,7 +1158,10 @@ export class WorkflowAgentExecutor implements Worker {
       }
       return Promise.resolve({ kind: "user_answer", answers });
     }
-    return Promise.resolve({ decision: "allow_once", grantedPermissions: null });
+    return Promise.resolve({
+      decision: "allow_once",
+      grantedPermissions: null,
+    });
   }
 
   /** Map errors escaping the runtime API (startThread/runTurn/listModels)

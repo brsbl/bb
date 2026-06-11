@@ -959,8 +959,7 @@ export function NewTabActions({
   const canPrefillCreateAppPrompt =
     promptDraft.storageKey !== null && currentThreadId.length > 0;
   const showOpenBrowserEntry =
-    onOpenBrowser !== undefined &&
-    isDesktopBrowserAvailable();
+    onOpenBrowser !== undefined && isDesktopBrowserAvailable();
   const showStartTerminalEntry = onStartTerminal !== undefined;
   const showCreateAppEntry = canPrefillCreateAppPrompt;
 
@@ -1001,8 +1000,7 @@ export function NewTabActions({
   }, [canPrefillCreateAppPrompt, onCreateAppPromptPrefill, promptDraft]);
 
   const hasInstalledApps = appSuggestions.length > 0;
-  const showAppsToggle =
-    appSuggestions.length > NEW_TAB_APP_ROWS_VISIBLE_LIMIT;
+  const showAppsToggle = appSuggestions.length > NEW_TAB_APP_ROWS_VISIBLE_LIMIT;
   const showAppsMoreCount = Math.max(
     0,
     appSuggestions.length - NEW_TAB_APP_ROWS_VISIBLE_LIMIT,

@@ -120,7 +120,9 @@ describe("PromptBoxActionsMenu", () => {
     openDesktopMenu();
 
     const menu = screen.getByRole("menu");
-    expect(within(menu).queryByRole("menuitem", { name: /Skills/u })).toBeNull();
+    expect(
+      within(menu).queryByRole("menuitem", { name: /Skills/u }),
+    ).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: /Apps/u })).toBeNull();
   });
 
@@ -135,8 +137,12 @@ describe("PromptBoxActionsMenu", () => {
     });
 
     openDesktopMenu();
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Plan mode" }));
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Goal mode" }));
+    fireEvent.click(
+      screen.getByRole("menuitemcheckbox", { name: "Plan mode" }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitemcheckbox", { name: "Goal mode" }),
+    );
 
     expect(onPlanChange).toHaveBeenCalledWith(true);
     expect(onGoalChange).toHaveBeenCalledWith(false);
@@ -175,7 +181,9 @@ describe("PromptBoxActionsMenu", () => {
     ).toEqual(["Back", "Review Board", "Status"]);
 
     fireEvent.click(screen.getByRole("menuitem", { name: "Back" }));
-    expect(screen.getByRole("menuitem", { name: "Create App..." })).toBeTruthy();
+    expect(
+      screen.getByRole("menuitem", { name: "Create App..." }),
+    ).toBeTruthy();
     expect(screen.queryByText("2 installed apps")).toBeNull();
 
     fireEvent.click(screen.getByRole("menuitem", { name: /Apps/u }));

@@ -192,9 +192,7 @@ function parseNdjsonRecordLine<
 
 async function* streamNdjsonRecords<
   TRecord extends { ordinal: number; relativeMs: number },
->(
-  args: StreamNdjsonRecordsArgs<TRecord>,
-): AsyncGenerator<TRecord> {
+>(args: StreamNdjsonRecordsArgs<TRecord>): AsyncGenerator<TRecord> {
   const lines = createInterface({
     input: createReadStream(args.filePath, { encoding: "utf8" }),
     crlfDelay: Infinity,
@@ -228,9 +226,9 @@ async function* streamNdjsonRecords<
   }
 }
 
-function readNdjsonRecords<TRecord extends { ordinal: number; relativeMs: number }>(
-  args: StreamNdjsonRecordsArgs<TRecord>,
-): TRecord[] {
+function readNdjsonRecords<
+  TRecord extends { ordinal: number; relativeMs: number },
+>(args: StreamNdjsonRecordsArgs<TRecord>): TRecord[] {
   const content = readTextSync(args.filePath);
   const state = createNdjsonRecordValidationState();
   const records: TRecord[] = [];
@@ -265,7 +263,9 @@ function unsupportedManifestVersionMessage(version: number): string {
   return `Replay capture schema version ${version} is not supported. Replay captures must use schema version ${REPLAY_CAPTURE_SCHEMA_VERSION}.`;
 }
 
-function parseManifest<TManifest>(args: ParseManifestArgs<TManifest>): TManifest {
+function parseManifest<TManifest>(
+  args: ParseManifestArgs<TManifest>,
+): TManifest {
   const version = manifestVersion(args.value);
   if (version !== null && version !== REPLAY_CAPTURE_SCHEMA_VERSION) {
     throw new ReplayCaptureReadError(

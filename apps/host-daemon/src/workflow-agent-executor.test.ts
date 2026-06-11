@@ -1,6 +1,13 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -111,7 +118,9 @@ interface CreateHarnessOptions {
 
 const harnesses: Harness[] = [];
 
-async function createHarness(options: CreateHarnessOptions = {}): Promise<Harness> {
+async function createHarness(
+  options: CreateHarnessOptions = {},
+): Promise<Harness> {
   const rootDir = await mkdtemp(join(tmpdir(), "bb-wf-executor-"));
   const workDir = join(rootDir, "work");
   await mkdir(workDir, { recursive: true });
@@ -186,7 +195,10 @@ afterEach(async () => {
   }
 });
 
-function buildSpec(harness: Harness, overrides: Partial<AgentSpec> = {}): AgentSpec {
+function buildSpec(
+  harness: Harness,
+  overrides: Partial<AgentSpec> = {},
+): AgentSpec {
   return {
     prompt: "hello",
     provider: "codex",
@@ -741,7 +753,11 @@ describe("WorkflowAgentExecutor", () => {
     const context = buildContext();
 
     const run = harness.executor.runAgent(
-      buildSpec(harness, { cwd: repoDir, worktree: true, prompt: "delay:1500" }),
+      buildSpec(harness, {
+        cwd: repoDir,
+        worktree: true,
+        prompt: "delay:1500",
+      }),
       context,
     );
 
@@ -779,129 +795,127 @@ const silentLogger: HostDaemonLogger = {
 };
 
 describe("WorkflowAgentExecutor across the runner wire", () => {
-  it(
-    "revalidates structured output with one corrective re-prompt into the agentIndex-keyed log",
-    async () => {
-      // Full M1-runtime + runner-wire + executor + fake-provider path: the
-      // first structured reply violates the schema, the workflow runtime's
-      // single corrective re-prompt re-runs the agent (same agentIndex, next
-      // attempt), and the corrected value validates.
-      const dataDir = await mkdtemp(join(tmpdir(), "bb-wf-corrective-"));
-      const workDir = join(dataDir, "work");
-      await mkdir(workDir, { recursive: true });
-      const events: WorkflowRunManagerRunEvent[] = [];
-      const manager = new WorkflowRunManager({
-        dataDir,
-        logger: silentLogger,
-        workflowAgentShellEnv: { PATH: "/usr/bin:/bin" },
-        onRunEvent: (event) => {
-          events.push(event);
+  it("revalidates structured output with one corrective re-prompt into the agentIndex-keyed log", async () => {
+    // Full M1-runtime + runner-wire + executor + fake-provider path: the
+    // first structured reply violates the schema, the workflow runtime's
+    // single corrective re-prompt re-runs the agent (same agentIndex, next
+    // attempt), and the corrected value validates.
+    const dataDir = await mkdtemp(join(tmpdir(), "bb-wf-corrective-"));
+    const workDir = join(dataDir, "work");
+    await mkdir(workDir, { recursive: true });
+    const events: WorkflowRunManagerRunEvent[] = [];
+    const manager = new WorkflowRunManager({
+      dataDir,
+      logger: silentLogger,
+      workflowAgentShellEnv: { PATH: "/usr/bin:/bin" },
+      onRunEvent: (event) => {
+        events.push(event);
+      },
+      maxLiveProviderProcesses: 4,
+      worktreeSetupTimeoutMs: 10_000,
+      turnStallTimeoutMs: 60_000,
+      cancelEscalationGraceMs: 10_000,
+      createRuntime: (runtimeOptions) =>
+        createAgentRuntimeWithAdapters({
+          ...runtimeOptions,
+          adapterFactory: () =>
+            createFakeAdapter({
+              scriptPath: executorFakeProviderScriptPath,
+              supportsUserQuestion: true,
+            }),
+        }),
+    });
+    try {
+      const marker = join(dataDir, "schema-miss.marker");
+      const source = [
+        'export const meta = { name: "corrective", description: "corrective retry fixture" };',
+        `return await agent("schema-miss-once:${marker} collect the answer", { schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] } });`,
+        "",
+      ].join("\n");
+      const accepted = await manager.startRun({
+        runId: "wfr_corrective",
+        projectId: "proj_test",
+        source,
+        filename: "corrective.workflow.js",
+        args: undefined,
+        seed: 11,
+        baseTimeMs: 1_700_000_000_000,
+        defaults: {
+          provider: "codex",
+          effort: "medium",
+          sandbox: "read-only",
+          cwd: workDir,
+          concurrency: 2,
+          maxAgents: 5,
+          maxFanout: 4,
+          budgetOutputTokens: null,
         },
-        maxLiveProviderProcesses: 4,
-        worktreeSetupTimeoutMs: 10_000,
-        turnStallTimeoutMs: 60_000,
-        cancelEscalationGraceMs: 10_000,
-        createRuntime: (runtimeOptions) =>
-          createAgentRuntimeWithAdapters({
-            ...runtimeOptions,
-            adapterFactory: () =>
-              createFakeAdapter({
-                scriptPath: executorFakeProviderScriptPath,
-                supportsUserQuestion: true,
-              }),
-          }),
+        sandboxCeiling: "workspace-write",
+        journal: [],
+        execTimeoutMs: null,
       });
-      try {
-        const marker = join(dataDir, "schema-miss.marker");
-        const source = [
-          'export const meta = { name: "corrective", description: "corrective retry fixture" };',
-          `return await agent("schema-miss-once:${marker} collect the answer", { schema: { type: "object", properties: { answer: { type: "string" } }, required: ["answer"] } });`,
-          "",
-        ].join("\n");
-        const accepted = await manager.startRun({
-          runId: "wfr_corrective",
-          projectId: "proj_test",
-          source,
-          filename: "corrective.workflow.js",
-          args: undefined,
-          seed: 11,
-          baseTimeMs: 1_700_000_000_000,
-          defaults: {
-            provider: "codex",
-            effort: "medium",
-            sandbox: "read-only",
-            cwd: workDir,
-            concurrency: 2,
-            maxAgents: 5,
-            maxFanout: 4,
-            budgetOutputTokens: null,
-          },
-          sandboxCeiling: "workspace-write",
-          journal: [],
-          execTimeoutMs: null,
-        });
-        expect(accepted).toEqual({ accepted: true });
+      expect(accepted).toEqual({ accepted: true });
 
-        const deadline = Date.now() + 25_000;
-        const isTerminal = (entry: WorkflowRunManagerRunEvent) =>
-          entry.event.type === "run/completed" ||
-          entry.event.type === "run/failed" ||
-          entry.event.type === "run/cancelled";
-        while (!events.some(isTerminal)) {
-          if (Date.now() > deadline) {
-            throw new Error(
-              `run never settled: ${JSON.stringify(events.map((e) => e.event.type))}`,
-            );
-          }
-          await sleep(50);
+      const deadline = Date.now() + 25_000;
+      const isTerminal = (entry: WorkflowRunManagerRunEvent) =>
+        entry.event.type === "run/completed" ||
+        entry.event.type === "run/failed" ||
+        entry.event.type === "run/cancelled";
+      while (!events.some(isTerminal)) {
+        if (Date.now() > deadline) {
+          throw new Error(
+            `run never settled: ${JSON.stringify(events.map((e) => e.event.type))}`,
+          );
         }
-        const terminal = events.find(isTerminal)!;
-        if (terminal.event.type !== "run/completed") {
-          throw new Error(`run did not complete: ${JSON.stringify(terminal.event)}`);
-        }
-        expect(terminal.event.result).toEqual({ answer: "ok" });
-
-        // Exactly one corrective re-prompt was issued.
-        const correctiveLogs = events.filter(
-          (entry) =>
-            entry.event.type === "log" &&
-            entry.event.message.includes("structured output retry"),
-        );
-        expect(correctiveLogs).toHaveLength(1);
-
-        const completion = events.find(
-          (entry) => entry.event.type === "agent/completed",
-        );
-        if (!completion || completion.event.type !== "agent/completed") {
-          throw new Error("expected an agent/completed event");
-        }
-        expect(completion.event.entry.structured).toEqual({ answer: "ok" });
-
-        // Both attempts (a working + extraction turn each) landed in the ONE
-        // log addressed by the run event's agentIndex — the M5 drill-in key.
-        const raw = await readFile(
-          join(
-            workflowRunDirPath(dataDir, "wfr_corrective"),
-            "agents",
-            `${completion.event.agentIndex}.events.jsonl`,
-          ),
-          "utf8",
-        );
-        const rows = raw
-          .trim()
-          .split("\n")
-          .map((line) => parseThreadEventRow(JSON.parse(line)));
-        rows.forEach((row, index) => {
-          expect(row.seq).toBe(index + 1);
-        });
-        expect(rows.filter((row) => row.type === "turn/completed")).toHaveLength(
-          4,
-        );
-      } finally {
-        await manager.shutdown();
-        await rm(dataDir, { recursive: true, force: true });
+        await sleep(50);
       }
-    },
-    30_000,
-  );
+      const terminal = events.find(isTerminal)!;
+      if (terminal.event.type !== "run/completed") {
+        throw new Error(
+          `run did not complete: ${JSON.stringify(terminal.event)}`,
+        );
+      }
+      expect(terminal.event.result).toEqual({ answer: "ok" });
+
+      // Exactly one corrective re-prompt was issued.
+      const correctiveLogs = events.filter(
+        (entry) =>
+          entry.event.type === "log" &&
+          entry.event.message.includes("structured output retry"),
+      );
+      expect(correctiveLogs).toHaveLength(1);
+
+      const completion = events.find(
+        (entry) => entry.event.type === "agent/completed",
+      );
+      if (!completion || completion.event.type !== "agent/completed") {
+        throw new Error("expected an agent/completed event");
+      }
+      expect(completion.event.entry.structured).toEqual({ answer: "ok" });
+
+      // Both attempts (a working + extraction turn each) landed in the ONE
+      // log addressed by the run event's agentIndex — the M5 drill-in key.
+      const raw = await readFile(
+        join(
+          workflowRunDirPath(dataDir, "wfr_corrective"),
+          "agents",
+          `${completion.event.agentIndex}.events.jsonl`,
+        ),
+        "utf8",
+      );
+      const rows = raw
+        .trim()
+        .split("\n")
+        .map((line) => parseThreadEventRow(JSON.parse(line)));
+      rows.forEach((row, index) => {
+        expect(row.seq).toBe(index + 1);
+      });
+      expect(rows.filter((row) => row.type === "turn/completed")).toHaveLength(
+        4,
+      );
+    } finally {
+      await manager.shutdown();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

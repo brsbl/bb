@@ -34,14 +34,16 @@ export function buildComposerSubmissionMode({
 }: BuildComposerSubmissionModeArgs): SubmissionMode {
   return {
     planMode:
-      planModeChecked && supportsSubmissionModeToggle({
+      planModeChecked &&
+      supportsSubmissionModeToggle({
         entrypoint,
         support: planModeSupport,
       })
         ? "plan"
         : DEFAULT_SUBMISSION_MODE.planMode,
     goalMode:
-      goalModeChecked && supportsSubmissionModeToggle({
+      goalModeChecked &&
+      supportsSubmissionModeToggle({
         entrypoint,
         support: goalModeSupport,
       })

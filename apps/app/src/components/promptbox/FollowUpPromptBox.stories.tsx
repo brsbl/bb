@@ -575,12 +575,7 @@ export function Overview() {
         <Row
           submitMode={{ kind: "ready" }}
           actionsMenu={
-            <StoryActionsMenu
-              shortcut="$"
-              showPlan
-              showGoal
-              apps={storyApps}
-            />
+            <StoryActionsMenu shortcut="$" showPlan showGoal apps={storyApps} />
           }
         />
       </StoryRow>
@@ -616,7 +611,10 @@ export function Overview() {
         label="plus menu: unsupported"
         hint="provider without command/mode/app affordances keeps only Create App"
       >
-        <Row submitMode={{ kind: "ready" }} actionsMenu={<StoryActionsMenu />} />
+        <Row
+          submitMode={{ kind: "ready" }}
+          actionsMenu={<StoryActionsMenu />}
+        />
       </StoryRow>
     </StoryCard>
   );

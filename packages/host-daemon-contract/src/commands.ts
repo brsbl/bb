@@ -155,17 +155,19 @@ export type HostDaemonInjectedSkillSource = z.infer<
   typeof hostDaemonInjectedSkillSourceSchema
 >;
 
-const hostDaemonThreadRuntimeContextSchema = z.object({
-  workspaceContext: workspaceContextSchema,
-  projectId: z.string().min(1),
-  providerId: z.string().min(1),
-  options: runtimeThreadExecutionOptionsSchema,
-  instructions: z.string().min(1),
-  dynamicTools: z.array(dynamicToolSchema),
-  injectedSkillSources: z.array(hostDaemonInjectedSkillSourceSchema),
-  disallowedTools: z.array(z.string()).optional(),
-  instructionMode: instructionModeSchema,
-}).strict();
+const hostDaemonThreadRuntimeContextSchema = z
+  .object({
+    workspaceContext: workspaceContextSchema,
+    projectId: z.string().min(1),
+    providerId: z.string().min(1),
+    options: runtimeThreadExecutionOptionsSchema,
+    instructions: z.string().min(1),
+    dynamicTools: z.array(dynamicToolSchema),
+    injectedSkillSources: z.array(hostDaemonInjectedSkillSourceSchema),
+    disallowedTools: z.array(z.string()).optional(),
+    instructionMode: instructionModeSchema,
+  })
+  .strict();
 
 const hostDaemonExistingThreadRuntimeContextSchema =
   hostDaemonThreadRuntimeContextSchema.extend({
@@ -687,13 +689,12 @@ const environmentDestroyCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
-const environmentCleanupPreflightCommandSchema =
-  hostDaemonWorkspaceTargetSchema
-    .extend({
-      type: z.literal("environment.cleanup_preflight"),
-      mergeBaseBranch: gitBranchNameSchema,
-    })
-    .strict();
+const environmentCleanupPreflightCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("environment.cleanup_preflight"),
+    mergeBaseBranch: gitBranchNameSchema,
+  })
+  .strict();
 
 const workspaceStatusCommandSchema = hostDaemonWorkspaceTargetSchema.extend({
   type: z.literal("workspace.status"),
@@ -756,8 +757,12 @@ export const workflowStartErrorCodeValues = [
   "journal_fetch_failed",
   "resume_preconditions_failed",
 ] as const;
-export const workflowStartErrorCodeSchema = z.enum(workflowStartErrorCodeValues);
-export type WorkflowStartErrorCode = z.infer<typeof workflowStartErrorCodeSchema>;
+export const workflowStartErrorCodeSchema = z.enum(
+  workflowStartErrorCodeValues,
+);
+export type WorkflowStartErrorCode = z.infer<
+  typeof workflowStartErrorCodeSchema
+>;
 
 /**
  * Start (or resume) a workflow run. Acceptance-only ack: success means the
@@ -946,14 +951,13 @@ const workspaceCommitCommandSchema = hostDaemonWorkspaceTargetSchema
   })
   .strict();
 
-const workspaceSquashMergeCommandSchema =
-  hostDaemonWorkspaceTargetSchema
-    .extend({
-      type: z.literal("workspace.squash_merge"),
-      targetBranch: gitBranchNameSchema,
-      commitMessage: z.string().min(1),
-    })
-    .strict();
+const workspaceSquashMergeCommandSchema = hostDaemonWorkspaceTargetSchema
+  .extend({
+    type: z.literal("workspace.squash_merge"),
+    targetBranch: gitBranchNameSchema,
+    commitMessage: z.string().min(1),
+  })
+  .strict();
 
 const hostDaemonNonProvisionCommandSchema = z.discriminatedUnion("type", [
   threadStartCommandSchema,
@@ -1380,10 +1384,7 @@ export function parseHostDaemonOnlineRpcResultForCommand(
 
 export function parseHostDaemonRpcResultForCommand<
   TCommand extends HostDaemonRpcCommand,
->(
-  command: TCommand,
-  value: unknown,
-): HostDaemonRpcResultForCommand<TCommand>;
+>(command: TCommand, value: unknown): HostDaemonRpcResultForCommand<TCommand>;
 export function parseHostDaemonRpcResultForCommand(
   command: HostDaemonRpcCommand,
   value: unknown,

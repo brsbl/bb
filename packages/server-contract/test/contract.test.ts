@@ -133,6 +133,8 @@ const INTENTIONAL_OPTIONAL_SERVER_FIELDS: Record<string, string> = {
     "Thread creation may omit reasoning level and use the server default.",
   "createThreadRequestSchema.serviceTier":
     "Thread creation may omit service tier and use the server default.",
+  "createThreadRequestSchema.submissionMode":
+    "Thread creation may omit submission mode; the server fills the default before dispatch and validates non-default modes against provider support.",
   "createThreadRequestSchema.executionInputSources":
     "Thread creation may omit source metadata; legacy callers treat supplied execution fields as explicit.",
   "createThreadRequestSchema.executionInputSources.model":
@@ -169,6 +171,8 @@ const INTENTIONAL_OPTIONAL_SERVER_FIELDS: Record<string, string> = {
     "Immediate agent-to-agent CLI sends include the current thread; user-originated sends and queued messages omit live sender context.",
   "sendMessageRequestSchema.serviceTier":
     "Follow-up sends may inherit the thread's default service tier.",
+  "sendMessageRequestSchema.submissionMode":
+    "Follow-up sends may omit submission mode; the server fills the default before dispatch and validates non-default modes against provider support.",
   "sendMessageRequestSchema.executionInputSources":
     "Follow-up sends may omit source metadata; legacy callers treat supplied execution fields as explicit.",
   "sendMessageRequestSchema.executionInputSources.model":

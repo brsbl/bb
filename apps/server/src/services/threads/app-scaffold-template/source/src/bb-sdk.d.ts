@@ -13,13 +13,80 @@ declare global {
 
   type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 
-  type ThreadEventType = "thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/goal/updated" | "thread/goal/cleared" | "thread/compacted" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog";
+  type ThreadEventType =
+    | "thread/started"
+    | "thread/identity"
+    | "turn/started"
+    | "turn/completed"
+    | "turn/input/accepted"
+    | "thread/name/updated"
+    | "thread/goal/updated"
+    | "thread/goal/cleared"
+    | "thread/compacted"
+    | "item/started"
+    | "item/completed"
+    | "item/agentMessage/delta"
+    | "item/commandExecution/outputDelta"
+    | "item/fileChange/outputDelta"
+    | "item/reasoning/summaryTextDelta"
+    | "item/reasoning/textDelta"
+    | "item/plan/delta"
+    | "item/mcpToolCall/progress"
+    | "item/toolCall/progress"
+    | "item/backgroundTask/progress"
+    | "item/backgroundTask/completed"
+    | "thread/tokenUsage/updated"
+    | "thread/contextWindowUsage/updated"
+    | "turn/plan/updated"
+    | "turn/diff/updated"
+    | "provider/error"
+    | "provider/warning"
+    | "provider/unhandled"
+    | "client/thread/start"
+    | "client/turn/requested"
+    | "client/turn/start"
+    | "system/error"
+    | "system/manager/user_message"
+    | "system/thread/interrupted"
+    | "system/operation"
+    | "system/permissionGrant/lifecycle"
+    | "system/userQuestion/lifecycle"
+    | "system/thread-provisioning"
+    | "system/provider-turn-watchdog";
 
-  type ThreadChangeKind = "thread-created" | "thread-deleted" | "events-appended" | "interactions-changed" | "status-changed" | "title-changed" | "queue-changed" | "archived-changed" | "pin-state-changed" | "parent-changed" | "read-state-changed" | "order-changed" | "terminals-changed";
+  type ThreadChangeKind =
+    | "thread-created"
+    | "thread-deleted"
+    | "events-appended"
+    | "interactions-changed"
+    | "status-changed"
+    | "title-changed"
+    | "queue-changed"
+    | "archived-changed"
+    | "pin-state-changed"
+    | "parent-changed"
+    | "read-state-changed"
+    | "order-changed"
+    | "terminals-changed";
 
-  type ProjectChangeKind = "project-created" | "project-updated" | "project-deleted" | "project-sources-changed" | "threads-changed" | "project-order-changed" | "automations-changed" | "thread-schedules-changed";
+  type ProjectChangeKind =
+    | "project-created"
+    | "project-updated"
+    | "project-deleted"
+    | "project-sources-changed"
+    | "threads-changed"
+    | "project-order-changed"
+    | "automations-changed"
+    | "thread-schedules-changed";
 
-  type EnvironmentChangeKind = "status-changed" | "environment-created" | "environment-deleted" | "metadata-changed" | "work-status-changed" | "git-refs-changed" | "thread-storage-changed";
+  type EnvironmentChangeKind =
+    | "status-changed"
+    | "environment-created"
+    | "environment-deleted"
+    | "metadata-changed"
+    | "work-status-changed"
+    | "git-refs-changed"
+    | "thread-storage-changed";
 
   type HostChangeKind = "host-connected" | "host-disconnected";
 
@@ -75,9 +142,24 @@ declare global {
     id?: string | undefined;
   }
 
-  type ChangedMessage = ThreadChangedMessage | ProjectChangedMessage | EnvironmentChangedMessage | HostChangedMessage | SystemChangedMessage | AppChangedMessage;
+  type ChangedMessage =
+    | ThreadChangedMessage
+    | ProjectChangedMessage
+    | EnvironmentChangedMessage
+    | HostChangedMessage
+    | SystemChangedMessage
+    | AppChangedMessage;
 
-  type AppDataBroadcastMessage = { type: "app-data.changed"; applicationId: string; path: string; value: JsonValue; deleted: boolean; version: string | null; } | { type: "app-data.resync"; applicationId: string; };
+  type AppDataBroadcastMessage =
+    | {
+        type: "app-data.changed";
+        applicationId: string;
+        path: string;
+        value: JsonValue;
+        deleted: boolean;
+        version: string | null;
+      }
+    | { type: "app-data.resync"; applicationId: string };
 
   interface AppDataEntry {
     path: AppDataPath;
@@ -100,8 +182,7 @@ declare global {
     value: JsonValue;
   }
 
-  interface BbDataDeleteArgs extends BbDataReadArgs {
-  }
+  interface BbDataDeleteArgs extends BbDataReadArgs {}
 
   interface BbDataListArgs {
     prefix?: AppDataPath | "";
@@ -127,39 +208,74 @@ declare global {
 
   type BbRealtimeUnsubscribe = () => void;
 
-  type BbRealtimeEventName = "thread:changed" | "project:changed" | "environment:changed" | "host:changed" | "system:changed" | "system:config-changed" | "system:apps-changed" | "app:changed" | "app-data:changed" | "app-data:resync" | "realtime:connection";
+  type BbRealtimeEventName =
+    | "thread:changed"
+    | "project:changed"
+    | "environment:changed"
+    | "host:changed"
+    | "system:changed"
+    | "system:config-changed"
+    | "system:apps-changed"
+    | "app:changed"
+    | "app-data:changed"
+    | "app-data:resync"
+    | "realtime:connection";
 
-  type ThreadRealtimeEvent = Extract<ChangedMessage, {
-    entity: "thread";
-  }>;
+  type ThreadRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "thread";
+    }
+  >;
 
-  type ProjectRealtimeEvent = Extract<ChangedMessage, {
-    entity: "project";
-  }>;
+  type ProjectRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "project";
+    }
+  >;
 
-  type EnvironmentRealtimeEvent = Extract<ChangedMessage, {
-    entity: "environment";
-  }>;
+  type EnvironmentRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "environment";
+    }
+  >;
 
-  type HostRealtimeEvent = Extract<ChangedMessage, {
-    entity: "host";
-  }>;
+  type HostRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "host";
+    }
+  >;
 
-  type SystemRealtimeEvent = Extract<ChangedMessage, {
-    entity: "system";
-  }>;
+  type SystemRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "system";
+    }
+  >;
 
-  type AppRealtimeEvent = Extract<ChangedMessage, {
-    entity: "app";
-  }>;
+  type AppRealtimeEvent = Extract<
+    ChangedMessage,
+    {
+      entity: "app";
+    }
+  >;
 
-  type AppDataChangedRealtimeEvent = Extract<AppDataBroadcastMessage, {
-    type: "app-data.changed";
-  }>;
+  type AppDataChangedRealtimeEvent = Extract<
+    AppDataBroadcastMessage,
+    {
+      type: "app-data.changed";
+    }
+  >;
 
-  type AppDataResyncRealtimeEvent = Extract<AppDataBroadcastMessage, {
-    type: "app-data.resync";
-  }>;
+  type AppDataResyncRealtimeEvent = Extract<
+    AppDataBroadcastMessage,
+    {
+      type: "app-data.resync";
+    }
+  >;
 
   type BbRealtimeConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -189,7 +305,9 @@ declare global {
     "realtime:connection": BbRealtimeConnectionEvent;
   }
 
-  type BbRealtimeCallback<TEventName extends BbRealtimeEventName> = (event: BbRealtimeEventMap[TEventName]) => void;
+  type BbRealtimeCallback<TEventName extends BbRealtimeEventName> = (
+    event: BbRealtimeEventMap[TEventName],
+  ) => void;
 
   interface ThreadRealtimeOnArgs {
     callback: BbRealtimeCallback<"thread:changed">;
@@ -271,14 +389,32 @@ declare global {
     event: "realtime:connection";
   }
 
-  type BbRealtimeOnArgsUnion = ThreadRealtimeOnArgs | ProjectRealtimeOnArgs | EnvironmentRealtimeOnArgs | HostRealtimeOnArgs | SystemRealtimeOnArgs | SystemConfigRealtimeOnArgs | SystemAppsRealtimeOnArgs | AppRealtimeOnArgs | AppDataChangedRealtimeOnArgs | AppDataResyncRealtimeOnArgs | RealtimeConnectionOnArgs;
+  type BbRealtimeOnArgsUnion =
+    | ThreadRealtimeOnArgs
+    | ProjectRealtimeOnArgs
+    | EnvironmentRealtimeOnArgs
+    | HostRealtimeOnArgs
+    | SystemRealtimeOnArgs
+    | SystemConfigRealtimeOnArgs
+    | SystemAppsRealtimeOnArgs
+    | AppRealtimeOnArgs
+    | AppDataChangedRealtimeOnArgs
+    | AppDataResyncRealtimeOnArgs
+    | RealtimeConnectionOnArgs;
 
-  type BbRealtimeOnArgs<TEventName extends BbRealtimeEventName = BbRealtimeEventName> = Extract<BbRealtimeOnArgsUnion, {
-    event: TEventName;
-  }>;
+  type BbRealtimeOnArgs<
+    TEventName extends BbRealtimeEventName = BbRealtimeEventName,
+  > = Extract<
+    BbRealtimeOnArgsUnion,
+    {
+      event: TEventName;
+    }
+  >;
 
   interface BbRealtime {
-    on<TEventName extends BbRealtimeEventName>(args: BbRealtimeOnArgs<TEventName>): BbRealtimeUnsubscribe;
+    on<TEventName extends BbRealtimeEventName>(
+      args: BbRealtimeOnArgs<TEventName>,
+    ): BbRealtimeUnsubscribe;
   }
 
   type CurrentAppDataReadArgs = BbDataReadArgs;

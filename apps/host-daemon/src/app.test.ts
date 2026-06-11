@@ -9,10 +9,7 @@ import {
 } from "@bb/host-daemon-contract";
 import type { HostWatcher } from "@bb/host-watcher";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createHostDaemonApp,
-  type HostDaemonApp,
-} from "./app.js";
+import { createHostDaemonApp, type HostDaemonApp } from "./app.js";
 import type { HostDaemonLogger } from "./logger.js";
 import type { CreateReconnectingWebSocket } from "./server-connection.js";
 import type { ReconnectingWebSocketLike } from "./server-connection-support.js";
@@ -289,9 +286,7 @@ async function createAppFixture(
   };
 }
 
-
 describe("createHostDaemonApp", () => {
-
   it("forgets server-retired loaded environments when opening a session", async () => {
     const dataDir = await makeTempDir("bb-host-daemon-app-retired-");
     const workspacePath = await makeTempDir(

@@ -39,9 +39,7 @@ export function isDefaultSubmissionMode(
   );
 }
 
-function providerCapabilities(
-  providerId: string,
-): ProviderCapabilities | null {
+function providerCapabilities(providerId: string): ProviderCapabilities | null {
   if (!isAgentProviderId(providerId)) {
     return null;
   }

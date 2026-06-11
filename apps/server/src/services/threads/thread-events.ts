@@ -68,8 +68,7 @@ export interface ClientTurnRequestedEventArgs {
   type: "client/turn/requested";
 }
 
-export interface PreparedClientTurnRequestedEventArgs
-  extends ClientTurnRequestedEventArgs {
+export interface PreparedClientTurnRequestedEventArgs extends ClientTurnRequestedEventArgs {
   requestId: ClientTurnRequestId;
 }
 
@@ -91,8 +90,7 @@ export interface AppendedClientTurnRequest {
   sequence: number;
 }
 
-export interface AppendedClientTurnRequestWithNotification
-  extends AppendedClientTurnRequest {
+export interface AppendedClientTurnRequestWithNotification extends AppendedClientTurnRequest {
   notificationChanges: ThreadChangeKind[];
   notificationMetadata: ThreadChangeMetadata;
 }
@@ -567,10 +565,11 @@ export function appendPreparedClientTurnRequestedEventInTransaction(
   db: DbTransaction,
   args: PreparedClientTurnRequestedEventArgs,
 ): AppendedClientTurnRequest {
-  const result = appendPreparedClientTurnRequestedEventWithNotificationInTransaction(
-    db,
-    args,
-  );
+  const result =
+    appendPreparedClientTurnRequestedEventWithNotificationInTransaction(
+      db,
+      args,
+    );
   return {
     requestId: result.requestId,
     sequence: result.sequence,

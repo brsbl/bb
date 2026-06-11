@@ -186,8 +186,7 @@ type LegacyReplayCaptureManifestFixture = Omit<
 function legacyManifestWithoutSubmissionMode(
   manifest: ReplayCaptureManifest,
 ): LegacyReplayCaptureManifestFixture {
-  const { submissionMode: omittedSubmissionMode, ...legacyManifest } =
-    manifest;
+  const { submissionMode: omittedSubmissionMode, ...legacyManifest } = manifest;
   void omittedSubmissionMode;
   return legacyManifest;
 }
@@ -454,12 +453,12 @@ describe("readReplayCaptureManifest", () => {
       JSON.stringify(legacyManifestWithoutSubmissionMode(manifest), null, 2),
     );
 
-    await expect(readReplayCaptureManifest({ captureId, dataDir })).resolves.toEqual(
-      {
-        ...manifest,
-        submissionMode: DEFAULT_SUBMISSION_MODE,
-      },
-    );
+    await expect(
+      readReplayCaptureManifest({ captureId, dataDir }),
+    ).resolves.toEqual({
+      ...manifest,
+      submissionMode: DEFAULT_SUBMISSION_MODE,
+    });
   });
 });
 
@@ -506,8 +505,7 @@ describe("streamRawProviderRecords", () => {
 
     await expect(readRawRecords(dataDir, captureId)).rejects.toMatchObject({
       code: "invalid_replay_capture",
-      message:
-        "Replay capture ordinal 2 did not match expected ordinal 1",
+      message: "Replay capture ordinal 2 did not match expected ordinal 1",
     });
   });
 });

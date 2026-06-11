@@ -498,7 +498,12 @@ rl.on("line", (line) => {
         threadId: "t1",
         input: [
           promptTextInput({ text: "Ship it" }),
-          { type: "text", text: "hidden", mentions: [], visibility: "agent-only" },
+          {
+            type: "text",
+            text: "hidden",
+            mentions: [],
+            visibility: "agent-only",
+          },
           { type: "localFile", path: "/tmp/spec.md", name: "spec.md" },
           {
             type: "localFile",
@@ -604,7 +609,9 @@ rl.on("line", (line) => {
       expect(clearIndex).toBeGreaterThan(-1);
       expect(secondTurnStartIndex).toBeGreaterThan(-1);
       expect(clearIndex).toBeLessThan(secondTurnStartIndex);
-      await expect(runtime.getThreadGoal({ threadId: "t1" })).resolves.toBeNull();
+      await expect(
+        runtime.getThreadGoal({ threadId: "t1" }),
+      ).resolves.toBeNull();
 
       await runtime.shutdown();
     });
@@ -778,7 +785,9 @@ rl.on("line", (line) => {
           (command) => command.type === "skills/configure",
         ),
       ).toBeLessThan(
-        recordedCommands.findIndex((command) => command.type === "thread/start"),
+        recordedCommands.findIndex(
+          (command) => command.type === "thread/start",
+        ),
       );
 
       await runtime.shutdown();

@@ -914,9 +914,9 @@ export function RootComposeView() {
   );
 
   const commandTrigger = commandTriggerForProvider(selectedProviderId);
-  const installedApps = appsQuery.data ?? [];
-  const promptActionsMenu = useMemo(
-    () => (
+  const promptActionsMenu = useMemo(() => {
+    const installedApps = appsQuery.data ?? [];
+    return (
       <PromptBoxActionsMenu
         createApp={{
           disabled: !projectId,
@@ -949,20 +949,19 @@ export function RootComposeView() {
             : undefined
         }
       />
-    ),
-    [
-      canUseGoalMode,
-      canUsePlanMode,
-      commandTrigger,
-      goalModeChecked,
-      handleCreateAppPromptPrefill,
-      handleOpenSkills,
-      handleOpenStandaloneApp,
-      installedApps,
-      planModeChecked,
-      projectId,
-    ],
-  );
+    );
+  }, [
+    appsQuery.data,
+    canUseGoalMode,
+    canUsePlanMode,
+    commandTrigger,
+    goalModeChecked,
+    handleCreateAppPromptPrefill,
+    handleOpenSkills,
+    handleOpenStandaloneApp,
+    planModeChecked,
+    projectId,
+  ]);
 
   const reuseHeader = useMemo(() => {
     if (parsedEnvironment?.type !== "reuse") return null;

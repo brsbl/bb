@@ -6,10 +6,7 @@ import {
   ensureProviderSupportsSubmissionMode,
   resolveSubmissionMode,
 } from "../../../src/services/threads/thread-submission-mode.js";
-import {
-  seedHostSession,
-  seedProjectWithSource,
-} from "../../helpers/seed.js";
+import { seedHostSession, seedProjectWithSource } from "../../helpers/seed.js";
 import { textInput } from "../../helpers/prompt-input.js";
 import { withTestHarness } from "../../helpers/test-app.js";
 
@@ -35,7 +32,7 @@ describe("thread submission mode policy", () => {
         providerId: "codex",
         submissionMode: { planMode: "plan", goalMode: "none" },
       }),
-    ).toThrow("Provider \"codex\" does not support Plan mode for threadStart.");
+    ).toThrow('Provider "codex" does not support Plan mode for threadStart.');
 
     expect(() =>
       ensureProviderSupportsSubmissionMode({
@@ -44,7 +41,7 @@ describe("thread submission mode policy", () => {
         submissionMode: { planMode: "default", goalMode: "goal" },
       }),
     ).toThrow(
-      "Provider \"claude-code\" does not support Goal mode for turnStart.",
+      'Provider "claude-code" does not support Goal mode for turnStart.',
     );
   });
 
@@ -79,9 +76,9 @@ describe("thread submission mode policy", () => {
         },
       });
 
-      expect(
-        listThreads(harness.db, { projectId: project.id }),
-      ).toHaveLength(0);
+      expect(listThreads(harness.db, { projectId: project.id })).toHaveLength(
+        0,
+      );
     });
   });
 });

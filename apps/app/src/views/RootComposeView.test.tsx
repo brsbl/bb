@@ -51,7 +51,8 @@ import { RootComposeRoute } from "./RootComposeView";
 type ThreadOverrides = Partial<ThreadWithRuntime>;
 type ThreadListEntryOverrides = Partial<ThreadListEntry>;
 type ProjectWithThreadsOverrides = Partial<ProjectWithThreadsResponse>;
-type RootComposeProviderInfo = SystemExecutionOptionsResponse["providers"][number];
+type RootComposeProviderInfo =
+  SystemExecutionOptionsResponse["providers"][number];
 type RootComposeProviderCapabilities = RootComposeProviderInfo["capabilities"];
 type RootComposeProviderCapabilityOverrides =
   Partial<RootComposeProviderCapabilities>;
@@ -573,11 +574,10 @@ describe("RootComposeRoute", () => {
 
   it("sends Plan mode when enabled for a supported provider", async () => {
     const requests = installRootComposeFetchRoutes({
-      systemExecutionOptions: buildSystemExecutionOptionsWithProviderCapabilities(
-        {
+      systemExecutionOptions:
+        buildSystemExecutionOptionsWithProviderCapabilities({
           supportsPlanMode: { threadStart: true, turnStart: false },
-        },
-      ),
+        }),
     });
     seedRootComposeDraft("Plan the implementation");
     renderRootComposeRoute();

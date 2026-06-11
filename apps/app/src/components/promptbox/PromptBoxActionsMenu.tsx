@@ -345,9 +345,14 @@ function PromptBoxMenuActionRow({
         onSelect();
       }}
     >
-      <Icon name={iconName} className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS} />
+      <Icon
+        name={iconName}
+        className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+      />
       <span className={MENU_ACTION_LABEL_CLASS}>{label}</span>
-      {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+      {shortcut ? (
+        <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut>
+      ) : null}
       {trailingIconName ? (
         <Icon
           name={trailingIconName}
@@ -381,7 +386,10 @@ function PromptBoxMenuToggleRow({
       role="menuitemcheckbox"
       onSelect={handleSelect}
     >
-      <Icon name={iconName} className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS} />
+      <Icon
+        name={iconName}
+        className={COARSE_POINTER_COMPACT_ICON_SIZE_CLASS}
+      />
       <span className={MENU_ACTION_LABEL_CLASS}>{label}</span>
       <span
         aria-hidden="true"
@@ -397,10 +405,7 @@ function PromptBoxMenuToggleRow({
   );
 }
 
-function PromptBoxAppsList({
-  apps,
-  onAppSelect,
-}: PromptBoxAppsListProps) {
+function PromptBoxAppsList({ apps, onAppSelect }: PromptBoxAppsListProps) {
   return (
     <>
       <DropdownMenuLabel>{apps.length} installed apps</DropdownMenuLabel>

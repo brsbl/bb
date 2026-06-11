@@ -111,7 +111,9 @@ function renderNewTabPage(args: RenderNewTabPageArgs = {}) {
     ...render(
       <NewTabPage
         projectId={args.projectId}
-        environmentId={args.environmentId === undefined ? "env-1" : args.environmentId}
+        environmentId={
+          args.environmentId === undefined ? "env-1" : args.environmentId
+        }
         currentThreadId={args.currentThreadId ?? "thr-standard"}
         focusRequest={0}
         onSelect={onSelect}
@@ -306,9 +308,7 @@ describe("NewTabPage", () => {
   it("renders an unavailable state without querying", () => {
     renderNewTabPage({ currentThreadId: "", environmentId: null });
 
-    expect(
-      screen.getByText("No searchable source is available."),
-    ).toBeTruthy();
+    expect(screen.getByText("No searchable source is available.")).toBeTruthy();
     expect(api.searchProjectPaths).not.toHaveBeenCalled();
     expect(api.searchEnvironmentPaths).not.toHaveBeenCalled();
     expect(api.listApps).not.toHaveBeenCalled();
@@ -463,9 +463,13 @@ describe("NewTabPage recent section", () => {
       },
     );
 
-    expect(await screen.findByText("No results match your search.")).toBeTruthy();
+    expect(
+      await screen.findByText("No results match your search."),
+    ).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Recent" })).toBeNull();
-    expect(screen.queryByRole("option", { name: /swap-model\.md/u })).toBeNull();
+    expect(
+      screen.queryByRole("option", { name: /swap-model\.md/u }),
+    ).toBeNull();
   });
 
   it("reaches a recent row via keyboard navigation", async () => {

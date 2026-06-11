@@ -2,11 +2,7 @@ import { atom, useAtom } from "jotai";
 import { RESET, atomWithStorage } from "jotai/utils";
 import type { PromptTextMention } from "@bb/domain";
 import Placeholder from "@tiptap/extension-placeholder";
-import {
-  EditorContent,
-  useEditor,
-  type Editor,
-} from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   useCallback,
@@ -352,9 +348,7 @@ function promptEditorValueFromPlainText(text: string): PromptEditorValue {
   return { text: normalizePastedPlainText(text), mentions: [] };
 }
 
-function promptEditorValueFromRichHtml(
-  html: string,
-): ParsedRichClipboardValue {
+function promptEditorValueFromRichHtml(html: string): ParsedRichClipboardValue {
   const document = new DOMParser().parseFromString(html, "text/html");
   let text = "";
   let hasMentions = false;
@@ -716,10 +710,7 @@ export function PromptBoxInternal({
     if (commandTriggerChar === null) {
       return [MENTION_TRIGGER];
     }
-    return [
-      MENTION_TRIGGER,
-      { char: commandTriggerChar, kind: "command" },
-    ];
+    return [MENTION_TRIGGER, { char: commandTriggerChar, kind: "command" }];
   }, [commandTriggerChar]);
 
   // Fan the active query out to the matching data source and null the other,
@@ -1323,8 +1314,7 @@ export function PromptBoxInternal({
       "\n",
       "\n",
     );
-    const leadingText =
-      before.length > 0 && !/\s$/u.test(before) ? " " : "";
+    const leadingText = before.length > 0 && !/\s$/u.test(before) ? " " : "";
 
     currentEditor
       .chain()

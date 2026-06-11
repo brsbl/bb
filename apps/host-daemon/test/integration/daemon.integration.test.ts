@@ -7,10 +7,7 @@ import {
   createFakeAdapter,
   type ProviderAdapter,
 } from "@bb/agent-runtime/test";
-import {
-  jsonValueSchema,
-  type JsonValue,
-} from "@bb/domain";
+import { jsonValueSchema, type JsonValue } from "@bb/domain";
 import { HOST_AUTH_FILE_NAME } from "@bb/host-daemon-contract";
 import { startHostDaemon } from "../../src/start-host-daemon.js";
 import {
@@ -47,13 +44,17 @@ interface StartTestHostDaemonArgs {
   serverUrl: string;
 }
 
-function extractProviderThreadId(result: Record<string, unknown> | undefined): string {
+function extractProviderThreadId(
+  result: Record<string, unknown> | undefined,
+): string {
   if (!result) {
     throw new Error("Expected command result with providerThreadId");
   }
   const { providerThreadId } = result;
   if (typeof providerThreadId !== "string") {
-    throw new Error(`Expected providerThreadId string, got: ${typeof providerThreadId}`);
+    throw new Error(
+      `Expected providerThreadId string, got: ${typeof providerThreadId}`,
+    );
   }
   return providerThreadId;
 }

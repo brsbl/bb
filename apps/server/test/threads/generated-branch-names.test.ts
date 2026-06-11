@@ -329,8 +329,9 @@ describe("generated managed branch names", () => {
         .filter((event) => event.type === "system/thread-provisioning")
         .map(
           (event) =>
-            systemThreadProvisioningEventDataSchema.parse(JSON.parse(event.data))
-              .status,
+            systemThreadProvisioningEventDataSchema.parse(
+              JSON.parse(event.data),
+            ).status,
         );
       expect(provisioningStatuses).toContain("cancelled");
       expect(

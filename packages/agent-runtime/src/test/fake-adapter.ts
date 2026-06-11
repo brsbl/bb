@@ -397,7 +397,8 @@ function translateEventMessage(event: ProviderRuntimeEvent): ThreadEvent[] {
         return [];
       }
       const providerTurnId =
-        message.params.turnId === null || typeof message.params.turnId === "string"
+        message.params.turnId === null ||
+        typeof message.params.turnId === "string"
           ? message.params.turnId
           : null;
       return [
@@ -515,7 +516,7 @@ export function createFakeAdapter(
    * - `ask_user` emits a provider-scoped user-question interactive request
    *   when the adapter is configured with `supportsUserQuestion: true`.
    * - remaining text is echoed back as `Response to: ...`.
-  */
+   */
   const supportsUserQuestion = options.supportsUserQuestion ?? false;
   const unsupportedSubmissionMode = { threadStart: false, turnStart: false };
 
@@ -523,8 +524,7 @@ export function createFakeAdapter(
     buildCommandPlan,
     capabilities: {
       supportsArchive: true,
-      supportsGoalMode:
-        options.supportsGoalMode ?? unsupportedSubmissionMode,
+      supportsGoalMode: options.supportsGoalMode ?? unsupportedSubmissionMode,
       supportsPlanMode: options.supportsPlanMode ?? unsupportedSubmissionMode,
       supportsRename: true,
       supportsServiceTier: false,
@@ -532,8 +532,9 @@ export function createFakeAdapter(
       supportedPermissionModes: ["full", "workspace-write", "readonly"],
     },
     decodeToolCallRequest,
-    decodeInteractiveRequest:
-      supportsUserQuestion ? decodeInteractiveRequest : undefined,
+    decodeInteractiveRequest: supportsUserQuestion
+      ? decodeInteractiveRequest
+      : undefined,
     displayName: options.displayName ?? DEFAULT_DISPLAY_NAME,
     id: options.id ?? DEFAULT_ADAPTER_ID,
     parseModelListResult,
@@ -548,7 +549,8 @@ export function createFakeAdapter(
     translateAcceptedCommand() {
       return [];
     },
-    buildInteractiveResponse:
-      supportsUserQuestion ? buildInteractiveResponse : undefined,
+    buildInteractiveResponse: supportsUserQuestion
+      ? buildInteractiveResponse
+      : undefined,
   };
 }

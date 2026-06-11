@@ -913,11 +913,7 @@ export function ThreadDetailPromptArea({
               }
             : undefined
         }
-        apps={
-          apps.length > 0
-            ? { apps, onSelect: onOpenApp }
-            : undefined
-        }
+        apps={apps.length > 0 ? { apps, onSelect: onOpenApp } : undefined}
       />
     ),
     [
@@ -1032,12 +1028,12 @@ export function ThreadDetailPromptArea({
   }
 
   return (
-      <FollowUpPromptBox
-        id={THREAD_DETAIL_COMPOSER_TEXTAREA_ID}
-        actionsMenu={promptActionsMenu}
-        attachments={attachmentsConfig}
-        promptBoxRef={promptBoxRef}
-        stack={promptStack}
+    <FollowUpPromptBox
+      id={THREAD_DETAIL_COMPOSER_TEXTAREA_ID}
+      actionsMenu={promptActionsMenu}
+      attachments={attachmentsConfig}
+      promptBoxRef={promptBoxRef}
+      stack={promptStack}
       composer={composerConfig}
       zenModeResetKey={thread.id}
       environmentSummary={environmentSummary}

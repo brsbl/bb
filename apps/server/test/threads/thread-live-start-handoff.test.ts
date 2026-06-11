@@ -171,11 +171,15 @@ describe("live thread start handoff", () => {
           environmentId: fixture.environment.id,
           threadId: fixture.thread.id,
         });
+        expect(getThread(harness.db, fixture.thread.id)?.archivedAt).toEqual(
+          expect.any(Number),
+        );
         expect(
-          getThread(harness.db, fixture.thread.id)?.archivedAt,
-        ).toEqual(expect.any(Number));
-        expect(
-          listQueuedThreadCommands(harness, "thread.archive", fixture.thread.id),
+          listQueuedThreadCommands(
+            harness,
+            "thread.archive",
+            fixture.thread.id,
+          ),
         ).toEqual([]);
         await reportQueuedCommandSuccess(harness, stopCommand, {});
       } finally {

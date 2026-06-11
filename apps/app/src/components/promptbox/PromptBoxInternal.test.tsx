@@ -1688,9 +1688,7 @@ describe("PromptBoxInternal command typeahead", () => {
       expect(getDraftText()).toBe("Open @src/components/ ");
     });
     // The mention still inserts a pill node and records a mention range.
-    expect(
-      editor.querySelector('[data-prompt-mention="true"]'),
-    ).not.toBeNull();
+    expect(editor.querySelector('[data-prompt-mention="true"]')).not.toBeNull();
     expect(getDraftMentionCount()).toBe(1);
   });
 });

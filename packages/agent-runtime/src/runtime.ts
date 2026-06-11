@@ -282,8 +282,7 @@ function createAgentRuntimeInternal(
       // background tasks) before the thread's identity mappings are cleared —
       // the synthesized events still need provider-thread stamping.
       const detachEvents =
-        providerProcess.adapter.buildThreadDetachedEvents?.({ threadId }) ??
-        [];
+        providerProcess.adapter.buildThreadDetachedEvents?.({ threadId }) ?? [];
       if (detachEvents.length > 0) {
         emitTranslatedEvents({
           events: detachEvents,

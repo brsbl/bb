@@ -40,7 +40,9 @@ interface ReplayTestSocket {
   send(data: string): void;
 }
 
-function buildReplayManifest(args: BuildReplayManifestArgs): ReplayCaptureManifest {
+function buildReplayManifest(
+  args: BuildReplayManifestArgs,
+): ReplayCaptureManifest {
   return {
     schemaVersion: 3,
     captureId: args.captureId,
@@ -109,7 +111,9 @@ function replayResultForRequest(
   }
 }
 
-function replayOperationName(request: HostDaemonOnlineRpcRequestMessage): string {
+function replayOperationName(
+  request: HostDaemonOnlineRpcRequestMessage,
+): string {
   const { command } = request;
   if (command.type !== "development.replay") {
     return command.type;

@@ -1,11 +1,7 @@
 import type { AvailableModel, ProviderInfo } from "@bb/domain";
 import type { HostDaemonWorkflowListing } from "@bb/host-daemon-contract";
 import { WorkflowRunDialogContent } from "./WorkflowRunDialog";
-import {
-  HOST_IDS,
-  HOST_NAMES,
-  makeHost,
-} from "../../../.ladle/story-fixtures";
+import { HOST_IDS, HOST_NAMES, makeHost } from "../../../.ladle/story-fixtures";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
 import { DialogStage } from "../../../.ladle/story-dialog-stage";
 
@@ -15,7 +11,10 @@ export default {
 
 const noop = () => {};
 
-function makeAvailableModel(model: string, displayName: string): AvailableModel {
+function makeAvailableModel(
+  model: string,
+  displayName: string,
+): AvailableModel {
   return {
     id: model,
     model,
@@ -61,8 +60,7 @@ const deepResearch: HostDaemonWorkflowListing = {
   name: "deep-research",
   description:
     "Fan out research agents across independent sources, then synthesize a cited report.",
-  whenToUse:
-    "Broad questions that benefit from many independent perspectives.",
+  whenToUse: "Broad questions that benefit from many independent perspectives.",
   defaultProvider: "claude-code",
   defaultModel: "claude-haiku-4-5-20251001",
   defaultSandbox: "read-only",
@@ -78,7 +76,12 @@ const codeReview: HostDaemonWorkflowListing = {
 
 const storyHosts = [
   makeHost({ id: HOST_IDS.local, name: HOST_NAMES.local }),
-  makeHost({ id: HOST_IDS.remote, name: HOST_NAMES.remote, type: "persistent", status: "connected" }),
+  makeHost({
+    id: HOST_IDS.remote,
+    name: HOST_NAMES.remote,
+    type: "persistent",
+    status: "connected",
+  }),
 ];
 
 const singleSourceHostIds: string[] = [storyHosts[0].id];
@@ -183,7 +186,10 @@ export function LaunchError() {
 export function Pending() {
   return (
     <StoryCard>
-      <StoryRow label="launching" hint="controls disabled while the launch request is in flight">
+      <StoryRow
+        label="launching"
+        hint="controls disabled while the launch request is in flight"
+      >
         <DialogStage>
           <WorkflowRunDialogContent
             {...baseProps}
