@@ -99,10 +99,7 @@ if (
   });
 }
 
-if (
-  typeof Text !== "undefined" &&
-  !("getClientRects" in Text.prototype)
-) {
+if (typeof Text !== "undefined" && !("getClientRects" in Text.prototype)) {
   Object.defineProperty(Text.prototype, "getClientRects", {
     configurable: true,
     value: () => [],

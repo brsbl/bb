@@ -1226,7 +1226,6 @@ describe("server-contract canonical schemas", () => {
         },
       }),
     ).toThrow();
-
   });
 });
 
@@ -1423,9 +1422,7 @@ describe("server-contract clients", () => {
     };
 
     expect(
-      contract.timelineParentChangeSystemRowSchema.parse(
-        parentChangeRow,
-      ),
+      contract.timelineParentChangeSystemRowSchema.parse(parentChangeRow),
     ).toMatchObject({
       status: "completed",
     });

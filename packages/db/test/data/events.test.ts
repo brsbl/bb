@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { threadScope, turnScope, type PromptInput } from "@bb/domain";
+import {
+  DEFAULT_SUBMISSION_MODE,
+  threadScope,
+  turnScope,
+  type PromptInput,
+} from "@bb/domain";
 import { createConnection } from "../../src/connection.js";
 import { migrate } from "../../src/migrate.js";
 import { noopNotifier } from "../../src/notifier.js";
@@ -1236,6 +1241,7 @@ describe("events", () => {
         input: textInput("start"),
         target: { kind: "thread-start" },
         request: { method: "thread/start", params: {} },
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         execution: {
           model: "gpt-5",
           reasoningLevel: "medium",
