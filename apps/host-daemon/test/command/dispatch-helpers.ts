@@ -275,6 +275,11 @@ export function createFakeRuntime() {
     async renameThread(args) {
       state.renamedTitle = args.title;
     },
+    async setThreadGoal() {},
+    async getThreadGoal() {
+      return null;
+    },
+    async clearThreadGoal() {},
     async archiveThread(args) {
       state.archivedThreadId = args.threadId;
       state.archivedProviderId = args.providerId;

@@ -350,6 +350,7 @@ function toSummary(manifest: ReplayCaptureManifest): ReplayCaptureSummary {
     title: manifest.title,
     kind: manifest.kind,
     userInputPreview: manifest.userInputPreview,
+    submissionMode: manifest.submissionMode,
     execution: manifest.execution,
     eventCounts: manifest.eventCounts,
     errorMessage: manifest.errorMessage,

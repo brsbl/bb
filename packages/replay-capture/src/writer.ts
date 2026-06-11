@@ -16,6 +16,7 @@ import {
   getThreadEventScopeTurnId,
   type PromptInput,
   type ResolvedThreadExecutionOptions,
+  type SubmissionMode,
   type ThreadEvent,
 } from "@bb/domain";
 import {
@@ -115,6 +116,7 @@ export interface ReplayTurnRequestInput {
   kind: ReplayCaptureKind;
   input: PromptInput[];
   execution: ResolvedThreadExecutionOptions;
+  submissionMode: SubmissionMode;
   threadId: string;
 }
 
@@ -512,6 +514,7 @@ export function createReplayCaptureService(
         userInputPreview: deriveReplayCaptureUserInputPreview(
           turnRequest.input,
         ),
+        submissionMode: turnRequest.submissionMode,
         execution: turnRequest.execution,
         eventCounts: {
           rawProviderEvents: 0,

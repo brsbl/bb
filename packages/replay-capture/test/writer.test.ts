@@ -15,11 +15,18 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { AgentRuntimeCaptureEntry } from "@bb/agent-runtime/capture";
 import {
+  DEFAULT_SUBMISSION_MODE,
   type PromptInput,
   turnScope,
   type ResolvedThreadExecutionOptions,
+  type SubmissionMode,
   type ThreadEvent,
 } from "@bb/domain";
+
+const EXPLICIT_TEST_SUBMISSION_MODE: SubmissionMode = {
+  planMode: "plan",
+  goalMode: "goal",
+};
 
 const DEFAULT_TEST_EXECUTION: ResolvedThreadExecutionOptions = {
   model: "gpt-5",
@@ -171,6 +178,20 @@ type ReplayCaptureServiceInstance = NonNullable<
   ReturnType<typeof createReplayCaptureService>
 >;
 
+type LegacyReplayCaptureManifestFixture = Omit<
+  ReplayCaptureManifest,
+  "submissionMode"
+>;
+
+function legacyManifestWithoutSubmissionMode(
+  manifest: ReplayCaptureManifest,
+): LegacyReplayCaptureManifestFixture {
+  const { submissionMode: omittedSubmissionMode, ...legacyManifest } =
+    manifest;
+  void omittedSubmissionMode;
+  return legacyManifest;
+}
+
 function replayFixtureManifest(captureId: string): ReplayCaptureManifest {
   return {
     schemaVersion: 3,
@@ -193,6 +214,7 @@ function replayFixtureManifest(captureId: string): ReplayCaptureManifest {
       },
     ],
     userInputPreview: "Fixture prompt",
+    submissionMode: DEFAULT_SUBMISSION_MODE,
     execution: DEFAULT_TEST_EXECUTION,
     eventCounts: {
       rawProviderEvents: 2,
@@ -258,6 +280,7 @@ function recordStarted(
     kind: "thread-start",
     input: [textInput({ text: `Hello from ${threadId}` })],
     execution: DEFAULT_TEST_EXECUTION,
+    submissionMode: DEFAULT_SUBMISSION_MODE,
   });
   service.recordThreadEvent({
     environmentId: `env-${threadId}`,
@@ -419,6 +442,24 @@ describe("readReplayCaptureManifest", () => {
       ...replayFixtureManifest(captureId),
       extensionValue: "fixture-only",
     });
+  });
+
+  it("defaults missing submission mode on legacy v3 manifests", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "bb-replay-read-"));
+    const captureId = createReplayCaptureId(1_000, "abc123zz");
+    const manifest = replayFixtureManifest(captureId);
+    await mkdir(replayCaptureDir(dataDir, captureId), { recursive: true });
+    await writeFile(
+      replayCaptureManifestPath(dataDir, captureId),
+      JSON.stringify(legacyManifestWithoutSubmissionMode(manifest), null, 2),
+    );
+
+    await expect(readReplayCaptureManifest({ captureId, dataDir })).resolves.toEqual(
+      {
+        ...manifest,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
+      },
+    );
   });
 });
 
@@ -626,6 +667,7 @@ describe("createReplayCaptureService", () => {
       kind: "thread-start",
       input: [textInput({ text: "Original prompt text" })],
       execution: DEFAULT_TEST_EXECUTION,
+      submissionMode: EXPLICIT_TEST_SUBMISSION_MODE,
     });
 
     const rawEntry: AgentRuntimeCaptureEntry = {
@@ -694,6 +736,7 @@ describe("createReplayCaptureService", () => {
         },
       ],
       userInputPreview: "Original prompt text",
+      submissionMode: EXPLICIT_TEST_SUBMISSION_MODE,
       execution: DEFAULT_TEST_EXECUTION,
       eventCounts: {
         rawProviderEvents: 1,
@@ -720,6 +763,7 @@ describe("createReplayCaptureService", () => {
       },
     ]);
     expect(manifest.userInputPreview).toBe("Original prompt text");
+    expect(manifest.submissionMode).toEqual(EXPLICIT_TEST_SUBMISSION_MODE);
 
     const rawLines = (
       await readFile(replayRawProviderEventsPath(dataDir, captureId), "utf8")
@@ -821,6 +865,7 @@ describe("createReplayCaptureService", () => {
         { type: "localFile", path: "/tmp/notes.md", name: "notes.md" },
       ],
       execution: DEFAULT_TEST_EXECUTION,
+      submissionMode: DEFAULT_SUBMISSION_MODE,
     });
     service.recordThreadEvent({
       environmentId: "env-follow-up",
@@ -909,6 +954,7 @@ describe("createReplayCaptureService", () => {
         kind: "thread-start",
         input: [textInput({ text: `prompt ${threadId}` })],
         execution: DEFAULT_TEST_EXECUTION,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
       });
       service.recordRuntimeCaptureEntry({
         kind: "raw-provider-event",
@@ -1131,6 +1177,7 @@ describe("createReplayCaptureService", () => {
       kind: "turn-start",
       input: [textInput({ text: "second-turn" })],
       execution: DEFAULT_TEST_EXECUTION,
+      submissionMode: DEFAULT_SUBMISSION_MODE,
     });
     const started = turnStartedEvent("thr-pending-raw");
     service.recordRuntimeCaptureEntry({
@@ -1189,6 +1236,7 @@ describe("createReplayCaptureService", () => {
       kind: "thread-start",
       input: [textInput({ text: "capped prompt" })],
       execution: DEFAULT_TEST_EXECUTION,
+      submissionMode: DEFAULT_SUBMISSION_MODE,
     });
     recordRawTranslatedThreadEvent({
       at: currentTime,

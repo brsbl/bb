@@ -70,6 +70,10 @@ const REPLAY_CAPTURE_SUMMARY_RESULT: JsonObject = {
   title: "Replay capture",
   kind: "turn-start",
   userInputPreview: "Run the test",
+  submissionMode: {
+    planMode: "plan",
+    goalMode: "goal",
+  },
   execution: RESOLVED_REPLAY_EXECUTION_OPTIONS,
   eventCounts: {
     rawProviderEvents: 2,
@@ -248,6 +252,8 @@ const ONLINE_RPC_RESPONSE_RESULT_FIXTURES: OnlineRpcResponseResultFixtures = {
         displayName: "Codex",
         capabilities: {
           supportsArchive: true,
+          supportsGoalMode: { threadStart: true, turnStart: true },
+          supportsPlanMode: { threadStart: true, turnStart: true },
           supportsRename: true,
           supportsServiceTier: true,
           supportsUserQuestion: true,
@@ -417,6 +423,8 @@ function terminalDataBase64(byteLength: number): string {
 const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
   "hostDaemonCommandSchema.checkout":
     "environment.provision only includes checkout instructions for unmanaged workspaces that requested a branch mutation.",
+  "hostDaemonCommandSchema.options.claudeCodeMockCliTraffic":
+    "runtime execution options may omit the legacy Claude mock traffic setting; the daemon treats absence as normal provider traffic.",
   "hostDaemonOnlineRpcCommandSchema.mergeBaseBranch":
     "workspace.status may omit mergeBaseBranch when the caller only needs working-tree state.",
   "hostDaemonOnlineRpcCommandSchema.query":
@@ -1125,6 +1133,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1149,6 +1158,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1189,6 +1199,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1232,6 +1243,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1265,6 +1277,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1474,6 +1487,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1516,6 +1530,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1551,6 +1566,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1586,6 +1602,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1616,6 +1633,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -1640,6 +1658,7 @@ describe("host-daemon command schemas", () => {
           model: "gpt-5",
           serviceTier: "default",
           reasoningLevel: "medium",
+          submissionMode: { planMode: "default", goalMode: "none" },
           workflowsEnabled: false,
           permissionMode: "full",
           permissionEscalation: null,
@@ -2090,7 +2109,7 @@ describe("host-daemon command schemas", () => {
 
 describe("host-daemon session schemas", () => {
   it("documents the current protocol version", () => {
-    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(34);
+    expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(35);
   });
 
   it("parses valid session open and event batch payloads", () => {

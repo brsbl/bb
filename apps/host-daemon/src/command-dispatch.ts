@@ -128,6 +128,7 @@ function recordReplayTurnRequest(
       kind: "thread-start",
       input: command.input,
       execution: toReplayCaptureExecution(command.options),
+      submissionMode: command.options.submissionMode,
     });
     return;
   }
@@ -143,6 +144,7 @@ function recordReplayTurnRequest(
     kind: "turn-start",
     input: command.input,
     execution: toReplayCaptureExecution(command.options),
+    submissionMode: command.options.submissionMode,
   });
 }
 

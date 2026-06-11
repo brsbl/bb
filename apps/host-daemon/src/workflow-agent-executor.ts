@@ -52,6 +52,7 @@ import {
   type AgentRuntimeShellEnvironment,
 } from "@bb/agent-runtime";
 import {
+  DEFAULT_SUBMISSION_MODE,
   buildThreadEventRow,
   encodeClientTurnRequestIdNumber,
   isWorkflowSandboxAllowedByCeiling,
@@ -237,6 +238,7 @@ function buildWorkflowExecutionOptions(args: {
     model: args.model,
     serviceTier: "default" as const,
     reasoningLevel: args.spec.effort,
+    submissionMode: DEFAULT_SUBMISSION_MODE,
     // Nested workflow runs are a non-goal; provider-native dynamic workflows
     // stay off inside workflow agent sessions.
     workflowsEnabled: false,

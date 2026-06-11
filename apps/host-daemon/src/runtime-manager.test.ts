@@ -289,6 +289,9 @@ function createFakeRuntime() {
     })),
     stopThread: vi.fn(async (_args: StopThreadArgs) => undefined),
     renameThread: vi.fn(async (_args: RenameThreadArgs) => undefined),
+    setThreadGoal: vi.fn(async () => undefined),
+    getThreadGoal: vi.fn(async () => null),
+    clearThreadGoal: vi.fn(async () => undefined),
     archiveThread: vi.fn(async () => undefined),
     unarchiveThread: vi.fn(async () => undefined),
     listModels: vi.fn(async (_args: ListModelsArgs) => ({

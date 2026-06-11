@@ -293,6 +293,7 @@ describe("WorkflowAgentExecutor", () => {
       model: "fake-model",
       serviceTier: "default",
       reasoningLevel: "medium",
+      submissionMode: { planMode: "default", goalMode: "none" },
       workflowsEnabled: false,
       permissionMode: "readonly",
       permissionEscalation: "deny",

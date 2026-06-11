@@ -4,8 +4,10 @@ import {
   type JsonRpcEnvelope,
 } from "@bb/agent-runtime/shared/json-rpc-envelope";
 import {
+  DEFAULT_SUBMISSION_MODE,
   promptInputSchema,
   resolvedThreadExecutionOptionsSchema,
+  submissionModeSchema,
 } from "@bb/domain";
 
 export const REPLAY_CAPTURE_SCHEMA_VERSION = 3 as const;
@@ -88,6 +90,7 @@ export const replayCaptureManifestSchema = z
     kind: replayCaptureKindSchema,
     turns: z.array(replayCaptureTurnSchema).min(1),
     userInputPreview: z.string(),
+    submissionMode: submissionModeSchema.default(DEFAULT_SUBMISSION_MODE),
     execution: resolvedThreadExecutionOptionsSchema,
     eventCounts: replayCaptureEventCountsSchema,
     errorMessage: z.string().nullable(),
@@ -106,6 +109,7 @@ export const replayCaptureSummarySchema = replayCaptureManifestSchema.pick({
   title: true,
   kind: true,
   userInputPreview: true,
+  submissionMode: true,
   execution: true,
   eventCounts: true,
   errorMessage: true,

@@ -187,6 +187,11 @@ function createFakeRuntime(): AgentRuntime {
     },
     async stopThread() {},
     async renameThread() {},
+    async setThreadGoal() {},
+    async getThreadGoal() {
+      return null;
+    },
+    async clearThreadGoal() {},
     async archiveThread() {},
     async unarchiveThread() {},
     async listModels() {

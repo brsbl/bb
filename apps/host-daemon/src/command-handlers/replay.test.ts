@@ -60,6 +60,10 @@ function baseManifest(captureId: string): ReplayCaptureManifest {
       },
     ],
     userInputPreview: "Original prompt",
+    submissionMode: {
+      planMode: "default",
+      goalMode: "none",
+    },
     execution: {
       model: "gpt-5",
       reasoningLevel: "medium",

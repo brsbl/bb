@@ -18,7 +18,6 @@ import {
   isReplayCaptureId,
   type ReplayCaptureManifest,
 } from "@bb/replay-capture";
-import { DEFAULT_SUBMISSION_MODE } from "@bb/domain";
 import type { Hono } from "hono";
 import { COMMAND_TIMEOUT_MS } from "../constants.js";
 import { ApiError } from "../errors.js";
@@ -320,7 +319,7 @@ export function registerDevelopmentOnlyReplayRoutes(
           requestMethod:
             manifest.kind === "thread-start" ? "thread/start" : "turn/start",
           source: "tell",
-          submissionMode: DEFAULT_SUBMISSION_MODE,
+          submissionMode: manifest.submissionMode,
           target: { kind: "new-turn" },
         });
         await callHostOnlineRpc(deps, {
