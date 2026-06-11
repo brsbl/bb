@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { PermissionMode, PromptTextMention } from "@bb/domain";
+import type { AppSummary } from "@bb/server-contract";
 import {
   NewThreadPromptBoxUI,
   type NewThreadBranchConfig,
@@ -9,6 +10,8 @@ import {
   type NewThreadWorktreeConfig,
 } from "@/components/promptbox/NewThreadPromptBox";
 import type { HistoryConfig } from "@/components/promptbox/PromptBoxInternal";
+import { PromptBoxActionsMenu } from "@/components/promptbox/PromptBoxActionsMenu";
+import type { ProviderCommandTrigger } from "@/components/promptbox/mentions/command-trigger";
 import type { PickerOption } from "@/components/pickers/OptionPicker";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
 import {
@@ -31,6 +34,25 @@ export default {
 const noop = () => {};
 
 const baseExecution = makeExecutionControlsProps();
+
+const storyApps: readonly AppSummary[] = [
+  {
+    applicationId: "review-board",
+    name: "Review Board",
+    entry: { path: "index.html", kind: "html" },
+    capabilities: ["data", "message"],
+    icon: { kind: "builtin", name: "ListTodo" },
+    source: null,
+  },
+  {
+    applicationId: "release-notes",
+    name: "Release Notes",
+    entry: { path: "index.html", kind: "html" },
+    capabilities: ["data"],
+    icon: { kind: "builtin", name: "File" },
+    source: null,
+  },
+];
 
 const baseEnvironment: NewThreadEnvironmentConfig = {
   value: `host:${HOST_IDS.local}:local`,
@@ -110,11 +132,92 @@ const baseModeConfig: NewThreadModeConfig = {
 // caps content at 760px. Without this constraint the env-permission strip's
 // justify-between drifts the permission picker far to the right.
 interface PromptStageProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function PromptStage({ children }: PromptStageProps) {
   return <div className="mx-auto w-full max-w-[760px]">{children}</div>;
+}
+
+interface UseMenuToggleArgs {
+  initial: boolean;
+}
+
+function useMenuToggle({ initial }: UseMenuToggleArgs) {
+  const [checked, setChecked] = useState(initial);
+  return {
+    checked,
+    onCheckedChange: setChecked,
+  };
+}
+
+interface StoryActionsMenuProps {
+  apps?: readonly AppSummary[];
+  goalActive?: boolean;
+  planActive?: boolean;
+  shortcut?: ProviderCommandTrigger;
+  showGoal?: boolean;
+  showPlan?: boolean;
+}
+
+function StoryActionsMenu({
+  apps,
+  goalActive = false,
+  planActive = false,
+  shortcut,
+  showGoal = false,
+  showPlan = false,
+}: StoryActionsMenuProps) {
+  const planMode = useMenuToggle({ initial: planActive });
+  const goalMode = useMenuToggle({ initial: goalActive });
+  return (
+    <PromptBoxActionsMenu
+      createApp={{ onSelect: noop }}
+      skills={shortcut ? { shortcut, onSelect: noop } : undefined}
+      planMode={showPlan ? planMode : undefined}
+      goalMode={showGoal ? goalMode : undefined}
+      apps={apps && apps.length > 0 ? { apps, onSelect: noop } : undefined}
+    />
+  );
+}
+
+interface NewThreadStoryRowProps {
+  actionsMenu?: ReactNode;
+  id: string;
+  initialValue?: string;
+  modeConfig?: NewThreadModeConfig;
+  execution?: typeof baseExecution;
+}
+
+function NewThreadStoryRow({
+  actionsMenu,
+  id,
+  initialValue = "",
+  modeConfig = baseModeConfig,
+  execution = baseExecution,
+}: NewThreadStoryRowProps) {
+  const { value, mentionRanges, onChange } = useControlledValue(initialValue);
+  return (
+    <PromptStage>
+      <NewThreadPromptBoxUI
+        id={id}
+        value={value}
+        mentionRanges={mentionRanges}
+        onChange={onChange}
+        onSubmit={noop}
+        actionsMenu={actionsMenu}
+        isSubmitting={false}
+        disabled={false}
+        zenModeStorageKey={`bb.story.${id}`}
+        history={baseHistory}
+        typeahead={makeTypeahead()}
+        attachments={makeAttachments()}
+        modeConfig={modeConfig}
+        project={baseProject}
+        execution={execution}
+      />
+    </PromptStage>
+  );
 }
 
 function DefaultRow() {
@@ -260,6 +363,73 @@ function ProjectlessThreadRow() {
   );
 }
 
+function CodexPlusMenuRow() {
+  return (
+    <NewThreadStoryRow
+      id="story-new-thread-plus-codex"
+      actionsMenu={
+        <StoryActionsMenu
+          shortcut="$"
+          showPlan
+          showGoal
+          apps={storyApps}
+        />
+      }
+    />
+  );
+}
+
+function ClaudePlusMenuRow() {
+  return (
+    <NewThreadStoryRow
+      id="story-new-thread-plus-claude"
+      actionsMenu={<StoryActionsMenu shortcut="/" apps={storyApps} />}
+      execution={{
+        ...baseExecution,
+        provider: { ...baseExecution.provider, selectedId: "claude-code" },
+        serviceTier: { ...baseExecution.serviceTier!, supported: false },
+      }}
+    />
+  );
+}
+
+function ActiveModesPlusMenuRow() {
+  return (
+    <NewThreadStoryRow
+      id="story-new-thread-plus-active-modes"
+      initialValue="Review the new prompt action ordering before submit."
+      actionsMenu={
+        <StoryActionsMenu
+          shortcut="$"
+          showPlan
+          showGoal
+          planActive
+          goalActive
+          apps={storyApps}
+        />
+      }
+      modeConfig={{
+        ...baseModeConfig,
+        permission: { ...basePermission, value: "full" },
+      }}
+    />
+  );
+}
+
+function UnsupportedProviderPlusMenuRow() {
+  return (
+    <NewThreadStoryRow
+      id="story-new-thread-plus-unsupported"
+      actionsMenu={<StoryActionsMenu />}
+      execution={{
+        ...baseExecution,
+        provider: { ...baseExecution.provider, selectedId: "pi" },
+        serviceTier: { ...baseExecution.serviceTier!, supported: false },
+      }}
+    />
+  );
+}
+
 export function Overview() {
   return (
     <StoryCard>
@@ -283,6 +453,30 @@ export function Overview() {
         hint="host picker replaces environment picker"
       >
         <ProjectlessThreadRow />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: codex"
+        hint="left-side + with Skills $, Plan, Goal, Apps; paperclip remains right"
+      >
+        <CodexPlusMenuRow />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: claude"
+        hint="Skills / shown; Plan and Goal hidden"
+      >
+        <ClaudePlusMenuRow />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: active modes"
+        hint="trigger shows active state for Plan + Goal"
+      >
+        <ActiveModesPlusMenuRow />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: unsupported"
+        hint="provider without command/mode/app affordances keeps only Create App"
+      >
+        <UnsupportedProviderPlusMenuRow />
       </StoryRow>
     </StoryCard>
   );

@@ -49,6 +49,10 @@ import {
   sendThreadMessage,
 } from "../../services/threads/thread-send.js";
 import {
+  isDefaultSubmissionMode,
+  resolveSubmissionMode,
+} from "../../services/threads/thread-submission-mode.js";
+import {
   buildExecutionOptions,
   dispatchThreadUnarchiveCommand,
 } from "../../services/threads/thread-commands.js";
@@ -213,6 +217,16 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
     async (context, payload) => {
       const thread = requirePublicThread(deps.db, context.req.param("id"));
       if (payload.mode === "queue-if-active" && thread.status === "active") {
+        const submissionMode = resolveSubmissionMode({
+          submissionMode: payload.submissionMode,
+        });
+        if (!isDefaultSubmissionMode(submissionMode)) {
+          throw new ApiError(
+            400,
+            "unsupported_submission_mode",
+            "Plan and Goal modes are not supported for queued messages.",
+          );
+        }
         await createQueuedMessageForThread(deps, {
           payload: queuedMessagePayloadFromSendRequest(payload),
           thread,

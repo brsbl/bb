@@ -1563,6 +1563,8 @@ describe("public thread data routes", () => {
             displayName: "Codex",
             capabilities: {
               supportsArchive: true,
+              supportsGoalMode: { threadStart: false, turnStart: false },
+              supportsPlanMode: { threadStart: false, turnStart: false },
               supportsRename: true,
               supportsServiceTier: true,
               supportsUserQuestion: true,

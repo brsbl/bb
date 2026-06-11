@@ -24,12 +24,16 @@ import type {
   ServiceTier,
   ThreadEvent,
 } from "@bb/domain";
+import type { CollaborationMode } from "./generated/codex-app-server/schema/CollaborationMode.js";
 import type { ReasoningEffort as CodexReasoningEffort } from "./generated/codex-app-server/schema/ReasoningEffort.js";
 import type { JsonValue } from "./generated/codex-app-server/schema/serde_json/JsonValue.js";
 import type { ServerNotification as CodexServerNotification } from "./generated/codex-app-server/schema/ServerNotification.js";
 import type { SandboxPolicy } from "./generated/codex-app-server/schema/v2/SandboxPolicy.js";
 import type { DynamicToolSpec } from "./generated/codex-app-server/schema/v2/DynamicToolSpec.js";
 import type { SandboxMode as CodexSandboxMode } from "./generated/codex-app-server/schema/v2/SandboxMode.js";
+import type { ThreadGoalClearParams } from "./generated/codex-app-server/schema/v2/ThreadGoalClearParams.js";
+import type { ThreadGoalGetParams } from "./generated/codex-app-server/schema/v2/ThreadGoalGetParams.js";
+import type { ThreadGoalSetParams } from "./generated/codex-app-server/schema/v2/ThreadGoalSetParams.js";
 import type { ThreadResumeParams } from "./generated/codex-app-server/schema/v2/ThreadResumeParams.js";
 import type { ThreadStartParams } from "./generated/codex-app-server/schema/v2/ThreadStartParams.js";
 import type { TurnStartParams } from "./generated/codex-app-server/schema/v2/TurnStartParams.js";
@@ -629,7 +633,6 @@ function toCodexPermissionSettings(
 
 export type CodexEvent = CodexServerNotification;
 
-
 function toCodexServiceTier(tier: ServiceTier | undefined): "fast" | undefined {
   return tier === "fast" ? "fast" : undefined;
 }
@@ -651,6 +654,28 @@ function toCodexReasoningEffort(
     case "max":
       throw new Error("Codex does not support max reasoning level.");
   }
+}
+
+function toCodexCollaborationMode(
+  options: ProviderExecutionContext,
+): CollaborationMode | undefined {
+  if (options.submissionMode.planMode !== "plan") {
+    return undefined;
+  }
+  const model = options.model;
+  if (!model) {
+    throw new Error("Codex Plan mode requires an explicit model.");
+  }
+  return {
+    mode: "plan",
+    settings: {
+      developer_instructions: options.instructions ?? null,
+      model,
+      reasoning_effort: options.reasoningLevel
+        ? toCodexReasoningEffort(options.reasoningLevel)
+        : null,
+    },
+  };
 }
 
 function toCodexUserInput(input: PromptInput[]): CodexUserInput[] {
@@ -1417,13 +1442,16 @@ export function createCodexProviderAdapter(
             gitWritableRoots: writableRoots,
             options: command.options,
           });
+          const collaborationMode = toCodexCollaborationMode(command.options);
           const params: TurnStartParams = {
             threadId: command.providerThreadId,
             input: toCodexUserInput(command.input),
             approvalPolicy: permissionSettings.approvalPolicy,
             sandboxPolicy: permissionSettings.sandboxPolicy,
-            model: command.options?.model ?? undefined,
             serviceTier: toCodexServiceTier(command.options?.serviceTier),
+            ...(collaborationMode
+              ? { collaborationMode }
+              : { model: command.options?.model ?? undefined }),
             ...(command.outputSchema !== undefined
               ? { outputSchema: command.outputSchema }
               : {}),
@@ -1456,6 +1484,57 @@ export function createCodexProviderAdapter(
               name: command.title,
             },
           };
+        case "thread/goal/set": {
+          if (
+            !capabilities.supportsGoalMode.threadStart &&
+            !capabilities.supportsGoalMode.turnStart
+          ) {
+            return { kind: "noop", reason: "goal unsupported" };
+          }
+          const params: ThreadGoalSetParams = {
+            threadId: command.providerThreadId,
+            objective: command.objective,
+            status: command.status,
+            tokenBudget: command.tokenBudget,
+          };
+          return {
+            kind: "request",
+            method: "thread/goal/set",
+            params,
+          };
+        }
+        case "thread/goal/get": {
+          if (
+            !capabilities.supportsGoalMode.threadStart &&
+            !capabilities.supportsGoalMode.turnStart
+          ) {
+            return { kind: "noop", reason: "goal unsupported" };
+          }
+          const params: ThreadGoalGetParams = {
+            threadId: command.providerThreadId,
+          };
+          return {
+            kind: "request",
+            method: "thread/goal/get",
+            params,
+          };
+        }
+        case "thread/goal/clear": {
+          if (
+            !capabilities.supportsGoalMode.threadStart &&
+            !capabilities.supportsGoalMode.turnStart
+          ) {
+            return { kind: "noop", reason: "goal unsupported" };
+          }
+          const params: ThreadGoalClearParams = {
+            threadId: command.providerThreadId,
+          };
+          return {
+            kind: "request",
+            method: "thread/goal/clear",
+            params,
+          };
+        }
         case "thread/archive":
           if (!capabilities.supportsArchive) {
             return { kind: "noop", reason: "archive unsupported" };

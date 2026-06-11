@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IconName } from "@/components/ui/icon.js";
+import type { AppSummary, ThreadTimelineResponse } from "@bb/server-contract";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import { getFollowUpPromptPlaceholder } from "@/components/promptbox/follow-up-placeholder";
 import type {
@@ -8,7 +9,13 @@ import type {
   ThreadTimelinePendingTodos,
   ThreadWithRuntime,
 } from "@bb/domain";
-import type { ThreadTimelineResponse } from "@bb/server-contract";
+import { PromptBoxActionsMenu } from "@/components/promptbox/PromptBoxActionsMenu";
+import { type PromptBoxHandle } from "@/components/promptbox/PromptBoxInternal";
+import { commandTriggerForProvider } from "@/components/promptbox/mentions/command-trigger";
+import {
+  buildComposerSubmissionMode,
+  supportsSubmissionModeToggle,
+} from "@/components/promptbox/submission-mode-ui";
 import { ThreadPendingInteractionBanner } from "@/components/thread/pending-interactions/ThreadPendingInteractionBanner";
 import {
   ThreadPromptContextBanner,
@@ -48,7 +55,11 @@ import {
 } from "@/hooks/queries/thread-queries";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
-import { promptDraftToInput } from "@/lib/prompt-draft";
+import { isPromptDraftEmpty, promptDraftToInput } from "@/lib/prompt-draft";
+import {
+  CREATE_APP_PROMPT_REPLACE_CONFIRMATION,
+  createCreateAppPromptDraft,
+} from "@/lib/create-app-prompt";
 import { appToast } from "@/components/ui/app-toast";
 import {
   FollowUpPromptBox,
@@ -77,12 +88,14 @@ interface ThreadDetailPromptAreaProps {
   canUseGitUi: boolean;
   composerQueriesEnabled: boolean;
   composerQueriesStaleTime?: number;
+  apps: readonly AppSummary[];
   contextWindowUsage?: ThreadTimelineResponse["contextWindowUsage"];
   environmentBranchName?: string;
   environmentCompactLabel?: string;
   environmentIcon?: IconName;
   environmentLabel?: string;
   onCreateNewThreadInWorktree?: () => void;
+  onOpenApp: (applicationId: string) => void;
   isEnvironmentActionPending: boolean;
   pendingInteractions: readonly PendingInteraction[];
   onChangedFileClick: (selection: WorkspaceChangedFileSelection) => void;
@@ -131,12 +144,14 @@ export function ThreadDetailPromptArea({
   canUseGitUi,
   composerQueriesEnabled,
   composerQueriesStaleTime,
+  apps,
   contextWindowUsage,
   environmentBranchName,
   environmentCompactLabel,
   environmentIcon,
   environmentLabel,
   onCreateNewThreadInWorktree,
+  onOpenApp,
   isEnvironmentActionPending,
   pendingInteractions,
   onChangedFileClick,
@@ -233,6 +248,9 @@ export function ThreadDetailPromptArea({
     projectId,
     threadId: thread.id,
   });
+  const promptBoxRef = useRef<PromptBoxHandle>(null);
+  const [planModeChecked, setPlanModeChecked] = useState(false);
+  const [goalModeChecked, setGoalModeChecked] = useState(false);
   const promptMentions = usePromptMentions(projectId, {
     currentThreadId: thread.id,
     environmentId: thread.environmentId ?? null,
@@ -275,6 +293,8 @@ export function ThreadDetailPromptArea({
     modelLoadError,
     reasoningOptions,
     permissionModeOptions,
+    supportsGoalMode,
+    supportsPlanMode,
     supportsPermissionModeSelection,
     supportsServiceTier,
     serviceTierSupportByProvider,
@@ -330,6 +350,26 @@ export function ThreadDetailPromptArea({
   const promptPlaceholder = isStopRequested
     ? "Stopping thread..."
     : getFollowUpPromptPlaceholder(runtimeDisplayStatus);
+  const canUsePlanMode =
+    submitMode.kind === "ready" &&
+    supportsSubmissionModeToggle({
+      entrypoint: "turnStart",
+      support: supportsPlanMode,
+    });
+  const canUseGoalMode =
+    submitMode.kind === "ready" &&
+    supportsSubmissionModeToggle({
+      entrypoint: "turnStart",
+      support: supportsGoalMode,
+    });
+  useEffect(() => {
+    if (!canUsePlanMode) {
+      setPlanModeChecked(false);
+    }
+    if (!canUseGoalMode) {
+      setGoalModeChecked(false);
+    }
+  }, [canUseGoalMode, canUsePlanMode]);
   const currentPromptDraft = useMemo(
     () => ({
       text: promptDraft.text,
@@ -400,6 +440,25 @@ export function ThreadDetailPromptArea({
     [projectId, promptDraft, uploadPromptAttachment],
   );
 
+  const handleCreateAppPromptPrefill = useCallback(() => {
+    const currentDraft = promptDraft.getCurrent();
+    if (
+      !isPromptDraftEmpty(currentDraft) &&
+      !window.confirm(CREATE_APP_PROMPT_REPLACE_CONFIRMATION)
+    ) {
+      return;
+    }
+
+    promptDraft.setDraft(createCreateAppPromptDraft());
+    window.requestAnimationFrame(() => {
+      promptBoxRef.current?.focusEnd();
+    });
+  }, [promptDraft]);
+
+  const handleOpenSkills = useCallback(() => {
+    promptBoxRef.current?.openCommandTrigger();
+  }, []);
+
   const handleSend = useCallback(async () => {
     const submittedDraft = currentPromptDraft;
     const submittedInput = currentPromptDraftInput;
@@ -426,6 +485,13 @@ export function ThreadDetailPromptArea({
           threadId: thread.id,
           input: submittedInput,
           execution: followUpExecutionSelection,
+          submissionMode: buildComposerSubmissionMode({
+            entrypoint: "turnStart",
+            goalModeChecked,
+            goalModeSupport: supportsGoalMode,
+            planModeChecked,
+            planModeSupport: supportsPlanMode,
+          }),
         });
         if (request) {
           await sendMessage.mutateAsync(request);
@@ -450,9 +516,13 @@ export function ThreadDetailPromptArea({
     currentPromptDraft,
     currentPromptDraftInput,
     followUpExecutionSelection,
+    goalModeChecked,
     isDefaultExecutionOptionsLoading,
+    planModeChecked,
     promptDraft,
     sendMessage,
+    supportsGoalMode,
+    supportsPlanMode,
     thread.id,
     runtimeDisplayStatus,
   ]);
@@ -817,6 +887,52 @@ export function ThreadDetailPromptArea({
     ],
   );
 
+  const commandTrigger = commandTriggerForProvider(thread.providerId);
+  const promptActionsMenu = useMemo(
+    () => (
+      <PromptBoxActionsMenu
+        createApp={{ onSelect: handleCreateAppPromptPrefill }}
+        skills={
+          commandTrigger
+            ? { shortcut: commandTrigger, onSelect: handleOpenSkills }
+            : undefined
+        }
+        planMode={
+          canUsePlanMode
+            ? {
+                checked: planModeChecked,
+                onCheckedChange: setPlanModeChecked,
+              }
+            : undefined
+        }
+        goalMode={
+          canUseGoalMode
+            ? {
+                checked: goalModeChecked,
+                onCheckedChange: setGoalModeChecked,
+              }
+            : undefined
+        }
+        apps={
+          apps.length > 0
+            ? { apps, onSelect: onOpenApp }
+            : undefined
+        }
+      />
+    ),
+    [
+      apps,
+      canUseGoalMode,
+      canUsePlanMode,
+      commandTrigger,
+      goalModeChecked,
+      handleCreateAppPromptPrefill,
+      handleOpenSkills,
+      onOpenApp,
+      planModeChecked,
+    ],
+  );
+
   const environmentSummary = useMemo(
     () =>
       environmentLabel ? (
@@ -916,10 +1032,12 @@ export function ThreadDetailPromptArea({
   }
 
   return (
-    <FollowUpPromptBox
-      id={THREAD_DETAIL_COMPOSER_TEXTAREA_ID}
-      attachments={attachmentsConfig}
-      stack={promptStack}
+      <FollowUpPromptBox
+        id={THREAD_DETAIL_COMPOSER_TEXTAREA_ID}
+        actionsMenu={promptActionsMenu}
+        attachments={attachmentsConfig}
+        promptBoxRef={promptBoxRef}
+        stack={promptStack}
       composer={composerConfig}
       zenModeResetKey={thread.id}
       environmentSummary={environmentSummary}

@@ -20,9 +20,22 @@ interface PendingUserQuestion {
 }
 
 type ToolTurnIdMode = "active" | "unresolved";
+type ThreadGoalStatus = "active" | "paused" | "budgetLimited" | "complete";
+
+interface ThreadGoal {
+  createdAt: number;
+  objective: string;
+  status: ThreadGoalStatus;
+  threadId: string;
+  timeUsedSeconds: number;
+  tokenBudget: number | null;
+  tokensUsed: number;
+  updatedAt: number;
+}
 
 interface ThreadState {
   activeTurn: ActiveTurn | null;
+  goal: ThreadGoal | null;
   providerThreadId: string;
   turnCount: number;
   userMessageCount: number;
@@ -82,6 +95,24 @@ function getString(value: unknown, fallback = ""): string {
 
 function getParams(message: JsonRecord): JsonRecord {
   return isJsonRecord(message.params) ? message.params : {};
+}
+
+function getNullableNonnegativeNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
+function parseThreadGoalStatus(value: unknown): ThreadGoalStatus {
+  switch (value) {
+    case "active":
+    case "paused":
+    case "budgetLimited":
+    case "complete":
+      return value;
+    default:
+      return "active";
+  }
 }
 
 function send(message: JsonRecord): void {
@@ -398,6 +429,7 @@ function startOrResumeThread(
 
   threads.set(threadId, {
     activeTurn: null,
+    goal: null,
     providerThreadId,
     turnCount: 0,
     userMessageCount: 0,
@@ -588,6 +620,77 @@ function handleMessage(message: JsonRecord): void {
         },
       });
     }
+    return;
+  }
+
+  if (method === "thread/goal/set") {
+    const params = getParams(message);
+    const threadId = getString(params.threadId, "unknown");
+    const thread = getThreadState(threadId);
+    const now = Date.now();
+    const goal: ThreadGoal = {
+      createdAt: thread?.goal?.createdAt ?? now,
+      objective: getString(params.objective, "Complete the requested task."),
+      status: parseThreadGoalStatus(params.status),
+      threadId,
+      timeUsedSeconds: thread?.goal?.timeUsedSeconds ?? 0,
+      tokenBudget: getNullableNonnegativeNumber(params.tokenBudget),
+      tokensUsed: thread?.goal?.tokensUsed ?? 0,
+      updatedAt: now,
+    };
+    if (thread) {
+      thread.goal = goal;
+    }
+    send({
+      jsonrpc: "2.0",
+      id: getJsonRpcId(message.id) ?? 0,
+      result: { ok: true },
+    });
+    send({
+      jsonrpc: "2.0",
+      method: "thread/goal/updated",
+      params: {
+        threadId,
+        providerThreadId: thread?.providerThreadId ?? threadId,
+        turnId: null,
+        goal,
+      },
+    });
+    return;
+  }
+
+  if (method === "thread/goal/get") {
+    const params = getParams(message);
+    const threadId = getString(params.threadId, "unknown");
+    const thread = getThreadState(threadId);
+    send({
+      jsonrpc: "2.0",
+      id: getJsonRpcId(message.id) ?? 0,
+      result: thread?.goal ?? null,
+    });
+    return;
+  }
+
+  if (method === "thread/goal/clear") {
+    const params = getParams(message);
+    const threadId = getString(params.threadId, "unknown");
+    const thread = getThreadState(threadId);
+    if (thread) {
+      thread.goal = null;
+    }
+    send({
+      jsonrpc: "2.0",
+      id: getJsonRpcId(message.id) ?? 0,
+      result: { ok: true },
+    });
+    send({
+      jsonrpc: "2.0",
+      method: "thread/goal/cleared",
+      params: {
+        threadId,
+        providerThreadId: thread?.providerThreadId ?? threadId,
+      },
+    });
     return;
   }
 

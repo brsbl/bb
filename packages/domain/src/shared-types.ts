@@ -192,6 +192,68 @@ export const threadExecutionSourceSchema = z.enum([
 ]);
 export type ThreadExecutionSource = z.infer<typeof threadExecutionSourceSchema>;
 
+export const submissionModeEntrypointValues = [
+  "threadStart",
+  "turnStart",
+] as const;
+export const submissionModeEntrypointSchema = z.enum(
+  submissionModeEntrypointValues,
+);
+export type SubmissionModeEntrypoint = z.infer<
+  typeof submissionModeEntrypointSchema
+>;
+
+export const submissionPlanModeValues = ["default", "plan"] as const;
+export const submissionPlanModeSchema = z.enum(submissionPlanModeValues);
+export type SubmissionPlanMode = z.infer<typeof submissionPlanModeSchema>;
+
+export const submissionGoalModeValues = ["none", "goal"] as const;
+export const submissionGoalModeSchema = z.enum(submissionGoalModeValues);
+export type SubmissionGoalMode = z.infer<typeof submissionGoalModeSchema>;
+
+export const submissionModeSchema = z
+  .object({
+    planMode: submissionPlanModeSchema,
+    goalMode: submissionGoalModeSchema,
+  })
+  .strict();
+export type SubmissionMode = z.infer<typeof submissionModeSchema>;
+
+export const DEFAULT_SUBMISSION_MODE = {
+  planMode: "default",
+  goalMode: "none",
+} satisfies SubmissionMode;
+
+export const submissionModeSupportSchema = z
+  .object({
+    threadStart: z.boolean(),
+    turnStart: z.boolean(),
+  })
+  .strict();
+export type SubmissionModeSupport = z.infer<typeof submissionModeSupportSchema>;
+
+export const threadGoalStatusValues = [
+  "active",
+  "paused",
+  "budgetLimited",
+  "complete",
+] as const;
+export const threadGoalStatusSchema = z.enum(threadGoalStatusValues);
+export type ThreadGoalStatus = z.infer<typeof threadGoalStatusSchema>;
+
+export const threadGoalSchema = z
+  .object({
+    objective: z.string().min(1),
+    status: threadGoalStatusSchema,
+    tokenBudget: z.number().int().nonnegative().nullable(),
+    tokensUsed: z.number().int().nonnegative(),
+    timeUsedSeconds: z.number().nonnegative(),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ThreadGoal = z.infer<typeof threadGoalSchema>;
+
 export const callerExecutionInputSourceValues = [
   "explicit",
   "client-preference",
@@ -252,6 +314,7 @@ const runtimeThreadExecutionBaseOptionsSchema = z.object({
   model: z.string().min(1),
   serviceTier: serviceTierSchema,
   reasoningLevel: reasoningLevelSchema,
+  submissionMode: submissionModeSchema,
   // Optional for legacy command compatibility; the server fills the current
   // app setting before dispatching new runtime work.
   claudeCodeMockCliTraffic: claudeCodeMockCliTrafficConfigSchema.optional(),

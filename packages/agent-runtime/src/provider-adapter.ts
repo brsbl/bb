@@ -12,6 +12,8 @@ import type {
   ReasoningLevel,
   RuntimePermissionPolicy,
   ServiceTier,
+  SubmissionMode,
+  ThreadGoalStatus,
   ThreadEvent,
 } from "@bb/domain";
 import type {
@@ -110,6 +112,7 @@ export type ProviderExecutionContext = {
    * receive (and ignore) an explicit false.
    */
   workflowsEnabled: boolean;
+  submissionMode: SubmissionMode;
   instructions?: string;
   envVars?: Record<string, string>;
   skillRoots?: readonly AgentRuntimeSkillRoot[];
@@ -187,6 +190,24 @@ export type AdapterCommand =
       threadId: string;
       providerThreadId: string;
       title: string;
+    }
+  | {
+      type: "thread/goal/set";
+      threadId: string;
+      providerThreadId: string;
+      objective: string;
+      status: ThreadGoalStatus;
+      tokenBudget: number | null;
+    }
+  | {
+      type: "thread/goal/get";
+      threadId: string;
+      providerThreadId: string;
+    }
+  | {
+      type: "thread/goal/clear";
+      threadId: string;
+      providerThreadId: string;
     }
   | {
       type: "thread/archive";

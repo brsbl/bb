@@ -2,6 +2,7 @@ import type {
   Environment,
   PromptInput,
   ResolvedThreadExecutionOptions,
+  SubmissionMode,
   Thread,
   ThreadTurnInitiator,
 } from "@bb/domain";
@@ -36,6 +37,7 @@ export interface DispatchTurnDuringReprovisionArgs {
   input: PromptInput[];
   onStarted?: () => void;
   senderThreadId: string | null;
+  submissionMode: SubmissionMode;
   thread: Thread;
 }
 
@@ -137,6 +139,7 @@ export async function dispatchTurnDuringReprovision(
     initiator: args.initiator,
     provisioningId,
     senderThreadId: args.senderThreadId,
+    submissionMode: args.submissionMode,
   });
 
   const reprovisionResult = await dispatchManagedEnvironmentReprovision(

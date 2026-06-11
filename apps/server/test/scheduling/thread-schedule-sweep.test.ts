@@ -7,7 +7,12 @@ import {
   threads,
   threadSchedules,
 } from "@bb/db";
-import { threadScope, turnRequestEventDataSchema, turnScope } from "@bb/domain";
+import {
+  DEFAULT_SUBMISSION_MODE,
+  threadScope,
+  turnRequestEventDataSchema,
+  turnScope,
+} from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import { describe, expect, it } from "vitest";
 import { sweepDueThreadSchedules } from "../../src/services/scheduling/thread-schedule-sweep.js";
@@ -81,6 +86,7 @@ function seedRunnableThread(args: SeedRunnableThreadArgs) {
       serviceTier: "default",
       source: "client/turn/requested",
     },
+    submissionMode: DEFAULT_SUBMISSION_MODE,
     initiator: "user",
     senderThreadId: null,
     requestMethod: "thread/start",

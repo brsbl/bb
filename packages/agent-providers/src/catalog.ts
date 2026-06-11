@@ -58,8 +58,20 @@ export interface BuiltInAgentProviderCatalogEntry {
 
 type PiDefaultModelPerProvider = Partial<Record<string, string>>;
 
+const UNSUPPORTED_SUBMISSION_MODE = {
+  threadStart: false,
+  turnStart: false,
+} satisfies ProviderCapabilities["supportsPlanMode"];
+
+const CODEX_TURN_SUBMISSION_MODE = {
+  threadStart: false,
+  turnStart: true,
+} satisfies ProviderCapabilities["supportsPlanMode"];
+
 const CODEX_CAPABILITIES: ProviderCapabilities = {
   supportsArchive: true,
+  supportsGoalMode: CODEX_TURN_SUBMISSION_MODE,
+  supportsPlanMode: CODEX_TURN_SUBMISSION_MODE,
   supportsRename: true,
   supportsServiceTier: true,
   supportsUserQuestion: false,
@@ -68,6 +80,8 @@ const CODEX_CAPABILITIES: ProviderCapabilities = {
 
 const CLAUDE_CAPABILITIES: ProviderCapabilities = {
   supportsArchive: false,
+  supportsGoalMode: UNSUPPORTED_SUBMISSION_MODE,
+  supportsPlanMode: UNSUPPORTED_SUBMISSION_MODE,
   supportsRename: false,
   supportsServiceTier: false,
   supportsUserQuestion: true,
@@ -76,6 +90,8 @@ const CLAUDE_CAPABILITIES: ProviderCapabilities = {
 
 const PI_CAPABILITIES: ProviderCapabilities = {
   supportsArchive: false,
+  supportsGoalMode: UNSUPPORTED_SUBMISSION_MODE,
+  supportsPlanMode: UNSUPPORTED_SUBMISSION_MODE,
   supportsRename: false,
   supportsServiceTier: false,
   supportsUserQuestion: false,
@@ -176,6 +192,8 @@ function cloneCapabilities(
 ): ProviderCapabilities {
   return {
     supportsArchive: capabilities.supportsArchive,
+    supportsGoalMode: { ...capabilities.supportsGoalMode },
+    supportsPlanMode: { ...capabilities.supportsPlanMode },
     supportsRename: capabilities.supportsRename,
     supportsServiceTier: capabilities.supportsServiceTier,
     supportsUserQuestion: capabilities.supportsUserQuestion,

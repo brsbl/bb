@@ -1,5 +1,6 @@
 import { getThread } from "@bb/db";
 import {
+  DEFAULT_SUBMISSION_MODE,
   encodeClientTurnRequestIdNumber,
   threadScope,
   turnScope,
@@ -85,6 +86,7 @@ async function startLiveThreadStartRpc(
       value: args.requestIdValue,
     }),
     execution: START_EXECUTION,
+    submissionMode: DEFAULT_SUBMISSION_MODE,
     permissionEscalation: "ask",
     projectId: project.id,
     providerId: thread.providerId,

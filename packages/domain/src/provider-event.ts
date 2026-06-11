@@ -18,6 +18,7 @@ import {
   validateThreadEventScope,
 } from "./thread-event-scope.js";
 import { clientTurnRequestIdSchema } from "./protocol-ids.js";
+import { threadGoalSchema } from "./shared-types.js";
 import {
   backgroundTaskStatusSchema,
   backgroundTaskUsageSchema,
@@ -383,6 +384,18 @@ const unscopedProviderEventSchema = z.discriminatedUnion("type", [
     threadId: z.string(),
     providerThreadId: z.string(),
     threadName: z.string(),
+  }),
+  z.object({
+    type: z.literal("thread/goal/updated"),
+    threadId: z.string(),
+    providerThreadId: z.string(),
+    providerTurnId: z.string().nullable(),
+    goal: threadGoalSchema,
+  }),
+  z.object({
+    type: z.literal("thread/goal/cleared"),
+    threadId: z.string(),
+    providerThreadId: z.string(),
   }),
   z.object({
     type: z.literal("thread/compacted"),

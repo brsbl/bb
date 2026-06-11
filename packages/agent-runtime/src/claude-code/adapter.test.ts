@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
+  DEFAULT_SUBMISSION_MODE,
   threadScope,
   turnScope,
 } from "@bb/domain";
@@ -45,6 +46,7 @@ const fullProviderExecutionContext = {
   permissionMode: "full",
   permissionEscalation: null,
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
 } satisfies ProviderExecutionContext;
 
 const workspaceWriteProviderExecutionContext = {
@@ -52,6 +54,7 @@ const workspaceWriteProviderExecutionContext = {
   permissionMode: "workspace-write",
   permissionEscalation: "deny",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
 } satisfies ProviderExecutionContext;
 
 function createClaudeUserQuestionPayload(): UserQuestionPendingInteractionPayload {
@@ -170,6 +173,8 @@ describe("claude-code provider adapter", () => {
     const adapter = createClaudeCodeProviderAdapter();
     expect(adapter.capabilities).toEqual({
       supportsArchive: false,
+      supportsGoalMode: { threadStart: false, turnStart: false },
+      supportsPlanMode: { threadStart: false, turnStart: false },
       supportsRename: false,
       supportsServiceTier: false,
       supportsUserQuestion: true,
@@ -461,6 +466,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "readonly",
         permissionEscalation: "ask",
       },
@@ -491,6 +497,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionEscalation: "ask",
         model: "claude-opus-4-7",
         permissionMode: "workspace-write",
@@ -588,6 +595,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "readonly",
         permissionEscalation: "deny",
       },
@@ -609,6 +617,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "full",
         permissionEscalation: null,
       },
@@ -655,6 +664,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionEscalation: "deny",
         permissionMode: "readonly",
       },
@@ -721,6 +731,7 @@ describe("claude-code provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "readonly",
         permissionEscalation: "ask",
       },

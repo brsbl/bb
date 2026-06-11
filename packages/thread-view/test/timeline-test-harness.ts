@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SUBMISSION_MODE,
   encodeClientTurnRequestIdNumber,
   threadScope,
   turnScope,
@@ -572,6 +573,7 @@ export function createTimelineEventFactory(
             params: {},
           },
           execution: args.execution ?? defaultExecution,
+          submissionMode: DEFAULT_SUBMISSION_MODE,
         },
       };
     },

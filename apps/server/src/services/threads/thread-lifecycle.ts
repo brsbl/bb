@@ -798,6 +798,7 @@ export async function prepareReadyThreadTurnCommand(
       input: args.input,
       permissionEscalation: args.permissionEscalation,
       providerThreadId,
+      submissionMode: args.submissionMode,
       target: { mode: "start" },
       thread: args.thread,
     });

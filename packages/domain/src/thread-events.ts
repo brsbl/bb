@@ -7,8 +7,10 @@ import {
   userQuestionPendingInteractionResolutionSchema,
 } from "./pending-interactions.js";
 import {
+  DEFAULT_SUBMISSION_MODE,
   promptInputSchema,
   resolvedThreadExecutionOptionsSchema,
+  submissionModeSchema,
 } from "./shared-types.js";
 import { jsonValueSchema } from "./json-value.js";
 import { clientTurnRequestIdSchema } from "./protocol-ids.js";
@@ -106,6 +108,7 @@ export const turnRequestEventDataSchema = z.object({
     params: z.record(z.string(), z.unknown()),
   }),
   execution: turnRequestOptionsSchema,
+  submissionMode: submissionModeSchema.default(DEFAULT_SUBMISSION_MODE),
 });
 export type TurnRequestEventData = z.infer<typeof turnRequestEventDataSchema>;
 

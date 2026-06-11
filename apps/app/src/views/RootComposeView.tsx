@@ -6,6 +6,12 @@ import {
   type NewThreadProjectConfig,
 } from "@/components/promptbox/NewThreadPromptBox";
 import { type PromptBoxHandle } from "@/components/promptbox/PromptBoxInternal";
+import { PromptBoxActionsMenu } from "@/components/promptbox/PromptBoxActionsMenu";
+import { commandTriggerForProvider } from "@/components/promptbox/mentions/command-trigger";
+import {
+  buildComposerSubmissionMode,
+  supportsSubmissionModeToggle,
+} from "@/components/promptbox/submission-mode-ui";
 import {
   encodeHostValue,
   encodeReuseValue,
@@ -23,7 +29,7 @@ import {
   useSidebarNavigation,
   stripProjectThreads,
 } from "@/hooks/queries/project-queries";
-import { useThreads } from "@/hooks/queries/thread-queries";
+import { useApps, useThreads } from "@/hooks/queries/thread-queries";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
 import { usePrimaryHost } from "@/hooks/queries/host-queries";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
@@ -34,12 +40,17 @@ import { useThreadCreationOptions } from "@/hooks/useThreadCreationOptions";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
 import { getProjectScopedStorageKey } from "@/lib/project-scoped-storage";
-import { promptDraftToInput } from "@/lib/prompt-draft";
+import { isPromptDraftEmpty, promptDraftToInput } from "@/lib/prompt-draft";
+import {
+  CREATE_APP_PROMPT_REPLACE_CONFIRMATION,
+  createCreateAppPromptDraft,
+} from "@/lib/create-app-prompt";
 import { useNavigateToThreadAfterCreatePreference } from "@/lib/root-compose-create-preference";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import {
-  getThreadRoutePath,
   getRootComposeRoutePath,
+  getStandaloneAppRoutePath,
+  getThreadRoutePath,
   isProjectlessProjectId,
 } from "@/lib/app-route-paths";
 import {
@@ -217,7 +228,10 @@ export function RootComposeView() {
       environmentId: null,
     },
   );
+  const appsQuery = useApps();
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [planModeChecked, setPlanModeChecked] = useState(false);
+  const [goalModeChecked, setGoalModeChecked] = useState(false);
   const prompt = promptDraft.text;
   const promptInput = useMemo(
     () =>
@@ -289,6 +303,8 @@ export function RootComposeView() {
     modelLoadError,
     reasoningOptions,
     permissionModeOptions,
+    supportsGoalMode,
+    supportsPlanMode,
     supportsPermissionModeSelection,
     supportsServiceTier,
     serviceTierSupportByProvider,
@@ -485,6 +501,45 @@ export function RootComposeView() {
   }, [sidebarNavigationQuery.data]);
 
   const selectedThreadModel = activeModel?.model ?? selectedModel;
+  const canUsePlanMode = supportsSubmissionModeToggle({
+    entrypoint: "threadStart",
+    support: supportsPlanMode,
+  });
+  const canUseGoalMode = supportsSubmissionModeToggle({
+    entrypoint: "threadStart",
+    support: supportsGoalMode,
+  });
+  useEffect(() => {
+    if (!canUsePlanMode) {
+      setPlanModeChecked(false);
+    }
+    if (!canUseGoalMode) {
+      setGoalModeChecked(false);
+    }
+  }, [canUseGoalMode, canUsePlanMode]);
+  const handleCreateAppPromptPrefill = useCallback(() => {
+    const currentDraft = promptDraft.getCurrent();
+    if (
+      !isPromptDraftEmpty(currentDraft) &&
+      !window.confirm(CREATE_APP_PROMPT_REPLACE_CONFIRMATION)
+    ) {
+      return;
+    }
+
+    promptDraft.setDraft(createCreateAppPromptDraft());
+    window.requestAnimationFrame(() => {
+      promptBoxRef.current?.focusEnd();
+    });
+  }, [promptDraft]);
+  const handleOpenSkills = useCallback(() => {
+    promptBoxRef.current?.openCommandTrigger();
+  }, []);
+  const handleOpenStandaloneApp = useCallback(
+    (applicationId: string) => {
+      navigate(getStandaloneAppRoutePath(applicationId));
+    },
+    [navigate],
+  );
   const handleProjectChange = useCallback<ProjectSelectionChangeHandler>(
     (nextProjectId) => {
       const nextRootComposeProjectId = nextProjectId ?? PERSONAL_PROJECT_ID;
@@ -564,6 +619,13 @@ export function RootComposeView() {
         reasoningLevel,
         permissionMode,
         executionInputSources,
+        submissionMode: buildComposerSubmissionMode({
+          entrypoint: "threadStart",
+          goalModeChecked,
+          goalModeSupport: supportsGoalMode,
+          planModeChecked,
+          planModeSupport: supportsPlanMode,
+        }),
         environment: selectedEnvironment,
       });
       setLastCreatedThreadId(thread.id);
@@ -584,9 +646,11 @@ export function RootComposeView() {
     clearReuseEnvironment,
     createThread,
     executionInputSources,
+    goalModeChecked,
     navigate,
     navigateToThreadAfterCreate,
     permissionMode,
+    planModeChecked,
     projectId,
     promptDraft,
     reasoningLevel,
@@ -594,6 +658,8 @@ export function RootComposeView() {
     selectedProviderId,
     selectedThreadModel,
     serviceTier,
+    supportsGoalMode,
+    supportsPlanMode,
     supportsServiceTier,
   ]);
 
@@ -847,6 +913,57 @@ export function RootComposeView() {
     ],
   );
 
+  const commandTrigger = commandTriggerForProvider(selectedProviderId);
+  const installedApps = appsQuery.data ?? [];
+  const promptActionsMenu = useMemo(
+    () => (
+      <PromptBoxActionsMenu
+        createApp={{
+          disabled: !projectId,
+          onSelect: handleCreateAppPromptPrefill,
+        }}
+        skills={
+          commandTrigger
+            ? { shortcut: commandTrigger, onSelect: handleOpenSkills }
+            : undefined
+        }
+        planMode={
+          canUsePlanMode
+            ? {
+                checked: planModeChecked,
+                onCheckedChange: setPlanModeChecked,
+              }
+            : undefined
+        }
+        goalMode={
+          canUseGoalMode
+            ? {
+                checked: goalModeChecked,
+                onCheckedChange: setGoalModeChecked,
+              }
+            : undefined
+        }
+        apps={
+          installedApps.length > 0
+            ? { apps: installedApps, onSelect: handleOpenStandaloneApp }
+            : undefined
+        }
+      />
+    ),
+    [
+      canUseGoalMode,
+      canUsePlanMode,
+      commandTrigger,
+      goalModeChecked,
+      handleCreateAppPromptPrefill,
+      handleOpenSkills,
+      handleOpenStandaloneApp,
+      installedApps,
+      planModeChecked,
+      projectId,
+    ],
+  );
+
   const reuseHeader = useMemo(() => {
     if (parsedEnvironment?.type !== "reuse") return null;
     return (
@@ -908,6 +1025,7 @@ export function RootComposeView() {
         mentionRanges={promptDraft.mentions}
         onChange={promptDraft.setTextAndMentions}
         onSubmit={submitPrompt}
+        actionsMenu={promptActionsMenu}
         isSubmitting={createThread.isPending}
         disabled={isSubmitDisabled}
         zenModeStorageKey={rootComposeZenModeStorageKey}

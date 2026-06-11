@@ -26,13 +26,17 @@ import {
   type ThreadWithRuntime,
 } from "@bb/domain";
 import type {
+  AppSummary,
   ProjectResponse,
   ProjectWithThreadsResponse,
   SidebarBootstrapResponse,
   SystemConfigResponse,
   SystemExecutionOptionsResponse,
 } from "@bb/server-contract";
-import { createProjectRequestSchema } from "@bb/server-contract";
+import {
+  createProjectRequestSchema,
+  createThreadRequestSchema,
+} from "@bb/server-contract";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import { installFetchRoutes, jsonResponse } from "@/test/http-test-utils";
 import { getThreadRoutePath } from "@/lib/app-route-paths";
@@ -47,6 +51,10 @@ import { RootComposeRoute } from "./RootComposeView";
 type ThreadOverrides = Partial<ThreadWithRuntime>;
 type ThreadListEntryOverrides = Partial<ThreadListEntry>;
 type ProjectWithThreadsOverrides = Partial<ProjectWithThreadsResponse>;
+type RootComposeProviderInfo = SystemExecutionOptionsResponse["providers"][number];
+type RootComposeProviderCapabilities = RootComposeProviderInfo["capabilities"];
+type RootComposeProviderCapabilityOverrides =
+  Partial<RootComposeProviderCapabilities>;
 
 vi.mock("@/hooks/useHostDaemon", () => ({
   useHostDaemon: () => ({
@@ -64,10 +72,12 @@ vi.mock("@/hooks/useHostDaemon", () => ({
 const STANDARD_PROJECT_ID = "proj_standard";
 
 interface RootComposeFetchRoutesOptions {
+  apps?: readonly AppSummary[];
   createThreadShouldFail?: boolean;
   createdProject?: ProjectWithThreadsResponse;
   createdThread?: ThreadWithRuntime;
   sidebarNavigation?: SidebarBootstrapResponse;
+  systemExecutionOptions?: SystemExecutionOptionsResponse;
   threads?: readonly ThreadListEntry[];
 }
 
@@ -97,21 +107,23 @@ const standardProjectSource: ProjectSource = {
   updatedAt: 1,
 };
 
+const codexProviderInfo = {
+  id: "codex",
+  displayName: "Codex",
+  available: true,
+  capabilities: {
+    supportsArchive: true,
+    supportsGoalMode: { threadStart: false, turnStart: false },
+    supportsPlanMode: { threadStart: false, turnStart: false },
+    supportsRename: true,
+    supportsServiceTier: false,
+    supportsUserQuestion: true,
+    supportedPermissionModes: ["full", "workspace-write"],
+  },
+} satisfies RootComposeProviderInfo;
+
 const systemExecutionOptions = {
-  providers: [
-    {
-      id: "codex",
-      displayName: "Codex",
-      available: true,
-      capabilities: {
-        supportsArchive: true,
-        supportsRename: true,
-        supportsServiceTier: false,
-        supportsUserQuestion: true,
-        supportedPermissionModes: ["full", "workspace-write"],
-      },
-    },
-  ],
+  providers: [codexProviderInfo],
   models: [
     {
       id: "gpt-5",
@@ -128,6 +140,23 @@ const systemExecutionOptions = {
   selectedOnlyModels: [],
   modelLoadError: null,
 } satisfies SystemExecutionOptionsResponse;
+
+function buildSystemExecutionOptionsWithProviderCapabilities(
+  capabilities: RootComposeProviderCapabilityOverrides,
+): SystemExecutionOptionsResponse {
+  return {
+    ...systemExecutionOptions,
+    providers: [
+      {
+        ...codexProviderInfo,
+        capabilities: {
+          ...codexProviderInfo.capabilities,
+          ...capabilities,
+        },
+      },
+    ],
+  };
+}
 
 const systemConfig = {
   experiments: defaultExperiments,
@@ -372,6 +401,10 @@ function installRootComposeFetchRoutes(
   ];
   installFetchRoutes([
     {
+      pathname: "/api/v1/apps",
+      handler: () => jsonResponse(options.apps ?? []),
+    },
+    {
       pathname: "/api/v1/sidebar-bootstrap",
       handler: () => jsonResponse(sidebarNavigation),
     },
@@ -447,7 +480,8 @@ function installRootComposeFetchRoutes(
     },
     {
       pathname: "/api/v1/system/execution-options",
-      handler: () => jsonResponse(systemExecutionOptions),
+      handler: () =>
+        jsonResponse(options.systemExecutionOptions ?? systemExecutionOptions),
     },
     {
       pathname: "/api/v1/system/config",
@@ -535,6 +569,44 @@ describe("RootComposeRoute", () => {
       expect(requests.createThread).toHaveLength(1);
     });
     expect(screen.getByTestId("pathname").textContent).toBe("/");
+  });
+
+  it("sends Plan mode when enabled for a supported provider", async () => {
+    const requests = installRootComposeFetchRoutes({
+      systemExecutionOptions: buildSystemExecutionOptionsWithProviderCapabilities(
+        {
+          supportsPlanMode: { threadStart: true, turnStart: false },
+        },
+      ),
+    });
+    seedRootComposeDraft("Plan the implementation");
+    renderRootComposeRoute();
+
+    await screen.findByRole("textbox");
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Composer actions" }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitemcheckbox", { name: "Plan mode" }),
+    );
+    const submitButton = screen.getByTitle("Submit (Enter)");
+    await waitFor(() => {
+      expect(isEnabledButton(submitButton)).toBe(true);
+    });
+
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(requests.createThread).toHaveLength(1);
+    });
+    const createBody = createThreadRequestSchema.parse(
+      await requireRequest(requests.createThread[0]).json(),
+    );
+    expect(createBody.submissionMode).toEqual({
+      planMode: "plan",
+      goalMode: "none",
+    });
   });
 
   it("shows the created thread in mobile recents when staying on root compose", async () => {

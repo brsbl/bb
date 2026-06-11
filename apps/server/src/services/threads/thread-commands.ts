@@ -12,6 +12,7 @@ import {
   PermissionEscalation,
   ResolvedThreadExecutionOptions,
   RuntimeThreadExecutionOptions,
+  SubmissionMode,
   Thread,
   ClientTurnRequestId,
   EnvironmentStatus,
@@ -78,6 +79,7 @@ export interface ThreadStartCommandArgs {
   projectId: string;
   providerId: string;
   requestId: ClientTurnRequestId;
+  submissionMode: SubmissionMode;
   syncGeneratedTitle: boolean;
   thread: Thread;
 }
@@ -90,6 +92,7 @@ interface PreparedTurnSubmitCommandBuildArgs {
   input: PromptInput[];
   providerThreadId: string;
   runtimeContext: ResolvedThreadRuntimeCommandConfig;
+  submissionMode: SubmissionMode;
   target: TurnSubmitTarget;
   threadId: string;
 }
@@ -100,6 +103,7 @@ interface PrepareTurnSubmitCommandPayloadArgs {
   permissionEscalation: PermissionEscalation;
   input: PromptInput[];
   providerThreadId?: string;
+  submissionMode: SubmissionMode;
   target: TurnSubmitTarget;
   thread: Thread;
 }
@@ -119,6 +123,7 @@ interface RuntimeExecutionOptionsArgs {
   execution: ResolvedThreadExecutionOptions;
   permissionEscalation: PermissionEscalation;
   providerId: string;
+  submissionMode: SubmissionMode;
 }
 
 interface BuildExecutionOptionsArgs {
@@ -180,6 +185,7 @@ function toRuntimeExecutionOptions(
     model: args.execution.model,
     serviceTier: args.execution.serviceTier,
     reasoningLevel: args.execution.reasoningLevel,
+    submissionMode: args.submissionMode,
     claudeCodeMockCliTraffic: args.claudeCodeMockCliTraffic,
     workflowsEnabled: resolveWorkflowsEnabledPolicy(args.providerId),
   };
@@ -241,6 +247,7 @@ export async function buildThreadStartCommand(
     options: toRuntimeExecutionOptions({
       ...args,
       claudeCodeMockCliTraffic: resolveClaudeCodeMockCliTrafficConfig(deps),
+      submissionMode: args.submissionMode,
     }),
     instructions: runtimeContext.instructions,
     dynamicTools: runtimeContext.dynamicTools,
@@ -262,6 +269,7 @@ function buildPreparedTurnSubmitCommandPayload(
       ...args,
       claudeCodeMockCliTraffic: args.claudeCodeMockCliTraffic,
       providerId: args.runtimeContext.providerId,
+      submissionMode: args.submissionMode,
     }),
     target: args.target,
     resumeContext: {
@@ -309,6 +317,7 @@ export async function prepareTurnSubmitCommandPayload(
     input: args.input,
     providerThreadId,
     runtimeContext,
+    submissionMode: args.submissionMode,
     target: args.target,
     threadId: args.thread.id,
   });

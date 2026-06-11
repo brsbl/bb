@@ -16,10 +16,23 @@ import {
   findLastRecordedCommand,
   fullRuntimeOptions,
   wait,
+  waitForRuntimeThreadEvent,
   waitForThreadAgentMessageText,
   waitForThreadTurnCompleted,
   waitForThreadTurnStarted,
 } from "./test/runtime-test-harness.js";
+
+function findLastRecordedCommandIndex(
+  commands: readonly AdapterCommand[],
+  type: AdapterCommand["type"],
+): number {
+  for (let index = commands.length - 1; index >= 0; index -= 1) {
+    if (commands[index]?.type === type) {
+      return index;
+    }
+  }
+  return -1;
+}
 
 describe("createAgentRuntime lifecycle", () => {
   let tmpDir: string;
@@ -448,6 +461,241 @@ rl.on("line", (line) => {
         throw new Error("Expected turn/start command");
       }
       expect(turnStart.outputSchema).toEqual(turnSchema);
+
+      await runtime.shutdown();
+    });
+
+    it("sets provider goal before Goal-mode turns", async () => {
+      const recordedCommands: AdapterCommand[] = [];
+      const events: ThreadEvent[] = [];
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: (event) => events.push(event),
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        adapterFactory: () =>
+          createRecordingAdapter({
+            fakeAdapterOptions: {
+              supportsGoalMode: { threadStart: false, turnStart: true },
+            },
+            recordedCommands,
+            scriptPath,
+          }),
+      });
+
+      await runtime.startThread({
+        sessionKind: "thread",
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+      await runtime.runTurn({
+        clientRequestId: "creq_222222229g",
+        threadId: "t1",
+        input: [
+          promptTextInput({ text: "Ship it" }),
+          { type: "text", text: "hidden", mentions: [], visibility: "agent-only" },
+          { type: "localFile", path: "/tmp/spec.md", name: "spec.md" },
+          {
+            type: "localFile",
+            path: "/tmp/secret.md",
+            name: "secret.md",
+            visibility: "agent-only",
+          },
+        ],
+        options: {
+          ...fullRuntimeOptions,
+          submissionMode: { planMode: "default", goalMode: "goal" },
+        },
+      });
+
+      const goalSetIndex = recordedCommands.findIndex(
+        (command) => command.type === "thread/goal/set",
+      );
+      const turnStartIndex = recordedCommands.findIndex(
+        (command) => command.type === "turn/start",
+      );
+      expect(goalSetIndex).toBeGreaterThan(-1);
+      expect(turnStartIndex).toBeGreaterThan(-1);
+      expect(goalSetIndex).toBeLessThan(turnStartIndex);
+
+      const goalSet = recordedCommands[goalSetIndex];
+      if (!goalSet || goalSet.type !== "thread/goal/set") {
+        throw new Error("Expected thread/goal/set command");
+      }
+      expect(goalSet).toMatchObject({
+        threadId: "t1",
+        providerThreadId: "prov-1",
+        objective: "Ship it\n\n[File: spec.md]",
+        status: "active",
+        tokenBudget: null,
+      });
+      await waitForRuntimeThreadEvent({
+        events,
+        label: "goal updated",
+        predicate: (event) =>
+          event.type === "thread/goal/updated" &&
+          event.goal.objective === "Ship it\n\n[File: spec.md]",
+        runtime,
+        threadId: "t1",
+      });
+
+      await runtime.shutdown();
+    });
+
+    it("clears provider goal before default turns after Goal mode was active", async () => {
+      const recordedCommands: AdapterCommand[] = [];
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => undefined,
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        adapterFactory: () =>
+          createRecordingAdapter({
+            fakeAdapterOptions: {
+              supportsGoalMode: { threadStart: false, turnStart: true },
+            },
+            recordedCommands,
+            scriptPath,
+          }),
+      });
+
+      await runtime.startThread({
+        sessionKind: "thread",
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+      await runtime.runTurn({
+        clientRequestId: "creq_222222229j",
+        threadId: "t1",
+        input: [promptTextInput({ text: "Ship it" })],
+        options: {
+          ...fullRuntimeOptions,
+          submissionMode: { planMode: "default", goalMode: "goal" },
+        },
+      });
+      await runtime.runTurn({
+        clientRequestId: "creq_222222229k",
+        threadId: "t1",
+        input: [promptTextInput({ text: "Continue normally" })],
+        options: {
+          ...fullRuntimeOptions,
+          submissionMode: { planMode: "default", goalMode: "none" },
+        },
+      });
+
+      const clearIndex = findLastRecordedCommandIndex(
+        recordedCommands,
+        "thread/goal/clear",
+      );
+      const secondTurnStartIndex = findLastRecordedCommandIndex(
+        recordedCommands,
+        "turn/start",
+      );
+      expect(clearIndex).toBeGreaterThan(-1);
+      expect(secondTurnStartIndex).toBeGreaterThan(-1);
+      expect(clearIndex).toBeLessThan(secondTurnStartIndex);
+      await expect(runtime.getThreadGoal({ threadId: "t1" })).resolves.toBeNull();
+
+      await runtime.shutdown();
+    });
+
+    it("uses fallback goal objective when only agent-only inputs are present", async () => {
+      const recordedCommands: AdapterCommand[] = [];
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => undefined,
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        adapterFactory: () =>
+          createRecordingAdapter({
+            fakeAdapterOptions: {
+              supportsGoalMode: { threadStart: false, turnStart: true },
+            },
+            recordedCommands,
+            scriptPath,
+          }),
+      });
+
+      await runtime.startThread({
+        sessionKind: "thread",
+        environmentId: "env-1",
+        threadId: "t1",
+        projectId: "p1",
+        providerId: "fake",
+        options: fullRuntimeOptions,
+      });
+      await runtime.runTurn({
+        clientRequestId: "creq_222222229h",
+        threadId: "t1",
+        input: [
+          {
+            type: "text",
+            text: "hidden",
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        options: {
+          ...fullRuntimeOptions,
+          submissionMode: { planMode: "default", goalMode: "goal" },
+        },
+      });
+
+      const goalSet = findLastRecordedCommand(
+        recordedCommands,
+        "thread/goal/set",
+      );
+      if (!goalSet || goalSet.type !== "thread/goal/set") {
+        throw new Error("Expected thread/goal/set command");
+      }
+      expect(goalSet.objective).toBe("Complete the requested task.");
+
+      await runtime.shutdown();
+    });
+
+    it("rejects unsupported initial-input submission modes before thread start", async () => {
+      const recordedCommands: AdapterCommand[] = [];
+      const runtime = createAgentRuntimeWithAdapters({
+        workspacePath: tmpDir,
+        onEvent: () => undefined,
+        onToolCall: async () => ({
+          contentItems: [{ type: "inputText", text: "ok" }],
+          success: true,
+        }),
+        adapterFactory: () =>
+          createRecordingAdapter({ recordedCommands, scriptPath }),
+      });
+
+      await expect(
+        runtime.startThread({
+          sessionKind: "thread",
+          environmentId: "env-1",
+          threadId: "t1",
+          projectId: "p1",
+          providerId: "fake",
+          clientRequestId: "creq_222222229i",
+          input: [promptTextInput({ text: "Ship it" })],
+          options: {
+            ...fullRuntimeOptions,
+            submissionMode: { planMode: "default", goalMode: "goal" },
+          },
+        }),
+      ).rejects.toThrow("does not support Goal mode for turnStart");
+      expect(
+        recordedCommands.some((command) => command.type === "thread/start"),
+      ).toBe(false);
 
       await runtime.shutdown();
     });

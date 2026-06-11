@@ -10,11 +10,13 @@ import {
   formatEnvironmentDisplay,
   type EnvironmentDisplayHostContext,
 } from "@bb/core-ui";
-import type { ThreadContextWindowUsage } from "@bb/server-contract";
+import type { AppSummary, ThreadContextWindowUsage } from "@bb/server-contract";
 import {
   FollowUpPromptBox,
   type FollowUpSubmitMode,
 } from "@/components/promptbox/FollowUpPromptBox";
+import { PromptBoxActionsMenu } from "@/components/promptbox/PromptBoxActionsMenu";
+import type { ProviderCommandTrigger } from "@/components/promptbox/mentions/command-trigger";
 import { getFollowUpPromptPlaceholder } from "@/components/promptbox/follow-up-placeholder";
 import { getEnvironmentWorkspaceLabelIconName } from "@/lib/environment-workspace-display";
 import {
@@ -39,6 +41,25 @@ export default {
 };
 
 const noop = () => {};
+
+const storyApps: readonly AppSummary[] = [
+  {
+    applicationId: "review-board",
+    name: "Review Board",
+    entry: { path: "index.html", kind: "html" },
+    capabilities: ["data", "message"],
+    icon: { kind: "builtin", name: "ListTodo" },
+    source: null,
+  },
+  {
+    applicationId: "daily-status",
+    name: "Daily Status",
+    entry: { path: "index.html", kind: "html" },
+    capabilities: ["message"],
+    icon: { kind: "builtin", name: "GridView" },
+    source: null,
+  },
+];
 
 // FollowUp commits the provider — omit `onChange` so the picker renders the
 // provider segment as locked, and pass `displayName` so the static label
@@ -318,6 +339,7 @@ const queuedMessagesElement: ReactNode = (
 // ---------------------------------------------------------------------------
 
 interface RowConfig {
+  actionsMenu?: ReactNode;
   initialMessage?: string;
   submitMode: FollowUpSubmitMode;
   isFollowUpSubmitting?: boolean;
@@ -336,11 +358,58 @@ type ComposerCoreRuntimeStatus = Parameters<
 // Match production: ThreadTimelinePane's PageShell footer caps content at
 // 760px. The story's StoryRow value cell uses flex-wrap, which would
 // otherwise let the prompt box collapse to its intrinsic content width.
-function PromptStage({ children }: { children: React.ReactNode }) {
+interface PromptStageProps {
+  children: ReactNode;
+}
+
+function PromptStage({ children }: PromptStageProps) {
   return <div className="w-full max-w-[760px]">{children}</div>;
 }
 
+interface UseMenuToggleArgs {
+  initial: boolean;
+}
+
+function useMenuToggle({ initial }: UseMenuToggleArgs) {
+  const [checked, setChecked] = useState(initial);
+  return {
+    checked,
+    onCheckedChange: setChecked,
+  };
+}
+
+interface StoryActionsMenuProps {
+  apps?: readonly AppSummary[];
+  goalActive?: boolean;
+  planActive?: boolean;
+  shortcut?: ProviderCommandTrigger;
+  showGoal?: boolean;
+  showPlan?: boolean;
+}
+
+function StoryActionsMenu({
+  apps,
+  goalActive = false,
+  planActive = false,
+  shortcut,
+  showGoal = false,
+  showPlan = false,
+}: StoryActionsMenuProps) {
+  const planMode = useMenuToggle({ initial: planActive });
+  const goalMode = useMenuToggle({ initial: goalActive });
+  return (
+    <PromptBoxActionsMenu
+      createApp={{ onSelect: noop }}
+      skills={shortcut ? { shortcut, onSelect: noop } : undefined}
+      planMode={showPlan ? planMode : undefined}
+      goalMode={showGoal ? goalMode : undefined}
+      apps={apps && apps.length > 0 ? { apps, onSelect: noop } : undefined}
+    />
+  );
+}
+
 function Row({
+  actionsMenu,
   initialMessage = "",
   submitMode,
   isFollowUpSubmitting = false,
@@ -370,6 +439,7 @@ function Row({
   return (
     <PromptStage>
       <FollowUpPromptBox
+        actionsMenu={actionsMenu}
         attachments={attachmentsBase}
         stack={stack}
         composer={{
@@ -497,6 +567,56 @@ export function Overview() {
           submitMode={{ kind: "ready" }}
           environmentSummary={remoteEnvironmentSummary}
         />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: codex"
+        hint="left-side + with Skills $, Plan, Goal, Apps; paperclip remains right"
+      >
+        <Row
+          submitMode={{ kind: "ready" }}
+          actionsMenu={
+            <StoryActionsMenu
+              shortcut="$"
+              showPlan
+              showGoal
+              apps={storyApps}
+            />
+          }
+        />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: active modes"
+        hint="trigger shows active state for sticky Plan + Goal"
+      >
+        <Row
+          submitMode={{ kind: "ready" }}
+          initialMessage="Continue with a constrained implementation plan."
+          actionsMenu={
+            <StoryActionsMenu
+              shortcut="$"
+              showPlan
+              showGoal
+              planActive
+              goalActive
+              apps={storyApps}
+            />
+          }
+        />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: claude"
+        hint="Skills / shown; Plan and Goal hidden"
+      >
+        <Row
+          submitMode={{ kind: "ready" }}
+          actionsMenu={<StoryActionsMenu shortcut="/" apps={storyApps} />}
+        />
+      </StoryRow>
+      <StoryRow
+        label="plus menu: unsupported"
+        hint="provider without command/mode/app affordances keeps only Create App"
+      >
+        <Row submitMode={{ kind: "ready" }} actionsMenu={<StoryActionsMenu />} />
       </StoryRow>
     </StoryCard>
   );

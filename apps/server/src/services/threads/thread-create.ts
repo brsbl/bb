@@ -36,6 +36,10 @@ import {
   advanceThreadProvisioning,
   requestThreadProvision,
 } from "./thread-provisioning.js";
+import {
+  ensureProviderSupportsSubmissionMode,
+  resolveSubmissionMode,
+} from "./thread-submission-mode.js";
 import type {
   ThreadProvisionContext,
   ThreadProvisionEnvironmentIntent,
@@ -239,6 +243,7 @@ async function createProvisioningThread(
       environmentIntent: args.environmentIntent,
       execution,
       input: args.request.input,
+      submissionMode: args.request.submissionMode,
       titleProvided: Boolean(args.request.title),
     });
   } catch (error) {
@@ -287,6 +292,14 @@ export async function createThreadFromRequest(
       projectId: requestInput.projectId,
       providerId: requestInput.providerId,
     });
+  const submissionMode = resolveSubmissionMode({
+    submissionMode: requestInput.submissionMode,
+  });
+  ensureProviderSupportsSubmissionMode({
+    entrypoint: "threadStart",
+    providerId,
+    submissionMode,
+  });
   const request: ThreadCreateServiceRequest = {
     ...requestInput,
     environment: resolveCreateThreadEnvironment({
@@ -295,6 +308,7 @@ export async function createThreadFromRequest(
       requestedEnvironment: requestInput.environment,
     }),
     providerId,
+    submissionMode,
   };
   const resolvedEnvironment = resolveStableThreadRequestEnvironment(deps, {
     environment: request.environment,

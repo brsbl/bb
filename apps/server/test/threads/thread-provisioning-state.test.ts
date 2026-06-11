@@ -9,6 +9,7 @@ import {
   noopNotifier,
   upsertHost,
 } from "@bb/db";
+import { DEFAULT_SUBMISSION_MODE } from "@bb/domain";
 import { getActiveThreadProvisionContext } from "../../src/services/threads/thread-provisioning-active-context.js";
 import {
   requestThreadProvision,
@@ -60,6 +61,7 @@ describe("thread provisioning state", () => {
           path: "/tmp/source",
         },
         input,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         execution: {
           model: "gpt-5",
           serviceTier: "default",
@@ -105,6 +107,7 @@ describe("thread provisioning state", () => {
           source: "client/turn/requested",
         },
         initiator: "user",
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         senderThreadId: null,
         provisioningId,
       },

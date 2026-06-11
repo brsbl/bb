@@ -22,6 +22,7 @@ import {
   reasoningLevelSchema,
   resolvedThreadExecutionOptionsSchema,
   serviceTierSchema,
+  submissionModeSchema,
   terminalSessionCloseReasonSchema,
   terminalSessionStatusSchema,
   terminalColsSchema,
@@ -556,6 +557,7 @@ export const createThreadRequestSchema = z.object({
   origin: threadCreateOriginSchema,
   title: z.string().min(1).optional(),
   input: z.array(promptInputSchema).min(1),
+  submissionMode: submissionModeSchema.optional(),
   model: z.string().min(1).optional(),
   serviceTier: serviceTierSchema.optional(),
   reasoningLevel: reasoningLevelSchema.optional(),
@@ -813,6 +815,7 @@ export type UpdateAutomationRequest = z.infer<
 
 export const sendMessageRequestSchema = z.object({
   input: z.array(promptInputSchema).min(1),
+  submissionMode: submissionModeSchema.optional(),
   model: z.string().optional(),
   serviceTier: serviceTierSchema.optional(),
   reasoningLevel: reasoningLevelSchema.optional(),

@@ -30,7 +30,7 @@ import {
 } from "@bb/replay-capture/schema";
 import { z } from "zod";
 
-export const HOST_DAEMON_PROTOCOL_VERSION = 34 as const;
+export const HOST_DAEMON_PROTOCOL_VERSION = 35 as const;
 
 export {
   BRANCH_LIST_LIMIT_MAX,

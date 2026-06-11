@@ -1,14 +1,17 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import {
   isUserQuestionPendingInteractionPayload,
   isUserQuestionPendingInteractionResolution,
+  threadGoalSchema,
   threadScope,
   threadEventItemSchema,
   turnScope,
   type AvailableModel,
   type PendingInteractionUserQuestionOption,
   type ProviderCapabilities,
+  type ThreadGoal,
   type ThreadEvent,
 } from "@bb/domain";
 import type {
@@ -30,11 +33,14 @@ import { parseAvailableModelList } from "../shared/available-models.js";
 import { decodeNormalizedProviderToolCallRequest } from "../shared/provider-tool-call-contract.js";
 
 type FakeUserQuestionCapability = ProviderCapabilities["supportsUserQuestion"];
+type FakeSubmissionModeSupport = ProviderCapabilities["supportsGoalMode"];
 
 export interface CreateFakeProviderExecutionContext {
   displayName?: string;
   id?: string;
   scriptPath?: string;
+  supportsGoalMode?: FakeSubmissionModeSupport;
+  supportsPlanMode?: FakeSubmissionModeSupport;
   supportsUserQuestion?: FakeUserQuestionCapability;
 }
 
@@ -42,6 +48,22 @@ interface FakeEventMessage {
   method: string;
   params: Record<string, unknown>;
 }
+
+const fakeThreadGoalSchema = threadGoalSchema
+  .extend({
+    threadId: z.string().optional(),
+  })
+  .transform(
+    (value): ThreadGoal => ({
+      objective: value.objective,
+      status: value.status,
+      tokenBudget: value.tokenBudget,
+      tokensUsed: value.tokensUsed,
+      timeUsedSeconds: value.timeUsedSeconds,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    }),
+  );
 
 const DEFAULT_ADAPTER_ID = "fake";
 const DEFAULT_DISPLAY_NAME = "Fake Provider";
@@ -155,6 +177,36 @@ function buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
           providerThreadId: command.providerThreadId,
           threadId: command.threadId,
           title: command.title,
+        },
+      };
+    case "thread/goal/set":
+      return {
+        kind: "request",
+        method: "thread/goal/set",
+        params: {
+          objective: command.objective,
+          providerThreadId: command.providerThreadId,
+          status: command.status,
+          threadId: command.threadId,
+          tokenBudget: command.tokenBudget,
+        },
+      };
+    case "thread/goal/get":
+      return {
+        kind: "request",
+        method: "thread/goal/get",
+        params: {
+          providerThreadId: command.providerThreadId,
+          threadId: command.threadId,
+        },
+      };
+    case "thread/goal/clear":
+      return {
+        kind: "request",
+        method: "thread/goal/clear",
+        params: {
+          providerThreadId: command.providerThreadId,
+          threadId: command.threadId,
         },
       };
     case "thread/archive":
@@ -275,7 +327,7 @@ function translateEventMessage(event: ProviderRuntimeEvent): ThreadEvent[] {
   const providerThreadId =
     typeof message.params.providerThreadId === "string"
       ? message.params.providerThreadId
-      : "";
+      : threadId;
 
   switch (message.method) {
     case "thread/identity":
@@ -337,6 +389,35 @@ function translateEventMessage(event: ProviderRuntimeEvent): ThreadEvent[] {
             typeof message.params.threadName === "string"
               ? message.params.threadName
               : "",
+        },
+      ];
+    case "thread/goal/updated": {
+      const goal = fakeThreadGoalSchema.safeParse(message.params.goal);
+      if (!goal.success) {
+        return [];
+      }
+      const providerTurnId =
+        message.params.turnId === null || typeof message.params.turnId === "string"
+          ? message.params.turnId
+          : null;
+      return [
+        {
+          type: "thread/goal/updated",
+          threadId,
+          providerThreadId,
+          scope: threadScope(),
+          providerTurnId,
+          goal: goal.data,
+        },
+      ];
+    }
+    case "thread/goal/cleared":
+      return [
+        {
+          type: "thread/goal/cleared",
+          threadId,
+          providerThreadId,
+          scope: threadScope(),
         },
       ];
     default:
@@ -434,13 +515,17 @@ export function createFakeAdapter(
    * - `ask_user` emits a provider-scoped user-question interactive request
    *   when the adapter is configured with `supportsUserQuestion: true`.
    * - remaining text is echoed back as `Response to: ...`.
-   */
+  */
   const supportsUserQuestion = options.supportsUserQuestion ?? false;
+  const unsupportedSubmissionMode = { threadStart: false, turnStart: false };
 
   return {
     buildCommandPlan,
     capabilities: {
       supportsArchive: true,
+      supportsGoalMode:
+        options.supportsGoalMode ?? unsupportedSubmissionMode,
+      supportsPlanMode: options.supportsPlanMode ?? unsupportedSubmissionMode,
       supportsRename: true,
       supportsServiceTier: false,
       supportsUserQuestion,

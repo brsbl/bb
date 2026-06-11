@@ -1,12 +1,14 @@
 import {
   memo,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ComponentProps,
   type ReactNode,
+  type Ref,
 } from "react";
 import type { PromptTextMention, ThreadRuntimeDisplayStatus } from "@bb/domain";
 import {
@@ -120,7 +122,9 @@ type ContextWindowUsage = ComponentProps<
 
 export interface FollowUpPromptBoxProps {
   id?: string;
+  actionsMenu?: ReactNode;
   attachments: AttachmentsConfig;
+  promptBoxRef?: Ref<PromptBoxHandle>;
   /**
    * Slot for the stack of context cards above the prompt input — today
    * <ContextBanner> + <QueuedMessagesList>, both wrapped in PromptStackCard
@@ -153,7 +157,9 @@ export interface FollowUpPromptBoxProps {
 
 export const FollowUpPromptBox = memo(function FollowUpPromptBox({
   id,
+  actionsMenu,
   attachments,
+  promptBoxRef: externalPromptBoxRef,
   stack,
   composer,
   environmentSummary,
@@ -174,6 +180,22 @@ export const FollowUpPromptBox = memo(function FollowUpPromptBox({
       : undefined;
   const canStopRuntime = onStopRuntime !== undefined;
   const promptBoxRef = useRef<PromptBoxHandle>(null);
+  useImperativeHandle(
+    externalPromptBoxRef,
+    () => ({
+      focusEnd: () => {
+        promptBoxRef.current?.focusEnd();
+      },
+      insertTextAtCursor: (text) => {
+        promptBoxRef.current?.insertTextAtCursor(text);
+      },
+      openCommandTrigger: () => {
+        promptBoxRef.current?.openCommandTrigger();
+      },
+      getTextBeforeCursor: () => promptBoxRef.current?.getTextBeforeCursor(),
+    }),
+    [],
+  );
   const voice = usePromptVoice(promptBoxRef);
   const onModifierSubmit = composer.canModifierSubmit
     ? composer.onModifierSubmit
@@ -258,6 +280,7 @@ export const FollowUpPromptBox = memo(function FollowUpPromptBox({
             resetKey: zenModeResetKey,
             resetOnSubmit: true,
           }}
+          actionsMenu={actionsMenu}
           footerStart={footerStart}
         />
         <div className="mt-1 flex min-h-6 items-center justify-between gap-2 pl-[15px] pr-3.5">

@@ -4,6 +4,7 @@ import {
   pendingInteractionFileSystemPermissionsSchema,
   pendingInteractionMacOsPermissionsSchema,
   pendingInteractionNetworkPermissionsSchema,
+  threadGoalStatusSchema,
 } from "@bb/domain";
 import type { PendingInteractionCommandAction } from "@bb/domain";
 import { jsonRpcEnvelopeSchema } from "../shared/json-rpc-envelope.js";
@@ -30,6 +31,19 @@ const codexPlanStepStatusSchema = z.enum([
   "completed",
   "failed",
 ]);
+
+const codexThreadGoalSchema = z
+  .object({
+    threadId: z.string(),
+    objective: z.string().min(1),
+    status: threadGoalStatusSchema,
+    tokenBudget: z.number().int().nonnegative().nullable(),
+    tokensUsed: z.number().int().nonnegative(),
+    timeUsedSeconds: z.number().nonnegative(),
+    createdAt: z.number().int().nonnegative(),
+    updatedAt: z.number().int().nonnegative(),
+  })
+  .passthrough();
 
 type ZodObjectSchema = z.ZodObject<z.ZodRawShape>;
 
@@ -755,6 +769,24 @@ export const codexHandledEventSchema = z.discriminatedUnion("method", [
       .object({
         threadId: z.string(),
         threadName: z.string().optional(),
+      })
+      .passthrough(),
+  ),
+  createCodexEventSchema(
+    "thread/goal/updated",
+    z
+      .object({
+        threadId: z.string(),
+        turnId: z.string().nullable(),
+        goal: codexThreadGoalSchema,
+      })
+      .passthrough(),
+  ),
+  createCodexEventSchema(
+    "thread/goal/cleared",
+    z
+      .object({
+        threadId: z.string(),
       })
       .passthrough(),
   ),

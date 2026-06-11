@@ -128,6 +128,7 @@ export interface NewThreadPromptBoxUIProps {
   mentionRanges: readonly PromptTextMention[];
   onChange: (value: string, mentionRanges: PromptTextMention[]) => void;
   onSubmit: () => void;
+  actionsMenu?: ReactNode;
   promptBoxRef?: Ref<PromptBoxHandle>;
   isSubmitting: boolean;
   disabled: boolean;
@@ -175,6 +176,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
   mentionRanges,
   onChange,
   onSubmit,
+  actionsMenu,
   promptBoxRef: externalPromptBoxRef,
   isSubmitting,
   disabled,
@@ -195,6 +197,9 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
       },
       insertTextAtCursor: (text) => {
         promptBoxRef.current?.insertTextAtCursor(text);
+      },
+      openCommandTrigger: () => {
+        promptBoxRef.current?.openCommandTrigger();
       },
       getTextBeforeCursor: () => promptBoxRef.current?.getTextBeforeCursor(),
     }),
@@ -229,6 +234,7 @@ export const NewThreadPromptBoxUI = memo(function NewThreadPromptBoxUI({
         minHeight={NEW_THREAD_PROMPT_BOX_MIN_HEIGHT}
         placeholder={placeholder}
         header={modeConfig.header}
+        actionsMenu={actionsMenu}
         footerStart={<ExecutionControls {...execution} />}
       />
       {/* Strip below the prompt-box card: optional project + env + branch (or

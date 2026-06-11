@@ -15,6 +15,8 @@ describe("agent provider catalog", () => {
         displayName: "Codex",
         capabilities: {
           supportsArchive: true,
+          supportsGoalMode: { threadStart: false, turnStart: true },
+          supportsPlanMode: { threadStart: false, turnStart: true },
           supportsRename: true,
           supportsServiceTier: true,
           supportsUserQuestion: false,
@@ -27,6 +29,8 @@ describe("agent provider catalog", () => {
         displayName: "Claude Code",
         capabilities: {
           supportsArchive: false,
+          supportsGoalMode: { threadStart: false, turnStart: false },
+          supportsPlanMode: { threadStart: false, turnStart: false },
           supportsRename: false,
           supportsServiceTier: false,
           supportsUserQuestion: true,
@@ -39,6 +43,8 @@ describe("agent provider catalog", () => {
         displayName: "Pi",
         capabilities: {
           supportsArchive: false,
+          supportsGoalMode: { threadStart: false, turnStart: false },
+          supportsPlanMode: { threadStart: false, turnStart: false },
           supportsRename: false,
           supportsServiceTier: false,
           supportsUserQuestion: false,

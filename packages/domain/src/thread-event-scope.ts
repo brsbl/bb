@@ -87,6 +87,16 @@ export const threadEventScopeDefinitionByType = {
     rationale:
       "Thread metadata event; names are not part of a specific turn transcript.",
   },
+  "thread/goal/updated": {
+    policy: "thread",
+    rationale:
+      "Thread goal state is provider thread metadata and may be updated outside a specific turn transcript.",
+  },
+  "thread/goal/cleared": {
+    policy: "thread",
+    rationale:
+      "Thread goal state is provider thread metadata and may be cleared outside a specific turn transcript.",
+  },
   "thread/compacted": { policy: "turn" },
   "item/started": { policy: "turn" },
   "item/completed": { policy: "turn" },

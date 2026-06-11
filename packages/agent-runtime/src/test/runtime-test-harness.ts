@@ -1,4 +1,4 @@
-import { threadScope, turnScope } from "@bb/domain";
+import { DEFAULT_SUBMISSION_MODE, threadScope, turnScope } from "@bb/domain";
 import type {
   AdapterCommand,
   DecodedInteractiveRequest,
@@ -14,6 +14,7 @@ import {
   buildNodeScriptArgs,
   createFakeAdapter as createSharedFakeAdapter,
 } from "./index.js";
+import type { CreateFakeProviderExecutionContext } from "./index.js";
 export {
   waitForRuntimeState,
   waitForRuntimeThreadEvent,
@@ -27,16 +28,22 @@ export const fullRuntimeOptions = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "full",
   permissionEscalation: null,
 } satisfies AgentRuntimeExecutionOptions;
 
 interface CreateRecordingAdapterArgs {
+  fakeAdapterOptions?: RuntimeTestFakeAdapterOptions;
   recordedCommands: AdapterCommand[];
   scriptPath: string;
 }
 
 type RuntimeTestRecord = Record<string, unknown>;
+type RuntimeTestFakeAdapterOptions = Omit<
+  CreateFakeProviderExecutionContext,
+  "scriptPath"
+>;
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,14 +71,17 @@ export function findLastRecordedCommand(
   return undefined;
 }
 
-export function createFakeAdapter(scriptPath: string): ProviderAdapter {
-  return createSharedFakeAdapter({ scriptPath });
+export function createFakeAdapter(
+  scriptPath: string,
+  options: RuntimeTestFakeAdapterOptions = {},
+): ProviderAdapter {
+  return createSharedFakeAdapter({ ...options, scriptPath });
 }
 
 export function createRecordingAdapter(
   args: CreateRecordingAdapterArgs,
 ): ProviderAdapter {
-  const adapter = createFakeAdapter(args.scriptPath);
+  const adapter = createFakeAdapter(args.scriptPath, args.fakeAdapterOptions);
   return {
     ...adapter,
     buildCommandPlan(command) {
@@ -205,6 +215,8 @@ export function createWarningEventAdapter(scriptPath: string): ProviderAdapter {
     displayName: "Warning Fake",
     capabilities: {
       supportsArchive: false,
+      supportsGoalMode: { threadStart: false, turnStart: false },
+      supportsPlanMode: { threadStart: false, turnStart: false },
       supportsRename: false,
       supportsServiceTier: false,
       supportsUserQuestion: false,
@@ -248,6 +260,9 @@ export function createWarningEventAdapter(scriptPath: string): ProviderAdapter {
         case "turn/steer":
         case "thread/stop":
         case "thread/name/set":
+        case "thread/goal/set":
+        case "thread/goal/get":
+        case "thread/goal/clear":
         case "thread/archive":
         case "thread/unarchive":
           return unsupportedRuntimeTestCommand(command);
@@ -314,6 +329,8 @@ export function createStartedEventAdapter(scriptPath: string): ProviderAdapter {
     displayName: "Started Fake",
     capabilities: {
       supportsArchive: false,
+      supportsGoalMode: { threadStart: false, turnStart: false },
+      supportsPlanMode: { threadStart: false, turnStart: false },
       supportsRename: false,
       supportsServiceTier: false,
       supportsUserQuestion: false,
@@ -350,6 +367,9 @@ export function createStartedEventAdapter(scriptPath: string): ProviderAdapter {
         case "turn/steer":
         case "thread/stop":
         case "thread/name/set":
+        case "thread/goal/set":
+        case "thread/goal/get":
+        case "thread/goal/clear":
         case "thread/archive":
         case "thread/unarchive":
           return unsupportedRuntimeTestCommand(command);

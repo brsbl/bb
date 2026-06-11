@@ -4,11 +4,18 @@ import type {
   AgentRuntimeSkillRoot,
 } from "./types.js";
 import type { ProviderExecutionContext } from "./provider-adapter.js";
-import { DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG } from "@bb/domain";
+import {
+  DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
+  DEFAULT_SUBMISSION_MODE,
+  type SubmissionModeEntrypoint,
+} from "@bb/domain";
 import { resolveAdapterPermissionPolicy } from "./shared/permission-policy.js";
+
+type SubmissionModeConsumption = SubmissionModeEntrypoint | "deferred" | "none";
 
 interface AssertProviderSupportsExecutionOptionsArgs {
   adapter: ProviderAdapter;
+  consumption: SubmissionModeConsumption;
   options: AgentRuntimeExecutionOptions;
   providerId: string;
 }
@@ -47,6 +54,42 @@ export function assertProviderSupportsExecutionOptions(
       `Provider "${args.providerId}" does not support permission mode "${args.options.permissionMode}".`,
     );
   }
+
+  if (
+    args.options.submissionMode.planMode ===
+      DEFAULT_SUBMISSION_MODE.planMode &&
+    args.options.submissionMode.goalMode === DEFAULT_SUBMISSION_MODE.goalMode
+  ) {
+    return;
+  }
+
+  if (args.consumption === "deferred") {
+    return;
+  }
+
+  if (args.consumption === "none") {
+    throw new Error(
+      `Provider "${args.providerId}" cannot consume submission modes here.`,
+    );
+  }
+
+  if (
+    args.options.submissionMode.planMode === "plan" &&
+    !args.adapter.capabilities.supportsPlanMode[args.consumption]
+  ) {
+    throw new Error(
+      `Provider "${args.providerId}" does not support Plan mode for ${args.consumption}.`,
+    );
+  }
+
+  if (
+    args.options.submissionMode.goalMode === "goal" &&
+    !args.adapter.capabilities.supportsGoalMode[args.consumption]
+  ) {
+    throw new Error(
+      `Provider "${args.providerId}" does not support Goal mode for ${args.consumption}.`,
+    );
+  }
 }
 
 export function sameExecutionSettings(
@@ -82,6 +125,7 @@ export function toProviderExecutionContext(
       args.execOpts.claudeCodeMockCliTraffic ??
       DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
     workflowsEnabled: args.execOpts.workflowsEnabled,
+    submissionMode: args.execOpts.submissionMode,
     ...permissionPolicy,
     instructions: args.instructions,
     envVars: args.envVars,

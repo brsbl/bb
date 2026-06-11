@@ -17,6 +17,7 @@ import type {
   ResolvedThreadExecutionOptions,
   TurnRequestTarget,
 } from "@bb/domain";
+import { DEFAULT_SUBMISSION_MODE } from "@bb/domain";
 import type {
   HostDaemonCommand,
   TurnSubmitTarget,
@@ -478,6 +479,7 @@ async function prepareDueThreadSchedule(
       }),
       input,
       providerThreadId,
+      submissionMode: DEFAULT_SUBMISSION_MODE,
       target: renderThreadScheduleTurnSubmitTarget(targetIntent),
       thread,
     });
@@ -546,6 +548,7 @@ function queueDueThreadScheduleInTransaction(
     senderThreadId: null,
     requestMethod: "turn/start",
     source: "tell",
+    submissionMode: DEFAULT_SUBMISSION_MODE,
     target: renderThreadScheduleTurnRequestTarget(
       args.preparation.targetIntent,
     ),

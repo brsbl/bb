@@ -12,6 +12,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
+  DEFAULT_SUBMISSION_MODE,
   turnScope,
 } from "@bb/domain";
 
@@ -46,6 +47,7 @@ const fullProviderExecutionContext = {
   permissionMode: "full",
   permissionEscalation: null,
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
 } satisfies ProviderExecutionContext;
 
 const workspaceWriteAskProviderExecutionContext = {
@@ -53,6 +55,7 @@ const workspaceWriteAskProviderExecutionContext = {
   permissionMode: "workspace-write",
   permissionEscalation: "ask",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
 } satisfies ProviderExecutionContext;
 
 type CodexProviderAdapter = ReturnType<typeof createCodexProviderAdapter>;
@@ -277,6 +280,8 @@ describe("codex provider adapter", () => {
     const adapter = createCodexProviderAdapter();
     expect(adapter.capabilities).toEqual({
       supportsArchive: true,
+      supportsGoalMode: { threadStart: false, turnStart: true },
+      supportsPlanMode: { threadStart: false, turnStart: true },
       supportsRename: true,
       supportsServiceTier: true,
       supportsUserQuestion: false,
@@ -1420,6 +1425,7 @@ describe("codex provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "workspace-write",
         permissionEscalation: "deny",
       },
@@ -1445,6 +1451,7 @@ describe("codex provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "full",
         permissionEscalation: null,
       },
@@ -1707,6 +1714,56 @@ describe("codex provider adapter", () => {
     expect(cmd.params).not.toHaveProperty("outputSchema");
   });
 
+  it("buildCommand turn/start maps Plan mode to native collaborationMode", () => {
+    const adapter = createCodexProviderAdapter();
+    const cmd = adapter.buildCommandPlan({
+      type: "turn/start",
+      clientRequestId: "creq_222222229b",
+      threadId: "t1",
+      providerThreadId: "codex-1",
+      input: [promptTextInput({ text: "plan it" })],
+      options: {
+        ...fullProviderExecutionContext,
+        instructions: "Use the project conventions.",
+        model: "gpt-5.5",
+        reasoningLevel: "xhigh",
+        submissionMode: { planMode: "plan", goalMode: "none" },
+      },
+    });
+    expect(cmd).toMatchObject({
+      method: "turn/start",
+      params: {
+        threadId: "codex-1",
+        collaborationMode: {
+          mode: "plan",
+          settings: {
+            developer_instructions: "Use the project conventions.",
+            model: "gpt-5.5",
+            reasoning_effort: "xhigh",
+          },
+        },
+      },
+    });
+    expect(cmd.params).not.toHaveProperty("model");
+  });
+
+  it("buildCommand turn/start rejects Plan mode without an explicit model", () => {
+    const adapter = createCodexProviderAdapter();
+    expect(() =>
+      adapter.buildCommandPlan({
+        type: "turn/start",
+        clientRequestId: "creq_222222229c",
+        threadId: "t1",
+        providerThreadId: "codex-1",
+        input: [promptTextInput({ text: "plan it" })],
+        options: {
+          ...fullProviderExecutionContext,
+          submissionMode: { planMode: "plan", goalMode: "none" },
+        },
+      }),
+    ).toThrow("Codex Plan mode requires an explicit model.");
+  });
+
   it("buildCommand turn/start passes the structured output schema to the app server", () => {
     const adapter = createCodexProviderAdapter();
     const outputSchema = {
@@ -1831,6 +1888,7 @@ describe("codex provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "readonly",
         permissionEscalation: "ask",
       },
@@ -1858,6 +1916,7 @@ describe("codex provider adapter", () => {
       options: {
         claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
         workflowsEnabled: false,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionMode: "readonly",
         permissionEscalation: "deny",
       },
@@ -1890,6 +1949,55 @@ describe("codex provider adapter", () => {
         threadId: "codex-1",
         expectedTurnId: "turn-3",
         input: [{ type: "text", text: "steer it" }],
+      },
+    });
+  });
+
+  it("buildCommand maps native thread goal commands", () => {
+    const adapter = createCodexProviderAdapter();
+    expect(
+      adapter.buildCommandPlan({
+        type: "thread/goal/set",
+        threadId: "t1",
+        providerThreadId: "codex-1",
+        objective: "Ship the feature",
+        status: "active",
+        tokenBudget: null,
+      }),
+    ).toEqual({
+      kind: "request",
+      method: "thread/goal/set",
+      params: {
+        threadId: "codex-1",
+        objective: "Ship the feature",
+        status: "active",
+        tokenBudget: null,
+      },
+    });
+    expect(
+      adapter.buildCommandPlan({
+        type: "thread/goal/get",
+        threadId: "t1",
+        providerThreadId: "codex-1",
+      }),
+    ).toEqual({
+      kind: "request",
+      method: "thread/goal/get",
+      params: {
+        threadId: "codex-1",
+      },
+    });
+    expect(
+      adapter.buildCommandPlan({
+        type: "thread/goal/clear",
+        threadId: "t1",
+        providerThreadId: "codex-1",
+      }),
+    ).toEqual({
+      kind: "request",
+      method: "thread/goal/clear",
+      params: {
+        threadId: "codex-1",
       },
     });
   });
@@ -2142,19 +2250,26 @@ describe("codex provider adapter", () => {
     ).toEqual([]);
   });
 
-  it("translateEvent ignores native thread goal notifications", () => {
+  it("translateEvent normalizes native thread goal notifications", () => {
     const adapter = createCodexProviderAdapter();
 
     expect(
       adapter.translateEvent(
         codexEvent("thread/goal/cleared", { threadId: "t1" }),
       ),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        type: "thread/goal/cleared",
+        threadId: "t1",
+        providerThreadId: "t1",
+        scope: { kind: "thread" },
+      },
+    ]);
     expect(
       adapter.translateEvent(
         codexEvent("thread/goal/updated", {
           threadId: "t1",
-          turnId: null,
+          turnId: "turn-1",
           goal: {
             threadId: "t1",
             objective: "Finish the task",
@@ -2167,7 +2282,24 @@ describe("codex provider adapter", () => {
           },
         }),
       ),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        type: "thread/goal/updated",
+        threadId: "t1",
+        providerThreadId: "t1",
+        scope: { kind: "thread" },
+        providerTurnId: "turn-1",
+        goal: {
+          objective: "Finish the task",
+          status: "active",
+          tokenBudget: null,
+          tokensUsed: 0,
+          timeUsedSeconds: 0,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      },
+    ]);
   });
 
   it("translateEvent thread/compacted emits a compacted event", () => {

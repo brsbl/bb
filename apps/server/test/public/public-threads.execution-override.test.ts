@@ -25,6 +25,8 @@ function stubClaudeCodeCatalog(
         displayName: "Claude Code",
         capabilities: {
           supportsArchive: true,
+          supportsGoalMode: { threadStart: false, turnStart: false },
+          supportsPlanMode: { threadStart: false, turnStart: false },
           supportsRename: false,
           supportsServiceTier: true,
           supportsUserQuestion: true,

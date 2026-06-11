@@ -461,6 +461,12 @@ export function ThreadDetailView() {
     environmentId: thread?.environmentId,
     storageFiles: threadStorageFiles?.files,
   });
+  const handlePromptMenuAppSelect = useCallback(
+    (applicationId: string) => {
+      selectFileSearchResult({ source: "app", applicationId });
+    },
+    [selectFileSearchResult],
+  );
   const [openLinksInAppBrowser] = useOpenLinksInAppBrowserPreference();
   // The in-app browser surface only exists on desktop; on web this stays false
   // and chat links keep their external-open behavior.
@@ -1332,6 +1338,7 @@ export function ThreadDetailView() {
   const composerFooter = (
     <ThreadDetailPromptArea
       canUseGitUi={canUseGitUi}
+      apps={appsQuery.data ?? []}
       contextWindowUsage={contextWindowUsage}
       environmentBranchName={threadBranchName}
       environmentIcon={threadEnvironmentIcon ?? undefined}
@@ -1339,6 +1346,7 @@ export function ThreadDetailView() {
       environmentCompactLabel={threadEnvironmentDisplay?.compactModeLabel}
       isEnvironmentActionPending={requestEnvironmentAction.isPending}
       onCreateNewThreadInWorktree={onCreateNewThreadInWorktree}
+      onOpenApp={handlePromptMenuAppSelect}
       composerQueriesEnabled={hasThreadComposerBootstrapReady}
       composerQueriesStaleTime={composerHydratedDataStaleTime}
       onChangedFileClick={handleChangedFileClick}

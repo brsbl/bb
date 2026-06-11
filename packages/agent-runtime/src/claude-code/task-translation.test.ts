@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
+  DEFAULT_SUBMISSION_MODE,
   threadScope,
 } from "@bb/domain";
 import type {
@@ -345,6 +346,7 @@ describe("claude-code background task translation", () => {
         options: {
           claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
           workflowsEnabled: false,
+          submissionMode: DEFAULT_SUBMISSION_MODE,
           permissionMode: "full",
           permissionEscalation: null,
         },
@@ -374,6 +376,7 @@ describe("claude-code background task translation", () => {
         options: {
           claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
           workflowsEnabled: false,
+          submissionMode: DEFAULT_SUBMISSION_MODE,
           permissionMode: "full",
           permissionEscalation: null,
         },
@@ -414,6 +417,7 @@ describe("claude-code background task translation", () => {
         options: {
           claudeCodeMockCliTraffic: DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
           workflowsEnabled: false,
+          submissionMode: DEFAULT_SUBMISSION_MODE,
           permissionMode: "full",
           permissionEscalation: null,
         },

@@ -1,3 +1,5 @@
+export type ProviderCommandTrigger = "/" | "$";
+
 /**
  * The trigger character a provider uses to invoke skills/commands in the
  * composer, or `null` when the provider has no command surface.
@@ -9,7 +11,9 @@
  * Takes a plain `string` because callers receive the provider id from thread
  * data / new-thread options where it is not yet narrowed to a known provider.
  */
-export function commandTriggerForProvider(providerId: string): "/" | "$" | null {
+export function commandTriggerForProvider(
+  providerId: string,
+): ProviderCommandTrigger | null {
   switch (providerId) {
     case "claude-code":
       return "/";

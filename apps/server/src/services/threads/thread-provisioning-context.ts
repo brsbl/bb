@@ -4,9 +4,11 @@ import {
   promptInputSchema,
   resolvedThreadExecutionOptionsSchema,
   clientTurnRequestIdSchema,
+  submissionModeSchema,
   type ClientTurnRequestId,
   type PromptInput,
   type ResolvedThreadExecutionOptions,
+  type SubmissionMode,
 } from "@bb/domain";
 import {
   baseBranchSpecSchema,
@@ -65,6 +67,7 @@ export const threadProvisionCommonPayloadSchema = z.object({
   environmentIntent: threadProvisionEnvironmentIntentSchema,
   execution: resolvedThreadExecutionOptionsSchema,
   input: z.array(promptInputSchema),
+  submissionMode: submissionModeSchema,
   titleProvided: z.boolean(),
 });
 
@@ -179,6 +182,7 @@ export interface CreateMetadataPendingContextArgs {
   environmentIntent: ThreadProvisionEnvironmentIntent;
   execution: ResolvedThreadExecutionOptions;
   input: PromptInput[];
+  submissionMode: SubmissionMode;
   titleProvided: boolean;
 }
 
@@ -206,6 +210,7 @@ export interface CreateReprovisioningContextArgs {
   execution: ResolvedThreadExecutionOptions;
   input: PromptInput[];
   provisioningId: string;
+  submissionMode: SubmissionMode;
 }
 
 export interface CreateWorkspaceReadyContextArgs {
@@ -318,6 +323,7 @@ export function createMetadataPendingContext(
       environmentIntent: args.environmentIntent,
       execution: args.execution,
       input: args.input,
+      submissionMode: args.submissionMode,
       titleProvided: args.titleProvided,
     },
     state: {
@@ -423,6 +429,7 @@ export function createReprovisioningContext(
       clientRequestId: args.clientRequestId,
       execution: args.execution,
       input: args.input,
+      submissionMode: args.submissionMode,
       titleProvided: true,
     },
     state: {

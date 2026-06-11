@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { closeSession, listEvents, workflowRuns } from "@bb/db";
 import {
+  DEFAULT_SUBMISSION_MODE,
   encodeClientTurnRequestIdNumber,
   type ResolvedThreadExecutionOptions,
 } from "@bb/domain";
@@ -387,6 +388,7 @@ describe("workflow run pending manager notifications", () => {
         input: textInput("kick off the manager"),
         requestId: encodeClientTurnRequestIdNumber({ value: 1 }),
         execution,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         permissionEscalation: "ask",
         projectId: fixture.projectId,
         providerId: thread.providerId,

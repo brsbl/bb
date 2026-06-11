@@ -177,6 +177,8 @@ function resolveProviderIdentifiers(event: HostDaemonEventEnvelope["event"]): {
       return { providerThreadId: null };
     case "thread/identity":
     case "thread/name/updated":
+    case "thread/goal/updated":
+    case "thread/goal/cleared":
     case "provider/warning":
       return { providerThreadId: event.providerThreadId };
     case "thread/compacted":

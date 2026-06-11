@@ -656,6 +656,34 @@ export function translateCodexEvent(
             },
           ]
         : [];
+    case "thread/goal/updated":
+      return [
+        {
+          type: "thread/goal/updated",
+          threadId: handledEvent.params.threadId,
+          providerThreadId: handledEvent.params.threadId,
+          scope: threadScope(),
+          providerTurnId: handledEvent.params.turnId,
+          goal: {
+            objective: handledEvent.params.goal.objective,
+            status: handledEvent.params.goal.status,
+            tokenBudget: handledEvent.params.goal.tokenBudget,
+            tokensUsed: handledEvent.params.goal.tokensUsed,
+            timeUsedSeconds: handledEvent.params.goal.timeUsedSeconds,
+            createdAt: handledEvent.params.goal.createdAt,
+            updatedAt: handledEvent.params.goal.updatedAt,
+          },
+        },
+      ];
+    case "thread/goal/cleared":
+      return [
+        {
+          type: "thread/goal/cleared",
+          threadId: handledEvent.params.threadId,
+          providerThreadId: handledEvent.params.threadId,
+          scope: threadScope(),
+        },
+      ];
     case "thread/compacted":
       return [
         {

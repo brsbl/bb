@@ -1,4 +1,4 @@
-import type { PromptInput } from "@bb/domain";
+import type { PromptInput, SubmissionMode } from "@bb/domain";
 import type {
   CreateThreadRequest,
   EnvironmentArgs,
@@ -18,12 +18,14 @@ export interface ThreadCreateServiceRequestInput {
   providerId?: CreateThreadRequest["providerId"];
   reasoningLevel?: CreateThreadRequest["reasoningLevel"];
   serviceTier?: CreateThreadRequest["serviceTier"];
+  submissionMode?: CreateThreadRequest["submissionMode"];
   title?: string;
 }
 
 export interface ThreadCreateServiceRequest extends Omit<
   ThreadCreateServiceRequestInput,
-  "providerId"
+  "providerId" | "submissionMode"
 > {
   providerId: string;
+  submissionMode: SubmissionMode;
 }

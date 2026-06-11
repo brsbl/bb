@@ -15,6 +15,8 @@ export function getEventProviderThreadId(
     case "turn/started":
     case "turn/input/accepted":
     case "thread/name/updated":
+    case "thread/goal/updated":
+    case "thread/goal/cleared":
     case "thread/compacted":
     case "item/started":
     case "item/completed":
@@ -81,6 +83,8 @@ export function getEventParentToolCallId(
     case "turn/completed":
     case "turn/input/accepted":
     case "thread/name/updated":
+    case "thread/goal/updated":
+    case "thread/goal/cleared":
     case "thread/compacted":
     case "thread/tokenUsage/updated":
     case "thread/contextWindowUsage/updated":

@@ -20,6 +20,7 @@ import type {
   ToolCallResponse,
 } from "@bb/domain";
 import {
+  DEFAULT_SUBMISSION_MODE,
   getThreadEventScopeTurnId,
   isApprovalPendingInteractionPayload,
   isUserQuestionPendingInteractionPayload,
@@ -112,6 +113,7 @@ export const fullRuntimeOptionsTemplate = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "full",
   permissionEscalation: null,
 } satisfies RuntimeOptionsTemplate;
@@ -120,6 +122,7 @@ export const workspaceWriteAskRuntimeOptionsTemplate = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "workspace-write",
   permissionEscalation: "ask",
 } satisfies RuntimeOptionsTemplate;
@@ -128,6 +131,7 @@ export const workspaceWriteDenyRuntimeOptionsTemplate = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "workspace-write",
   permissionEscalation: "deny",
 } satisfies RuntimeOptionsTemplate;
@@ -136,6 +140,7 @@ export const readonlyAskRuntimeOptionsTemplate = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "readonly",
   permissionEscalation: "ask",
 } satisfies RuntimeOptionsTemplate;
@@ -144,6 +149,7 @@ export const readonlyDenyRuntimeOptionsTemplate = {
   serviceTier: "default",
   reasoningLevel: "medium",
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
   permissionMode: "readonly",
   permissionEscalation: "deny",
 } satisfies RuntimeOptionsTemplate;

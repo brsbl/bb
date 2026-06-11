@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { events, getThread, threads } from "@bb/db";
-import { threadScope, turnScope } from "@bb/domain";
+import { DEFAULT_SUBMISSION_MODE, threadScope, turnScope } from "@bb/domain";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendClientTurnEvent,
@@ -284,6 +284,7 @@ describe("thread event appends", () => {
           serviceTier: "default",
           source: "client/turn/requested",
         },
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         initiator: "user",
         senderThreadId: null,
         requestMethod: "turn/start",
@@ -333,6 +334,7 @@ describe("thread event appends", () => {
           serviceTier: "default",
           source: "client/turn/requested",
         },
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         initiator: "agent",
         senderThreadId: "thr_sender",
         requestMethod: "turn/start",

@@ -1,4 +1,8 @@
-import type { PromptInput, ThreadRuntimeDisplayStatus } from "@bb/domain";
+import {
+  DEFAULT_SUBMISSION_MODE,
+  type PromptInput,
+  type ThreadRuntimeDisplayStatus,
+} from "@bb/domain";
 import { describe, expect, it } from "vitest";
 import {
   buildAutoFollowUpRequest,
@@ -71,12 +75,14 @@ describe("threadDetailPromptSubmission", () => {
           executionInputSources: {},
         },
         input: textInput,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         threadId: "thread-1",
       }),
     ).toEqual({
       id: "thread-1",
       input: textInput,
       mode: "queue-if-active",
+      submissionMode: DEFAULT_SUBMISSION_MODE,
       model: "gpt-5",
       permissionMode: "full",
       reasoningLevel: "medium",
@@ -90,12 +96,14 @@ describe("threadDetailPromptSubmission", () => {
       buildAutoFollowUpRequest({
         execution: null,
         input: textInput,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         threadId: "thread-1",
       }),
     ).toEqual({
       id: "thread-1",
       input: textInput,
       mode: "queue-if-active",
+      submissionMode: DEFAULT_SUBMISSION_MODE,
     });
   });
 

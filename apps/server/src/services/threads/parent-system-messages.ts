@@ -10,6 +10,7 @@ import type {
   ResolvedThreadExecutionOptions,
   Thread,
 } from "@bb/domain";
+import { DEFAULT_SUBMISSION_MODE } from "@bb/domain";
 import type { HostDaemonCommand } from "@bb/host-daemon-contract";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { requireThreadEnvironment } from "../lib/entity-lookup.js";
@@ -43,6 +44,7 @@ import {
 } from "../hosts/live-command.js";
 
 const PARENT_SYSTEM_MESSAGE_SOURCE = "tell";
+const PARENT_SYSTEM_SUBMISSION_MODE = DEFAULT_SUBMISSION_MODE;
 
 interface QueueParentSystemMessageArgs {
   input: PromptInput[];
@@ -210,6 +212,7 @@ function queueActiveParentSystemMessageInTransaction(
     senderThreadId: null,
     requestMethod: "turn/start",
     source: PARENT_SYSTEM_MESSAGE_SOURCE,
+    submissionMode: PARENT_SYSTEM_SUBMISSION_MODE,
     target: {
       kind: "auto",
       expectedTurnId: expectedSteerTurnId,
@@ -247,6 +250,7 @@ async function queueActiveParentSystemMessage(
     input: args.input,
     execution: args.execution,
     permissionEscalation,
+    submissionMode: PARENT_SYSTEM_SUBMISSION_MODE,
     target: {
       mode: "auto",
       expectedTurnId: expectedSteerTurnId,
@@ -321,6 +325,7 @@ async function queueReadyParentSystemMessage(
     },
     projectId: args.thread.projectId,
     providerId: args.thread.providerId,
+    submissionMode: PARENT_SYSTEM_SUBMISSION_MODE,
     syncGeneratedTitle: false,
   });
   let transitioned = false;
@@ -337,6 +342,7 @@ async function queueReadyParentSystemMessage(
         senderThreadId: null,
         requestMethod: "turn/start",
         source: PARENT_SYSTEM_MESSAGE_SOURCE,
+        submissionMode: PARENT_SYSTEM_SUBMISSION_MODE,
         target: { kind: "new-turn" },
         requestId,
       });
@@ -412,6 +418,7 @@ export async function queueParentSystemMessage(
       initiator: "system",
       input: args.input,
       senderThreadId: null,
+      submissionMode: PARENT_SYSTEM_SUBMISSION_MODE,
       thread: parentThread,
     })
   ) {

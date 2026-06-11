@@ -41,6 +41,11 @@ import { resolveThreadRuntimeState } from "./thread-runtime-display.js";
 import { recordAcceptedPromptHistoryEntry } from "../prompt-history.js";
 import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
 import {
+  ensureProviderSupportsSubmissionMode,
+  isDefaultSubmissionMode,
+  resolveSubmissionMode,
+} from "./thread-submission-mode.js";
+import {
   LIVE_DAEMON_COMMAND_TIMEOUT_MS,
   startLiveHostCommand,
 } from "../hosts/live-command.js";
@@ -112,6 +117,7 @@ interface AppendAndQueueSendThreadMessageArgs {
   queueInTransaction: SendThreadMessageQueueRequest;
   requestId: ClientTurnRequestId;
   senderThreadId: string | null;
+  submissionMode: NonNullable<SendMessageRequest["submissionMode"]>;
   target: TurnRequestTarget;
   thread: Thread;
 }
@@ -282,6 +288,7 @@ function appendAndQueueSendThreadMessageInTransaction({
   queueInTransaction,
   requestId,
   senderThreadId,
+  submissionMode,
   target,
   thread,
 }: AppendAndQueueSendThreadMessageArgs): AppendAndQueueSendThreadMessageResult {
@@ -302,6 +309,7 @@ function appendAndQueueSendThreadMessageInTransaction({
             senderThreadId,
             requestMethod: "turn/start",
             source: "tell",
+            submissionMode,
             target,
             requestId,
           },
@@ -345,6 +353,21 @@ export async function sendThreadMessage(
   if (mode === "start") {
     ensureThreadCanStartRequest(thread);
   }
+  const submissionMode = resolveSubmissionMode({
+    submissionMode: payload.submissionMode,
+  });
+  if (mode !== "start" && !isDefaultSubmissionMode(submissionMode)) {
+    throw new ApiError(
+      400,
+      "unsupported_submission_mode",
+      "Plan and Goal modes are only supported when starting a new turn.",
+    );
+  }
+  ensureProviderSupportsSubmissionMode({
+    entrypoint: "turnStart",
+    providerId: thread.providerId,
+    submissionMode,
+  });
   const senderThreadId = resolveMessageSenderThreadId(deps, {
     senderThreadId: payload.senderThreadId,
     targetThread: thread,
@@ -387,6 +410,7 @@ export async function sendThreadMessage(
       execution,
       initiator,
       input,
+      submissionMode,
       senderThreadId,
       thread,
     })
@@ -423,6 +447,7 @@ export async function sendThreadMessage(
       },
       projectId: thread.projectId,
       providerId: thread.providerId,
+      submissionMode,
       syncGeneratedTitle: false,
     });
     const queuedRequest = appendAndQueueSendThreadMessageInTransaction({
@@ -454,6 +479,7 @@ export async function sendThreadMessage(
       },
       requestId,
       senderThreadId,
+      submissionMode,
       target,
       thread,
     });
@@ -489,6 +515,7 @@ export async function sendThreadMessage(
     input,
     execution,
     permissionEscalation,
+    submissionMode,
     target: {
       mode,
       expectedTurnId: expectedSteerTurnId,
@@ -517,6 +544,7 @@ export async function sendThreadMessage(
     },
     requestId,
     senderThreadId,
+    submissionMode,
     target,
     thread,
   });

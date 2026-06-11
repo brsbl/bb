@@ -236,6 +236,8 @@ export interface PromptBoxHandle {
   focusEnd: () => void;
   /** Insert text at the editor's current cursor position, with smart spacing. */
   insertTextAtCursor: (text: string) => void;
+  /** Focus the editor and open the provider command/skill trigger if available. */
+  openCommandTrigger: () => void;
   /** Return the trimmed text before the cursor, used as voice transcript context. */
   getTextBeforeCursor: () => string | undefined;
 }
@@ -254,6 +256,7 @@ export interface PromptBoxInternalProps {
    * for prominent context that should be impossible to miss — e.g. a
    * "Reusing existing worktree" banner when env mode is set to reuse. */
   header?: ReactNode;
+  actionsMenu?: ReactNode;
   footerStart?: ReactNode;
   submission?: PromptBoxSubmissionConfig;
   /**
@@ -553,6 +556,7 @@ export function PromptBoxInternal({
   placeholder = "Ask anything. @ to mention files or folders",
   className,
   header,
+  actionsMenu,
   footerStart,
   submission = {},
   minHeight = PROMPTBOX_MIN_HEIGHT,
@@ -1296,6 +1300,41 @@ export function PromptBoxInternal({
     [scheduleRevealEditorSelection],
   );
 
+  const openCommandTrigger = useCallback(() => {
+    if (commandTriggerChar === null) {
+      return;
+    }
+
+    const currentEditor = editorRef.current;
+    if (!currentEditor || currentEditor.isDestroyed) {
+      const currentValue = valueRef.current;
+      const nextValue =
+        currentValue.length === 0 || /\s$/u.test(currentValue)
+          ? `${currentValue}${commandTriggerChar}`
+          : `${currentValue} ${commandTriggerChar}`;
+      onChangeRef.current(nextValue, [...mentionRangesRef.current]);
+      return;
+    }
+
+    currentEditor.commands.focus("end");
+    const before = currentEditor.state.doc.textBetween(
+      0,
+      currentEditor.state.selection.from,
+      "\n",
+      "\n",
+    );
+    const leadingText =
+      before.length > 0 && !/\s$/u.test(before) ? " " : "";
+
+    currentEditor
+      .chain()
+      .focus("end")
+      .insertContent(`${leadingText}${commandTriggerChar}`)
+      .run();
+    syncTriggerState(currentEditor);
+    scheduleRevealEditorSelection();
+  }, [commandTriggerChar, scheduleRevealEditorSelection, syncTriggerState]);
+
   const getTextBeforeCursor = useCallback((): string | undefined => {
     const currentValue = valueRef.current;
     const currentEditor = editorRef.current;
@@ -1314,9 +1353,10 @@ export function PromptBoxInternal({
     () => ({
       focusEnd,
       insertTextAtCursor,
+      openCommandTrigger,
       getTextBeforeCursor,
     }),
-    [focusEnd, insertTextAtCursor, getTextBeforeCursor],
+    [focusEnd, insertTextAtCursor, openCommandTrigger, getTextBeforeCursor],
   );
 
   const isVoiceRecording = voice?.state === "recording";
@@ -1762,6 +1802,7 @@ export function PromptBoxInternal({
           className="flex min-w-0 flex-1 flex-row items-center gap-1"
           aria-live="polite"
         >
+          {actionsMenu}
           {footerStart}
         </div>
         <div className="flex shrink-0 flex-row items-center gap-1">

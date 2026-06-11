@@ -182,6 +182,8 @@ describe("resolveSystemExecutionOptions", () => {
     displayName: "Claude Code",
     capabilities: {
       supportsArchive: true,
+      supportsGoalMode: { threadStart: false, turnStart: false },
+      supportsPlanMode: { threadStart: false, turnStart: false },
       supportsRename: true,
       supportsServiceTier: false,
       supportsUserQuestion: true,

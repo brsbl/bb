@@ -3,6 +3,7 @@ import type {
   PromptInput,
   ReasoningLevel,
   ServiceTier,
+  SubmissionMode,
   ThreadRuntimeDisplayStatus,
 } from "@bb/domain";
 import type {
@@ -48,6 +49,7 @@ interface BaseFollowUpRequestArgs {
 
 export interface BuildAutoFollowUpRequestArgs extends BaseFollowUpRequestArgs {
   execution: FollowUpExecutionSelection;
+  submissionMode: SubmissionMode;
 }
 
 export interface BuildCreateQueuedFollowUpRequestArgs extends BaseFollowUpRequestArgs {
@@ -170,6 +172,7 @@ export function resolveDefaultExecutionOptionsState({
 export function buildAutoFollowUpRequest({
   execution,
   input,
+  submissionMode,
   threadId,
 }: BuildAutoFollowUpRequestArgs): SendMessageMutationRequest | null {
   if (input.length === 0) {
@@ -180,6 +183,7 @@ export function buildAutoFollowUpRequest({
     id: threadId,
     input,
     mode: "queue-if-active",
+    submissionMode,
     ...buildSharedThreadExecutionRequestFields(execution),
   };
 }

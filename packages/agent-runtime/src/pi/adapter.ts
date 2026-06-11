@@ -1369,6 +1369,10 @@ export function createPiProviderAdapter(
           };
         case "thread/name/set":
           return { kind: "noop", reason: "rename unsupported" };
+        case "thread/goal/set":
+        case "thread/goal/get":
+        case "thread/goal/clear":
+          return { kind: "noop", reason: "goal unsupported" };
         case "thread/archive":
         case "thread/unarchive":
           return { kind: "noop", reason: "archive unsupported" };

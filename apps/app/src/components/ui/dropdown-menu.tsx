@@ -233,9 +233,10 @@ const DropdownMenuItem = React.forwardRef<
         <button
           ref={ref as React.RefCallback<HTMLButtonElement> | null}
           type="button"
-          role="menuitem"
+          role={domProps.role ?? "menuitem"}
+          aria-checked={domProps["aria-checked"]}
           disabled={disabled}
-          aria-disabled={disabled || undefined}
+          aria-disabled={disabled || domProps["aria-disabled"] || undefined}
           className={cn(
             "relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-left text-xs outline-none transition-colors focus:bg-state-hover focus:text-foreground active:bg-state-active active:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
             inset && "pl-8",

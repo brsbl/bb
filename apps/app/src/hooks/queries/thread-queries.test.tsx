@@ -412,6 +412,8 @@ describe("thread query bootstraps", () => {
             available: true,
             capabilities: {
               supportsArchive: true,
+              supportsGoalMode: { threadStart: false, turnStart: false },
+              supportsPlanMode: { threadStart: false, turnStart: false },
               supportsRename: true,
               supportsServiceTier: true,
               supportsUserQuestion: true,
@@ -520,8 +522,11 @@ describe("thread query bootstraps", () => {
           available: true,
           capabilities: {
             supportsArchive: true,
+            supportsGoalMode: { threadStart: false, turnStart: false },
+            supportsPlanMode: { threadStart: false, turnStart: false },
             supportsRename: true,
             supportsServiceTier: true,
+            supportsUserQuestion: true,
             supportedPermissionModes: ["full", "workspace-write", "readonly"],
           },
         },
@@ -531,8 +536,11 @@ describe("thread query bootstraps", () => {
           available: true,
           capabilities: {
             supportsArchive: true,
+            supportsGoalMode: { threadStart: false, turnStart: false },
+            supportsPlanMode: { threadStart: false, turnStart: false },
             supportsRename: true,
             supportsServiceTier: true,
+            supportsUserQuestion: true,
             supportedPermissionModes: ["full", "workspace-write", "readonly"],
           },
         },
@@ -825,6 +833,8 @@ describe("thread query bootstraps", () => {
             available: true,
             capabilities: {
               supportsArchive: true,
+              supportsGoalMode: { threadStart: false, turnStart: false },
+              supportsPlanMode: { threadStart: false, turnStart: false },
               supportsRename: true,
               supportsServiceTier: true,
               supportsUserQuestion: true,
@@ -837,6 +847,8 @@ describe("thread query bootstraps", () => {
             available: true,
             capabilities: {
               supportsArchive: true,
+              supportsGoalMode: { threadStart: false, turnStart: false },
+              supportsPlanMode: { threadStart: false, turnStart: false },
               supportsRename: true,
               supportsServiceTier: true,
               supportsUserQuestion: true,

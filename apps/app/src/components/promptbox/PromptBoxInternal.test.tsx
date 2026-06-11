@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { useState } from "react";
+import { createRef, useState, type Ref } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { PromptDraftState } from "@/lib/prompt-draft";
 import type {
@@ -19,6 +19,7 @@ import { POINTER_COARSE_QUERY } from "@/components/ui/hooks/use-pointer-coarse";
 import { restoreMatchMedia, setupMatchMedia } from "@/test/helpers/match-media";
 import {
   PromptBoxInternal,
+  type PromptBoxHandle,
   type PromptBoxZenModeConfig,
   type TypeaheadCommandConfig,
 } from "./PromptBoxInternal";
@@ -39,6 +40,7 @@ interface PromptBoxHarnessProps {
   onSubmitSpy?: PromptBoxSubmitSpy;
   onAttachFiles?: (files: File[]) => void | Promise<void>;
   placeholder?: string;
+  promptBoxRef?: Ref<PromptBoxHandle>;
   resolveMentionLink?: PromptMentionLinkResolver;
   resetKey?: string | number;
   zenModeLayout?: PromptBoxZenModeConfig["layout"];
@@ -138,6 +140,7 @@ function PromptBoxHarness(args: PromptBoxHarnessProps) {
           onSelectEntry: setDraft,
           resetKey: args.resetKey ?? "scope-1",
         }}
+        promptBoxRef={args.promptBoxRef}
       />
       <output data-testid="draft-text">{draft.text}</output>
       <output data-testid="draft-mentions">{draft.mentions.length}</output>
@@ -1393,6 +1396,35 @@ function makeCommandSuggestion(
 }
 
 describe("PromptBoxInternal command typeahead", () => {
+  it("opens the provider command trigger from the imperative prompt handle", async () => {
+    const promptBoxRef = createRef<PromptBoxHandle>();
+    render(
+      <PromptBoxHarness
+        initialDraft={{ text: "Ship it", attachments: [] }}
+        historyEntries={[]}
+        command={makeCommandConfig({
+          trigger: "$",
+          suggestions: [makeCommandSuggestion({ name: "create-app" })],
+        })}
+        promptBoxRef={promptBoxRef}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(promptBoxRef.current).not.toBeNull();
+    });
+
+    promptBoxRef.current?.openCommandTrigger();
+
+    await waitFor(() => {
+      expect(getDraftText()).toBe("Ship it $");
+    });
+    expect(await screen.findByText("Skills")).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: /create-app/u }),
+    ).toBeTruthy();
+  });
+
   it("shows the command menu and inserts a slash token as plain text on Enter", async () => {
     render(
       <PromptBoxHarness

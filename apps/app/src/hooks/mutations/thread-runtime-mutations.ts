@@ -86,6 +86,7 @@ export function useSendThreadMessage() {
       serviceTier,
       reasoningLevel,
       permissionMode,
+      submissionMode,
       mode,
     }: SendThreadMessageMutationRequest) =>
       api.sendThreadMessage(id, {
@@ -94,6 +95,7 @@ export function useSendThreadMessage() {
         serviceTier,
         reasoningLevel,
         permissionMode,
+        submissionMode,
         mode,
       }),
     onMutate: async (variables): Promise<SendThreadMessageTransaction> =>

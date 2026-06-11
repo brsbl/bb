@@ -109,6 +109,8 @@ describe("provider registry", () => {
         displayName: "Codex",
         capabilities: {
           supportsArchive: true,
+          supportsGoalMode: { threadStart: false, turnStart: true },
+          supportsPlanMode: { threadStart: false, turnStart: true },
           supportsRename: true,
           supportsServiceTier: true,
           supportsUserQuestion: false,
@@ -121,6 +123,8 @@ describe("provider registry", () => {
         displayName: "Claude Code",
         capabilities: {
           supportsArchive: false,
+          supportsGoalMode: { threadStart: false, turnStart: false },
+          supportsPlanMode: { threadStart: false, turnStart: false },
           supportsRename: false,
           supportsServiceTier: false,
           supportsUserQuestion: true,
@@ -133,6 +137,8 @@ describe("provider registry", () => {
         displayName: "Pi",
         capabilities: {
           supportsArchive: false,
+          supportsGoalMode: { threadStart: false, turnStart: false },
+          supportsPlanMode: { threadStart: false, turnStart: false },
           supportsRename: false,
           supportsServiceTier: false,
           supportsUserQuestion: false,

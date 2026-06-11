@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { environments, getEnvironment, getThread, listEvents } from "@bb/db";
 import {
+  DEFAULT_SUBMISSION_MODE,
   encodeClientTurnRequestIdNumber,
   threadScope,
   type ResolvedThreadExecutionOptions,
@@ -119,6 +120,7 @@ describe("thread provisioning recovery", () => {
         },
         execution: THREAD_START_EXECUTION,
         input: textInput("start after workspace ready"),
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         titleProvided: true,
       });
       const attachedContext = createEnvironmentAttachedContext(
@@ -240,6 +242,7 @@ describe("thread provisioning recovery", () => {
         },
         execution: THREAD_START_EXECUTION,
         input: textInput("start before first turn event"),
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         titleProvided: true,
       });
       const attachedContext = createEnvironmentAttachedContext(

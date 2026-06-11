@@ -10,6 +10,8 @@ export interface TestSystemProviderOverrides
 
 const DEFAULT_CAPABILITIES: TestSystemProviderCapabilities = {
   supportsArchive: true,
+  supportsGoalMode: { threadStart: false, turnStart: false },
+  supportsPlanMode: { threadStart: false, turnStart: false },
   supportsRename: true,
   supportsServiceTier: false,
   supportsUserQuestion: false,

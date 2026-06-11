@@ -1,5 +1,6 @@
 import { getEnvironment, getThread, listEvents } from "@bb/db";
 import {
+  DEFAULT_SUBMISSION_MODE,
   type ResolvedThreadExecutionOptions,
   systemThreadProvisioningEventDataSchema,
   threadSchema,
@@ -278,6 +279,7 @@ describe("generated managed branch names", () => {
         },
         execution: THREAD_START_EXECUTION,
         input,
+        submissionMode: DEFAULT_SUBMISSION_MODE,
         thread,
         titleProvided: false,
       });

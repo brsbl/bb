@@ -8,6 +8,8 @@ import type {
   PendingInteractionResolution,
   PromptInput,
   RuntimeThreadExecutionOptions,
+  ThreadGoal,
+  ThreadGoalStatus,
   ThreadEvent,
   ToolCallRequest,
   ToolCallResponse,
@@ -210,6 +212,21 @@ export interface RenameThreadArgs {
   title: string;
 }
 
+export interface SetThreadGoalArgs {
+  threadId: string;
+  objective: string;
+  status: ThreadGoalStatus;
+  tokenBudget: number | null;
+}
+
+export interface GetThreadGoalArgs {
+  threadId: string;
+}
+
+export interface ClearThreadGoalArgs {
+  threadId: string;
+}
+
 export interface ArchiveThreadArgs {
   providerId: string;
   providerThreadId: string;
@@ -240,6 +257,12 @@ export interface AgentRuntime {
   stopThread(args: StopThreadArgs): Promise<void>;
 
   renameThread(args: RenameThreadArgs): Promise<void>;
+
+  setThreadGoal(args: SetThreadGoalArgs): Promise<void>;
+
+  getThreadGoal(args: GetThreadGoalArgs): Promise<ThreadGoal | null>;
+
+  clearThreadGoal(args: ClearThreadGoalArgs): Promise<void>;
 
   archiveThread(args: ArchiveThreadArgs): Promise<void>;
 

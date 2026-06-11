@@ -27,6 +27,7 @@ import type {
   ClientTurnLifecycleEventData,
   PromptInput,
   ProvisioningTranscriptEntry,
+  SubmissionMode,
   SystemThreadProvisioningStatus,
   TurnRequestEventData,
   TurnRequestTarget,
@@ -61,6 +62,7 @@ export interface ClientTurnRequestedEventArgs {
   requestMethod: "thread/start" | "turn/start";
   senderThreadId: string | null;
   source: "spawn" | "tell";
+  submissionMode: SubmissionMode;
   target: TurnRequestTarget;
   threadId: string;
   type: "client/turn/requested";
@@ -236,6 +238,7 @@ function buildClientTurnRequestedEventData(
     input: args.input,
     target: args.target,
     execution: args.execution,
+    submissionMode: args.submissionMode,
   };
 }
 
@@ -649,6 +652,7 @@ export function parseStoredTurnRequestEvent(
       target: event.target,
       request: event.request,
       execution: event.execution,
+      submissionMode: event.submissionMode,
     };
   }
 

@@ -46,6 +46,7 @@ import { ensureThreadCanStartRequest } from "./thread-lifecycle.js";
 import { requireReadyThreadEnvironment } from "./thread-turn-dispatch.js";
 import { resolvePermissionEscalation } from "./thread-runtime-config.js";
 import { formatAgentThreadInput, sendThreadMessage } from "./thread-send.js";
+import { resolveSubmissionMode } from "./thread-submission-mode.js";
 import { recordAcceptedPromptHistoryEntry } from "../prompt-history.js";
 import { requireThreadCommandEnvironment } from "./thread-command-environment.js";
 import { tryTransitionInTransaction } from "./thread-transitions.js";
@@ -217,6 +218,9 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
     args.mode,
     senderThreadId,
   );
+  const submissionMode = resolveSubmissionMode({
+    submissionMode: payload.submissionMode,
+  });
   const input = formatQueuedMessageInputForSender({
     input: payload.input,
     senderThreadId,
@@ -242,6 +246,7 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
     input,
     permissionEscalation,
     providerThreadId,
+    submissionMode,
     target: { mode: "start" },
     thread,
   });
@@ -263,6 +268,7 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
         requestMethod: "turn/start",
         senderThreadId,
         source: "tell",
+        submissionMode,
         target: { kind: "new-turn" },
         threadId: thread.id,
         type: "client/turn/requested",

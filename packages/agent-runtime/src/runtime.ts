@@ -1,9 +1,17 @@
 import path from "node:path";
+import { z } from "zod";
 import {
   normalizeProviderThreadNameEvent,
+  threadGoalSchema,
   toProviderExternalThreadName,
 } from "@bb/domain";
-import type { DynamicTool, InstructionMode, ThreadEvent } from "@bb/domain";
+import type {
+  DynamicTool,
+  InstructionMode,
+  PromptInput,
+  ThreadEvent,
+  ThreadGoal,
+} from "@bb/domain";
 import type { AgentRuntimeCaptureEntry } from "./capture-types.js";
 import type {
   AdapterCommand,
@@ -92,6 +100,26 @@ interface ResolveThreadStoragePathArgs {
 
 type ProviderProcess = RuntimeProviderProcess;
 
+const providerThreadGoalResultSchema = threadGoalSchema
+  .extend({
+    threadId: z.string(),
+  })
+  .transform(
+    (value): ThreadGoal => ({
+      objective: value.objective,
+      status: value.status,
+      tokenBudget: value.tokenBudget,
+      tokensUsed: value.tokensUsed,
+      timeUsedSeconds: value.timeUsedSeconds,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    }),
+  );
+
+const threadGoalCommandResultSchema = z
+  .union([providerThreadGoalResultSchema, threadGoalSchema])
+  .nullable();
+
 interface ThreadRuntimeConfig {
   dynamicTools?: DynamicTool[];
   disallowedTools?: readonly string[];
@@ -150,6 +178,37 @@ interface RequireProviderRequestPlanArgs {
   commandType: AdapterCommand["type"];
   plan: ProviderCommandPlan;
   providerId: string;
+}
+
+function promptInputChunkToGoalObjective(input: PromptInput): string | null {
+  if (input.visibility === "agent-only") {
+    return null;
+  }
+  switch (input.type) {
+    case "text": {
+      const text = input.text.trim();
+      return text.length > 0 ? text : null;
+    }
+    case "image":
+      return `[Image: ${input.url}]`;
+    case "localImage":
+      return `[Image: ${input.path}]`;
+    case "localFile":
+      return `[File: ${input.name ?? input.path}]`;
+  }
+}
+
+function isGoalObjectivePart(value: string | null): value is string {
+  return value !== null;
+}
+
+function promptInputToGoalObjective(input: readonly PromptInput[]): string {
+  const objective = input
+    .map((chunk) => promptInputChunkToGoalObjective(chunk))
+    .filter(isGoalObjectivePart)
+    .join("\n\n")
+    .trim();
+  return objective.length > 0 ? objective : "Complete the requested task.";
 }
 
 function resolveThreadStoragePath(
@@ -245,6 +304,13 @@ function createAgentRuntimeInternal(
   });
   function requireProviderProcess(providerId: string): ProviderProcess {
     return providerProcesses.requireProviderProcess(providerId);
+  }
+
+  function adapterSupportsThreadGoals(proc: ProviderProcess): boolean {
+    return (
+      proc.adapter.capabilities.supportsGoalMode.threadStart ||
+      proc.adapter.capabilities.supportsGoalMode.turnStart
+    );
   }
 
   function sendCommand<TResult>(args: {
@@ -754,8 +820,11 @@ function createAgentRuntimeInternal(
 
       const proc = requireProviderProcess(providerId);
       const providerSkillRoots = skillRootsForProvider(providerId);
+      const submissionModeConsumption =
+        input && input.length > 0 ? "turnStart" : "threadStart";
       assertProviderSupportsExecutionOptions({
         adapter: proc.adapter,
+        consumption: submissionModeConsumption,
         options: execOpts,
         providerId,
       });
@@ -891,6 +960,7 @@ function createAgentRuntimeInternal(
       const providerSkillRoots = skillRootsForProvider(providerId);
       assertProviderSupportsExecutionOptions({
         adapter: proc.adapter,
+        consumption: "deferred",
         options: execOpts,
         providerId,
       });
@@ -998,6 +1068,7 @@ function createAgentRuntimeInternal(
       const proc = requireProviderProcess(pid);
       assertProviderSupportsExecutionOptions({
         adapter: proc.adapter,
+        consumption: "turnStart",
         options: execOpts,
         providerId: pid,
       });
@@ -1006,6 +1077,17 @@ function createAgentRuntimeInternal(
         options: execOpts,
         instructions,
       });
+
+      if (execOpts.submissionMode.goalMode === "goal") {
+        await runtime.setThreadGoal({
+          threadId,
+          objective: promptInputToGoalObjective(input),
+          status: "active",
+          tokenBudget: null,
+        });
+      } else if (adapterSupportsThreadGoals(proc)) {
+        await runtime.clearThreadGoal({ threadId });
+      }
 
       const adapterCommand: AdapterCommand = {
         type: "turn/start",
@@ -1057,6 +1139,7 @@ function createAgentRuntimeInternal(
       const proc = requireProviderProcess(pid);
       assertProviderSupportsExecutionOptions({
         adapter: proc.adapter,
+        consumption: "none",
         options: execOpts,
         providerId: pid,
       });
@@ -1162,6 +1245,112 @@ function createAgentRuntimeInternal(
         threadId,
         providerThreadId: requireProviderThreadId(threadId),
         title: toProviderExternalThreadName(title),
+      };
+      const cmd = requireProviderRequestPlan({
+        commandType: adapterCommand.type,
+        plan: proc.adapter.buildCommandPlan(adapterCommand),
+        providerId: pid,
+      });
+      await sendCommand({
+        proc,
+        message: cmd,
+        resultSchema: ignoredJsonRpcResultSchema,
+      });
+      emitAcceptedCommandEvents({
+        command: adapterCommand,
+        proc,
+        providerId: pid,
+        rawMethod: cmd.method,
+        sourceThreadId: threadId,
+      });
+    },
+
+    async setThreadGoal({ threadId, objective, status, tokenBudget }) {
+      const pid = resolveProviderForThread(threadId);
+      const proc = requireProviderProcess(pid);
+      if (
+        !proc.adapter.capabilities.supportsGoalMode.threadStart &&
+        !proc.adapter.capabilities.supportsGoalMode.turnStart
+      ) {
+        throw new Error(`Provider "${pid}" does not support thread goals.`);
+      }
+
+      const adapterCommand: AdapterCommand = {
+        type: "thread/goal/set",
+        threadId,
+        providerThreadId: requireProviderThreadId(threadId),
+        objective,
+        status,
+        tokenBudget,
+      };
+      const cmd = requireProviderRequestPlan({
+        commandType: adapterCommand.type,
+        plan: proc.adapter.buildCommandPlan(adapterCommand),
+        providerId: pid,
+      });
+      await sendCommand({
+        proc,
+        message: cmd,
+        resultSchema: ignoredJsonRpcResultSchema,
+      });
+      emitAcceptedCommandEvents({
+        command: adapterCommand,
+        proc,
+        providerId: pid,
+        rawMethod: cmd.method,
+        sourceThreadId: threadId,
+      });
+    },
+
+    async getThreadGoal({ threadId }) {
+      const pid = resolveProviderForThread(threadId);
+      const proc = requireProviderProcess(pid);
+      if (
+        !proc.adapter.capabilities.supportsGoalMode.threadStart &&
+        !proc.adapter.capabilities.supportsGoalMode.turnStart
+      ) {
+        throw new Error(`Provider "${pid}" does not support thread goals.`);
+      }
+
+      const adapterCommand: AdapterCommand = {
+        type: "thread/goal/get",
+        threadId,
+        providerThreadId: requireProviderThreadId(threadId),
+      };
+      const cmd = requireProviderRequestPlan({
+        commandType: adapterCommand.type,
+        plan: proc.adapter.buildCommandPlan(adapterCommand),
+        providerId: pid,
+      });
+      const result = await sendCommand({
+        proc,
+        message: cmd,
+        resultSchema: threadGoalCommandResultSchema,
+      });
+      emitAcceptedCommandEvents({
+        command: adapterCommand,
+        proc,
+        providerId: pid,
+        rawMethod: cmd.method,
+        sourceThreadId: threadId,
+      });
+      return result;
+    },
+
+    async clearThreadGoal({ threadId }) {
+      const pid = resolveProviderForThread(threadId);
+      const proc = requireProviderProcess(pid);
+      if (
+        !proc.adapter.capabilities.supportsGoalMode.threadStart &&
+        !proc.adapter.capabilities.supportsGoalMode.turnStart
+      ) {
+        throw new Error(`Provider "${pid}" does not support thread goals.`);
+      }
+
+      const adapterCommand: AdapterCommand = {
+        type: "thread/goal/clear",
+        threadId,
+        providerThreadId: requireProviderThreadId(threadId),
       };
       const cmd = requireProviderRequestPlan({
         commandType: adapterCommand.type,

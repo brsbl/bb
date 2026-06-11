@@ -13,6 +13,7 @@ import type {
   ProviderInfo,
   ReasoningLevel,
   ServiceTier,
+  SubmissionModeSupport,
 } from "@bb/domain";
 import type {
   CreateExecutionInputSources,
@@ -68,6 +69,10 @@ const PERMISSION_MODE_OPTIONS: PickerOption<PermissionMode>[] = [
 ];
 
 const DEFAULT_SUPPORTED_PERMISSION_MODES: readonly PermissionMode[] = ["full"];
+const UNSUPPORTED_SUBMISSION_MODE_SUPPORT = {
+  threadStart: false,
+  turnStart: false,
+} satisfies SubmissionModeSupport;
 
 interface PickerOption<T extends string> {
   value: T;
@@ -136,7 +141,9 @@ interface UseThreadCreationOptionsResult<TExecutionInputSources> {
   modelLoadError: SystemExecutionOptionsModelLoadError | null;
   reasoningOptions: PickerOption<ReasoningLevel>[];
   permissionModeOptions: PickerOption<PermissionMode>[];
+  supportsGoalMode: SubmissionModeSupport;
   supportsPermissionModeSelection: boolean;
+  supportsPlanMode: SubmissionModeSupport;
   supportsServiceTier: boolean;
   serviceTierSupportByProvider: Record<string, boolean>;
   executionInputSources: TExecutionInputSources;
@@ -680,6 +687,12 @@ export function useThreadCreationOptions(
 
   const supportsServiceTier =
     activeProviderCapabilities?.supportsServiceTier ?? false;
+  const supportsGoalMode =
+    activeProviderCapabilities?.supportsGoalMode ??
+    UNSUPPORTED_SUBMISSION_MODE_SUPPORT;
+  const supportsPlanMode =
+    activeProviderCapabilities?.supportsPlanMode ??
+    UNSUPPORTED_SUBMISSION_MODE_SUPPORT;
   const supportedPermissionModes: readonly PermissionMode[] =
     activeProviderCapabilities?.supportedPermissionModes ??
     DEFAULT_SUPPORTED_PERMISSION_MODES;
@@ -994,7 +1007,9 @@ export function useThreadCreationOptions(
     modelLoadError,
     reasoningOptions,
     permissionModeOptions,
+    supportsGoalMode,
     supportsPermissionModeSelection,
+    supportsPlanMode,
     supportsServiceTier,
     serviceTierSupportByProvider,
     executionInputSources,

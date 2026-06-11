@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CLAUDE_CODE_MOCK_CLI_TRAFFIC_CONFIG,
+  DEFAULT_SUBMISSION_MODE,
   threadScope,
   turnScope,
 } from "@bb/domain";
@@ -27,6 +28,7 @@ const fullProviderExecutionContext = {
   permissionMode: "full",
   permissionEscalation: null,
   workflowsEnabled: false,
+  submissionMode: DEFAULT_SUBMISSION_MODE,
 } satisfies ProviderExecutionContext;
 
 type PiProviderAdapter = ReturnType<typeof createPiProviderAdapter>;
@@ -171,6 +173,8 @@ describe("pi provider adapter", () => {
     const adapter = createPiProviderAdapter();
     expect(adapter.capabilities).toEqual({
       supportsArchive: false,
+      supportsGoalMode: { threadStart: false, turnStart: false },
+      supportsPlanMode: { threadStart: false, turnStart: false },
       supportsRename: false,
       supportsServiceTier: false,
       supportsUserQuestion: false,

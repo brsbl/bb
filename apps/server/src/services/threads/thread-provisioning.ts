@@ -4,6 +4,7 @@ import {
   type PromptInput,
   type ProvisioningTranscriptEntry,
   type ResolvedThreadExecutionOptions,
+  type SubmissionMode,
   type Thread,
   type ThreadTurnInitiator,
   type TurnRequestTarget,
@@ -42,6 +43,7 @@ interface RequestThreadProvisionArgs {
   environmentIntent: ThreadProvisionEnvironmentIntent;
   execution: ResolvedThreadExecutionOptions;
   input: PromptInput[];
+  submissionMode: SubmissionMode;
   thread: Thread;
   titleProvided: boolean;
 }
@@ -54,6 +56,7 @@ interface RequestThreadReprovisionArgs {
   initiator: ThreadTurnInitiator;
   provisioningId: string;
   senderThreadId: string | null;
+  submissionMode: SubmissionMode;
   thread: Thread;
 }
 
@@ -179,6 +182,7 @@ async function startThreadIfEnvironmentReady(
     }),
     projectId: args.thread.projectId,
     providerId: args.thread.providerId,
+    submissionMode: args.context.request.submissionMode,
     syncGeneratedTitle: !args.context.request.titleProvided,
   });
 }
@@ -199,6 +203,7 @@ export function requestThreadProvision(
     senderThreadId: null,
     requestMethod: "thread/start",
     source: "spawn",
+    submissionMode: args.submissionMode,
     target,
   });
   recordAcceptedPromptHistoryEntry(deps, {
@@ -242,6 +247,7 @@ export function requestThreadReprovision(
     senderThreadId: args.senderThreadId,
     requestMethod: "turn/start",
     source: "tell",
+    submissionMode: args.submissionMode,
     target: { kind: "new-turn" },
   });
   recordAcceptedPromptHistoryEntry(deps, {
@@ -259,6 +265,7 @@ export function requestThreadReprovision(
     environmentId: args.environment.id,
     input: args.input,
     provisioningId: args.provisioningId,
+    submissionMode: args.submissionMode,
   });
   saveThreadProvisionContext({
     threadId: args.thread.id,

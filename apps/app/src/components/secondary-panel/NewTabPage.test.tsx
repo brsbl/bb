@@ -13,7 +13,7 @@ import * as api from "@/lib/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
 import { NewTabPage } from "./NewTabPage";
-import { CREATE_APP_PROMPT_TEMPLATE } from "./NewTabFileSearch";
+import { CREATE_APP_PROMPT_TEMPLATE } from "@/lib/create-app-prompt";
 import {
   getThreadRecentItemsStorageKey,
   type ThreadRecentItem,
