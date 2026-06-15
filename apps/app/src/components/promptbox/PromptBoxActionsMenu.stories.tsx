@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import type { AppSummary } from "@bb/server-contract";
 import {
   PromptBoxActionsMenu,
   type PromptBoxActionsMenuToggleConfig,
@@ -11,51 +10,6 @@ export default {
 };
 
 const noop = () => {};
-
-const BASE_APPS: readonly AppSummary[] = [
-  {
-    applicationId: "review-board",
-    name: "Review Board",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["data", "message"],
-    icon: { kind: "builtin", name: "ListTodo" },
-    source: null,
-  },
-  {
-    applicationId: "release-notes",
-    name: "Release Notes",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["data"],
-    icon: { kind: "builtin", name: "File" },
-    source: { name: "team-apps", commitSha: "abc123" },
-  },
-  {
-    applicationId: "daily-status",
-    name: "Daily Status",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["message"],
-    icon: { kind: "builtin", name: "GridView" },
-    source: null,
-  },
-];
-
-const MANY_APPS: readonly AppSummary[] = Array.from(
-  { length: 18 },
-  (_value, index) => {
-    const appNumber = index + 1;
-    return {
-      applicationId: `app-${appNumber}`,
-      name: `Team App ${appNumber}`,
-      entry: { path: "index.html", kind: "html" },
-      capabilities: ["data"],
-      icon: {
-        kind: "builtin",
-        name: appNumber % 2 === 0 ? "GridView" : "ListTodo",
-      },
-      source: null,
-    } satisfies AppSummary;
-  },
-);
 
 interface MenuFrameProps {
   children: ReactNode;
@@ -79,11 +33,9 @@ function CodexMenuRow() {
   return (
     <MenuFrame>
       <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
         skills={{ shortcut: "$", onSelect: noop }}
         planMode={planMode}
         goalMode={goalMode}
-        apps={{ apps: BASE_APPS, onSelect: noop }}
       />
     </MenuFrame>
   );
@@ -92,11 +44,7 @@ function CodexMenuRow() {
 function ClaudeMenuRow() {
   return (
     <MenuFrame>
-      <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
-        skills={{ shortcut: "/", onSelect: noop }}
-        apps={{ apps: BASE_APPS, onSelect: noop }}
-      />
+      <PromptBoxActionsMenu skills={{ shortcut: "/", onSelect: noop }} />
     </MenuFrame>
   );
 }
@@ -104,10 +52,7 @@ function ClaudeMenuRow() {
 function UnsupportedProviderRow() {
   return (
     <MenuFrame>
-      <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
-        apps={{ apps: [], onSelect: noop }}
-      />
+      <PromptBoxActionsMenu />
     </MenuFrame>
   );
 }
@@ -117,7 +62,6 @@ function ActivePlanRow() {
   return (
     <MenuFrame>
       <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
         skills={{ shortcut: "$", onSelect: noop }}
         planMode={planMode}
       />
@@ -130,7 +74,6 @@ function ActiveGoalRow() {
   return (
     <MenuFrame>
       <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
         skills={{ shortcut: "$", onSelect: noop }}
         goalMode={goalMode}
       />
@@ -144,35 +87,9 @@ function BothModesRow() {
   return (
     <MenuFrame>
       <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
         skills={{ shortcut: "$", onSelect: noop }}
         planMode={planMode}
         goalMode={goalMode}
-        apps={{ apps: BASE_APPS, onSelect: noop }}
-      />
-    </MenuFrame>
-  );
-}
-
-function ManyAppsRow() {
-  return (
-    <MenuFrame>
-      <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
-        skills={{ shortcut: "$", onSelect: noop }}
-        apps={{ apps: MANY_APPS, onSelect: noop }}
-      />
-    </MenuFrame>
-  );
-}
-
-function CachedAppsFailureRow() {
-  return (
-    <MenuFrame>
-      <PromptBoxActionsMenu
-        createApp={{ onSelect: noop }}
-        skills={{ shortcut: "$", onSelect: noop }}
-        apps={{ apps: BASE_APPS, onSelect: noop }}
       />
     </MenuFrame>
   );
@@ -189,7 +106,7 @@ export function Overview() {
       </StoryRow>
       <StoryRow
         label="unsupported provider"
-        hint="Skills and Apps hidden when unavailable"
+        hint="Skills hidden when unavailable"
       >
         <UnsupportedProviderRow />
       </StoryRow>
@@ -201,18 +118,6 @@ export function Overview() {
       </StoryRow>
       <StoryRow label="both active" hint="independent sticky modes">
         <BothModesRow />
-      </StoryRow>
-      <StoryRow
-        label="many apps"
-        hint="Apps submenu scrolls when the installed app list is long"
-      >
-        <ManyAppsRow />
-      </StoryRow>
-      <StoryRow
-        label="cached apps after load failure"
-        hint="cached app data still renders when callers keep data"
-      >
-        <CachedAppsFailureRow />
       </StoryRow>
     </StoryCard>
   );

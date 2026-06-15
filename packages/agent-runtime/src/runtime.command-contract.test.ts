@@ -307,7 +307,6 @@ rl.on("line", (line) => {
 
     try {
       await runtime.startThread({
-        sessionKind: "thread",
         environmentId: "env-1",
         threadId: "t1",
         projectId: "p1",
@@ -414,7 +413,6 @@ rl.on("line", (line) => {
 
     try {
       const { providerThreadId } = await runtime.startThread({
-        sessionKind: "thread",
         environmentId: "env-1",
         options: workspaceWriteOptions,
         projectId: "p1",
@@ -464,7 +462,6 @@ rl.on("line", (line) => {
     });
 
     await runtime.startThread({
-      sessionKind: "thread",
       environmentId: "env-1",
       threadId: "t1",
       projectId: "p1",
@@ -504,7 +501,6 @@ rl.on("line", (line) => {
     });
 
     await runtime.startThread({
-      sessionKind: "thread",
       environmentId: "env-1",
       threadId: "t1",
       projectId: "p1",
@@ -555,7 +551,6 @@ rl.on("line", (line) => {
     });
 
     await runtime.startThread({
-      sessionKind: "thread",
       environmentId: "env-1",
       threadId: "t1",
       projectId: "p1",
@@ -758,7 +753,6 @@ process.on("SIGTERM", () => {
 
     await expect(
       runtime.startThread({
-        sessionKind: "thread",
         environmentId: "env-1",
         threadId: "t1",
         projectId: "p1",
@@ -793,8 +787,7 @@ process.on("SIGTERM", () => {
       }),
     });
 
-    await runtime.startThread({
-      sessionKind: "thread",
+    const startResult = await runtime.startThread({
       environmentId: "env-1",
       threadId: "t1",
       projectId: "p1",
@@ -803,6 +796,17 @@ process.on("SIGTERM", () => {
     });
     await runtime.stopThread({ threadId: "t1" });
 
+    // Even a no-op stop removes the thread from the runtime, so the follow-up
+    // turn resumes the provider session first.
+    expect(runtime.hasThread("t1")).toBe(false);
+    await runtime.resumeThread({
+      environmentId: "env-1",
+      threadId: "t1",
+      projectId: "p1",
+      providerThreadId: startResult.providerThreadId,
+      providerId: "fake",
+      options: fullRuntimeOptions,
+    });
     await runtime.runTurn({
       clientRequestId: "creq_222222224v",
       threadId: "t1",

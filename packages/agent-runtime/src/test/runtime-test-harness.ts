@@ -13,8 +13,8 @@ import type { AgentRuntimeExecutionOptions } from "../types.js";
 import {
   buildNodeScriptArgs,
   createFakeAdapter as createSharedFakeAdapter,
-} from "./index.js";
-import type { CreateFakeProviderExecutionContext } from "./index.js";
+} from "./fake-adapter.js";
+import type { CreateFakeProviderExecutionContext } from "./fake-adapter.js";
 export {
   waitForRuntimeState,
   waitForRuntimeThreadEvent,

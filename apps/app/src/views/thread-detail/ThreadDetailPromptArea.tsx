@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IconName } from "@/components/ui/icon.js";
-import type { AppSummary, ThreadTimelineResponse } from "@bb/server-contract";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import { getFollowUpPromptPlaceholder } from "@/components/promptbox/follow-up-placeholder";
 import type {
@@ -9,6 +8,7 @@ import type {
   ThreadTimelinePendingTodos,
   ThreadWithRuntime,
 } from "@bb/domain";
+import type { ThreadTimelineFeedResponse } from "@bb/server-contract";
 import { PromptBoxActionsMenu } from "@/components/promptbox/PromptBoxActionsMenu";
 import { type PromptBoxHandle } from "@/components/promptbox/PromptBoxInternal";
 import { commandTriggerForProvider } from "@/components/promptbox/mentions/command-trigger";
@@ -23,7 +23,6 @@ import {
   type ThreadPromptContextBannerExpandedSection,
   type ThreadPromptParentThreadSection,
   type ThreadPromptChildThreadsSection,
-  type ThreadPromptWorkflowsSection,
 } from "@/components/promptbox/banner/ThreadPromptContextBanner";
 import type {
   WorkspaceChangedFileSelection,
@@ -35,7 +34,9 @@ import {
 } from "@/components/promptbox/banner/QueuedMessagesList";
 import type { QueuedMessageReorderRequest } from "@/lib/queued-message-reorder";
 import { ThreadEnvironmentSummary } from "@/components/promptbox/ThreadEnvironmentSummary";
+import type { WorkspaceCheckoutDisplay } from "@/lib/workspace-checkout-display";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
+import { useEscapeToHide } from "@/hooks/useEscapeToHide";
 import { usePromptMentions } from "@/hooks/usePromptMentions";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
 import { useThreadCreationOptions } from "@/hooks/useThreadCreationOptions";
@@ -49,17 +50,13 @@ import {
 } from "@/hooks/mutations/thread-runtime-mutations";
 import {
   getLatestPendingInteraction,
-  useThreadDefaultExecutionOptions,
   useThreadQueuedMessages,
   useThreadPromptHistory,
 } from "@/hooks/queries/thread-queries";
+import { useThreadDefaultExecutionOptions } from "@/hooks/queries/thread-default-execution-options-query";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
-import { isPromptDraftEmpty, promptDraftToInput } from "@/lib/prompt-draft";
-import {
-  CREATE_APP_PROMPT_REPLACE_CONFIRMATION,
-  createCreateAppPromptDraft,
-} from "@/lib/create-app-prompt";
+import { promptDraftToInput } from "@/lib/prompt-draft";
 import { appToast } from "@/components/ui/app-toast";
 import {
   FollowUpPromptBox,
@@ -88,14 +85,13 @@ interface ThreadDetailPromptAreaProps {
   canUseGitUi: boolean;
   composerQueriesEnabled: boolean;
   composerQueriesStaleTime?: number;
-  apps: readonly AppSummary[];
-  contextWindowUsage?: ThreadTimelineResponse["contextWindowUsage"];
-  environmentBranchName?: string;
+  contextWindowUsage?: ThreadTimelineFeedResponse["contextWindowUsage"];
+  environmentCheckout?: WorkspaceCheckoutDisplay;
   environmentCompactLabel?: string;
   environmentIcon?: IconName;
   environmentLabel?: string;
   onCreateNewThreadInWorktree?: () => void;
-  onOpenApp: (applicationId: string) => void;
+  onEscapeEmptyPrompt?: () => void;
   isEnvironmentActionPending: boolean;
   pendingInteractions: readonly PendingInteraction[];
   onChangedFileClick: (selection: WorkspaceChangedFileSelection) => void;
@@ -127,8 +123,6 @@ interface ThreadDetailPromptAreaProps {
   parentThreadSection: ThreadPromptParentThreadSection | null;
   /** Active child threads for parent threads. Null otherwise. */
   childThreadsSection: ThreadPromptChildThreadsSection | null;
-  /** Actively running workflow runs anchored to this thread. Null when none. */
-  workflowsSection: ThreadPromptWorkflowsSection | null;
   sendMessage: SendMessageMutationLike;
   thread: ThreadWithRuntime;
 }
@@ -144,14 +138,13 @@ export function ThreadDetailPromptArea({
   canUseGitUi,
   composerQueriesEnabled,
   composerQueriesStaleTime,
-  apps,
   contextWindowUsage,
-  environmentBranchName,
+  environmentCheckout,
   environmentCompactLabel,
   environmentIcon,
   environmentLabel,
   onCreateNewThreadInWorktree,
-  onOpenApp,
+  onEscapeEmptyPrompt,
   isEnvironmentActionPending,
   pendingInteractions,
   onChangedFileClick,
@@ -164,7 +157,6 @@ export function ThreadDetailPromptArea({
   pendingTodos,
   parentThreadSection,
   childThreadsSection,
-  workflowsSection,
   sendMessage,
   thread,
 }: ThreadDetailPromptAreaProps) {
@@ -290,6 +282,7 @@ export function ThreadDetailPromptArea({
     setPermissionMode,
     activeModel,
     modelOptions,
+    isLoadingModels,
     modelLoadError,
     reasoningOptions,
     permissionModeOptions,
@@ -383,6 +376,18 @@ export function ThreadDetailPromptArea({
     [currentPromptDraft],
   );
   const hasPromptDraftInput = currentPromptDraftInput.length > 0;
+  const isPromptEmpty = useCallback(
+    () => !hasPromptDraftInput,
+    [hasPromptDraftInput],
+  );
+  const hideEmptyPrompt = useCallback(() => {
+    onEscapeEmptyPrompt?.();
+  }, [onEscapeEmptyPrompt]);
+  useEscapeToHide({
+    enabled: onEscapeEmptyPrompt !== undefined,
+    isEmpty: isPromptEmpty,
+    onHide: hideEmptyPrompt,
+  });
   const canSubmitModifierShortcut = canSubmitFollowUpShortcut({
     hasPromptDraftInput,
     isFollowUpSubmitting,
@@ -439,21 +444,6 @@ export function ThreadDetailPromptArea({
     },
     [projectId, promptDraft, uploadPromptAttachment],
   );
-
-  const handleCreateAppPromptPrefill = useCallback(() => {
-    const currentDraft = promptDraft.getCurrent();
-    if (
-      !isPromptDraftEmpty(currentDraft) &&
-      !window.confirm(CREATE_APP_PROMPT_REPLACE_CONFIRMATION)
-    ) {
-      return;
-    }
-
-    promptDraft.setDraft(createCreateAppPromptDraft());
-    window.requestAnimationFrame(() => {
-      promptBoxRef.current?.focusEnd();
-    });
-  }, [promptDraft]);
 
   const handleOpenSkills = useCallback(() => {
     promptBoxRef.current?.openCommandTrigger();
@@ -805,6 +795,7 @@ export function ThreadDetailPromptArea({
         active: activeModel,
         selected: selectedModel,
         options: modelOptions,
+        isLoading: isLoadingModels,
         loadError: modelLoadError,
         onChange: setSelectedModel,
       },
@@ -823,6 +814,7 @@ export function ThreadDetailPromptArea({
     [
       activeModel,
       hasMultipleProviders,
+      isLoadingModels,
       modelLoadError,
       modelOptions,
       providerOptions,
@@ -891,7 +883,6 @@ export function ThreadDetailPromptArea({
   const promptActionsMenu = useMemo(
     () => (
       <PromptBoxActionsMenu
-        createApp={{ onSelect: handleCreateAppPromptPrefill }}
         skills={
           commandTrigger
             ? { shortcut: commandTrigger, onSelect: handleOpenSkills }
@@ -913,18 +904,14 @@ export function ThreadDetailPromptArea({
               }
             : undefined
         }
-        apps={apps.length > 0 ? { apps, onSelect: onOpenApp } : undefined}
       />
     ),
     [
-      apps,
       canUseGoalMode,
       canUsePlanMode,
       commandTrigger,
       goalModeChecked,
-      handleCreateAppPromptPrefill,
       handleOpenSkills,
-      onOpenApp,
       planModeChecked,
     ],
   );
@@ -936,12 +923,12 @@ export function ThreadDetailPromptArea({
           environmentLabel={environmentLabel}
           environmentCompactLabel={environmentCompactLabel}
           environmentIcon={environmentIcon}
-          environmentBranchName={environmentBranchName}
+          environmentCheckout={environmentCheckout}
           onCreateNewThreadInWorktree={onCreateNewThreadInWorktree}
         />
       ) : null,
     [
-      environmentBranchName,
+      environmentCheckout,
       environmentCompactLabel,
       environmentIcon,
       environmentLabel,
@@ -960,7 +947,6 @@ export function ThreadDetailPromptArea({
           }
           parentThreadSection={parentThreadSection}
           childThreadsSection={childThreadsSection}
-          workflowsSection={workflowsSection}
           gitSection={
             workspaceChangedFilesSection
               ? {
@@ -1007,7 +993,6 @@ export function ThreadDetailPromptArea({
       isQueueMutationPending,
       parentThreadSection,
       childThreadsSection,
-      workflowsSection,
       pendingTodos,
       displayedProcessingQueuedMessage,
       queuedMessages,

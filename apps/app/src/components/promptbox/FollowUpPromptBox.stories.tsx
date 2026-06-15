@@ -10,7 +10,7 @@ import {
   formatEnvironmentDisplay,
   type EnvironmentDisplayHostContext,
 } from "@bb/core-ui";
-import type { AppSummary, ThreadContextWindowUsage } from "@bb/server-contract";
+import type { ThreadContextWindowUsage } from "@bb/server-contract";
 import {
   FollowUpPromptBox,
   type FollowUpSubmitMode,
@@ -27,6 +27,10 @@ import {
 import { ThreadPromptContextBanner } from "@/components/promptbox/banner/ThreadPromptContextBanner";
 import { QueuedMessagesList } from "@/components/promptbox/banner/QueuedMessagesList";
 import { ThreadEnvironmentSummary } from "@/components/promptbox/ThreadEnvironmentSummary";
+import {
+  formatWorkspaceCheckoutDisplay,
+  type WorkspaceCheckoutDisplay,
+} from "@/lib/workspace-checkout-display";
 import type { PickerOption } from "@/components/pickers/OptionPicker";
 import { selectWorkspaceChangedFilesSection } from "@/components/workspace/workspace-change-summary";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
@@ -41,25 +45,6 @@ export default {
 };
 
 const noop = () => {};
-
-const storyApps: readonly AppSummary[] = [
-  {
-    applicationId: "review-board",
-    name: "Review Board",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["data", "message"],
-    icon: { kind: "builtin", name: "ListTodo" },
-    source: null,
-  },
-  {
-    applicationId: "daily-status",
-    name: "Daily Status",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["message"],
-    icon: { kind: "builtin", name: "GridView" },
-    source: null,
-  },
-];
 
 // FollowUp commits the provider — omit `onChange` so the picker renders the
 // provider segment as locked, and pass `displayName` so the static label
@@ -102,6 +87,7 @@ interface EnvironmentSummaryArgs {
   environment: Environment;
   host: EnvironmentDisplayHostContext;
   branchName?: string;
+  environmentCheckout?: WorkspaceCheckoutDisplay;
   onCreateNewThreadInWorktree?: () => void;
 }
 
@@ -109,12 +95,24 @@ function makeEnvironmentSummary({
   environment,
   host,
   branchName,
+  environmentCheckout,
   onCreateNewThreadInWorktree,
 }: EnvironmentSummaryArgs): ReactNode {
   const display = formatEnvironmentDisplay({
     environment,
     host,
   });
+  const checkoutDisplay =
+    environmentCheckout ??
+    (branchName
+      ? formatWorkspaceCheckoutDisplay({
+          checkout: {
+            kind: "branch",
+            branchName,
+            headSha: null,
+          },
+        })
+      : undefined);
   return (
     <ThreadEnvironmentSummary
       environmentLabel={display.modeLabel}
@@ -122,7 +120,7 @@ function makeEnvironmentSummary({
       environmentIcon={getEnvironmentWorkspaceLabelIconName(
         display.workspaceDisplayKind,
       )}
-      environmentBranchName={branchName}
+      environmentCheckout={checkoutDisplay}
       onCreateNewThreadInWorktree={onCreateNewThreadInWorktree}
     />
   );
@@ -169,6 +167,22 @@ const worktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   // Worktree threads expose a "new thread in this worktree" affordance —
   // production wires it to the new-thread route. The story just needs a
   // non-null handler so the MessageSquarePlus icon renders.
+  onCreateNewThreadInWorktree: noop,
+});
+
+const detachedWorktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
+  environment: makeEnvironment({
+    isWorktree: true,
+    workspaceProvisionType: "managed-worktree",
+    status: "ready",
+  }),
+  host: localEnvironmentDisplayHost,
+  environmentCheckout: formatWorkspaceCheckoutDisplay({
+    checkout: {
+      kind: "detached",
+      headSha: "abcdef1234567890",
+    },
+  }),
   onCreateNewThreadInWorktree: noop,
 });
 
@@ -257,6 +271,11 @@ const dirtyWorkspaceStatus: WorkspaceStatus = {
     currentBranch: "bb/promptbox-stories",
     defaultBranch: "main",
   },
+  checkout: {
+    kind: "branch",
+    branchName: "bb/promptbox-stories",
+    headSha: null,
+  },
   mergeBase: null,
 };
 
@@ -279,7 +298,6 @@ const contextBannerElement: ReactNode = dirtyContextBannerSection ? (
     gitSectionPending={false}
     parentThreadSection={null}
     childThreadsSection={null}
-    workflowsSection={null}
     expandedSection={null}
     onToggleSection={noop}
   />
@@ -379,7 +397,6 @@ function useMenuToggle({ initial }: UseMenuToggleArgs) {
 }
 
 interface StoryActionsMenuProps {
-  apps?: readonly AppSummary[];
   goalActive?: boolean;
   planActive?: boolean;
   shortcut?: ProviderCommandTrigger;
@@ -388,7 +405,6 @@ interface StoryActionsMenuProps {
 }
 
 function StoryActionsMenu({
-  apps,
   goalActive = false,
   planActive = false,
   shortcut,
@@ -399,11 +415,9 @@ function StoryActionsMenu({
   const goalMode = useMenuToggle({ initial: goalActive });
   return (
     <PromptBoxActionsMenu
-      createApp={{ onSelect: noop }}
       skills={shortcut ? { shortcut, onSelect: noop } : undefined}
       planMode={showPlan ? planMode : undefined}
       goalMode={showGoal ? goalMode : undefined}
-      apps={apps && apps.length > 0 ? { apps, onSelect: noop } : undefined}
     />
   );
 }
@@ -562,6 +576,12 @@ export function Overview() {
           environmentSummary={worktreeEnvironmentSummary}
         />
       </StoryRow>
+      <StoryRow label="env: detached" hint="detached checkout label">
+        <Row
+          submitMode={{ kind: "ready" }}
+          environmentSummary={detachedWorktreeEnvironmentSummary}
+        />
+      </StoryRow>
       <StoryRow label="env: remote direct" hint="remote label + icon">
         <Row
           submitMode={{ kind: "ready" }}
@@ -575,7 +595,7 @@ export function Overview() {
         <Row
           submitMode={{ kind: "ready" }}
           actionsMenu={
-            <StoryActionsMenu shortcut="$" showPlan showGoal apps={storyApps} />
+            <StoryActionsMenu shortcut="$" showPlan showGoal />
           }
         />
       </StoryRow>
@@ -593,7 +613,6 @@ export function Overview() {
               showGoal
               planActive
               goalActive
-              apps={storyApps}
             />
           }
         />
@@ -604,12 +623,12 @@ export function Overview() {
       >
         <Row
           submitMode={{ kind: "ready" }}
-          actionsMenu={<StoryActionsMenu shortcut="/" apps={storyApps} />}
+          actionsMenu={<StoryActionsMenu shortcut="/" />}
         />
       </StoryRow>
       <StoryRow
         label="plus menu: unsupported"
-        hint="provider without command/mode/app affordances keeps only Create App"
+        hint="provider without command or mode affordances renders an empty menu"
       >
         <Row
           submitMode={{ kind: "ready" }}

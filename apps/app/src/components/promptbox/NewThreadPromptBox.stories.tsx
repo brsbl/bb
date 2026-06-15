@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react";
 import type { PermissionMode, PromptTextMention } from "@bb/domain";
-import type { AppSummary } from "@bb/server-contract";
 import {
   NewThreadPromptBoxUI,
   type NewThreadBranchConfig,
@@ -34,25 +33,6 @@ export default {
 const noop = () => {};
 
 const baseExecution = makeExecutionControlsProps();
-
-const storyApps: readonly AppSummary[] = [
-  {
-    applicationId: "review-board",
-    name: "Review Board",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["data", "message"],
-    icon: { kind: "builtin", name: "ListTodo" },
-    source: null,
-  },
-  {
-    applicationId: "release-notes",
-    name: "Release Notes",
-    entry: { path: "index.html", kind: "html" },
-    capabilities: ["data"],
-    icon: { kind: "builtin", name: "File" },
-    source: null,
-  },
-];
 
 const baseEnvironment: NewThreadEnvironmentConfig = {
   value: `host:${HOST_IDS.local}:local`,
@@ -152,7 +132,6 @@ function useMenuToggle({ initial }: UseMenuToggleArgs) {
 }
 
 interface StoryActionsMenuProps {
-  apps?: readonly AppSummary[];
   goalActive?: boolean;
   planActive?: boolean;
   shortcut?: ProviderCommandTrigger;
@@ -161,7 +140,6 @@ interface StoryActionsMenuProps {
 }
 
 function StoryActionsMenu({
-  apps,
   goalActive = false,
   planActive = false,
   shortcut,
@@ -172,11 +150,9 @@ function StoryActionsMenu({
   const goalMode = useMenuToggle({ initial: goalActive });
   return (
     <PromptBoxActionsMenu
-      createApp={{ onSelect: noop }}
       skills={shortcut ? { shortcut, onSelect: noop } : undefined}
       planMode={showPlan ? planMode : undefined}
       goalMode={showGoal ? goalMode : undefined}
-      apps={apps && apps.length > 0 ? { apps, onSelect: noop } : undefined}
     />
   );
 }
@@ -270,6 +246,41 @@ function SubmittingRow() {
   );
 }
 
+function LoadingModelsRow() {
+  const { value, mentionRanges, onChange } = useControlledValue(
+    "Investigate the timeline pagination flicker.",
+  );
+  return (
+    <PromptStage>
+      <NewThreadPromptBoxUI
+        id="story-new-thread-loading-models"
+        value={value}
+        mentionRanges={mentionRanges}
+        onChange={onChange}
+        onSubmit={noop}
+        isSubmitting={false}
+        disabled
+        zenModeStorageKey="bb.story.new-thread.loading-models"
+        history={baseHistory}
+        typeahead={makeTypeahead()}
+        attachments={makeAttachments()}
+        modeConfig={baseModeConfig}
+        project={baseProject}
+        execution={{
+          ...baseExecution,
+          model: {
+            ...baseExecution.model,
+            active: null,
+            selected: "",
+            options: [],
+            isLoading: true,
+          },
+        }}
+      />
+    </PromptStage>
+  );
+}
+
 function ClaudeProviderRow() {
   const { value, mentionRanges, onChange } = useControlledValue("");
   return (
@@ -299,6 +310,7 @@ function ClaudeProviderRow() {
               { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
               { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
             ],
+            isLoading: false,
             onChange: noop,
           },
           serviceTier: { ...baseExecution.serviceTier!, supported: false },
@@ -368,7 +380,7 @@ function CodexPlusMenuRow() {
     <NewThreadStoryRow
       id="story-new-thread-plus-codex"
       actionsMenu={
-        <StoryActionsMenu shortcut="$" showPlan showGoal apps={storyApps} />
+        <StoryActionsMenu shortcut="$" showPlan showGoal />
       }
     />
   );
@@ -378,7 +390,7 @@ function ClaudePlusMenuRow() {
   return (
     <NewThreadStoryRow
       id="story-new-thread-plus-claude"
-      actionsMenu={<StoryActionsMenu shortcut="/" apps={storyApps} />}
+      actionsMenu={<StoryActionsMenu shortcut="/" />}
       execution={{
         ...baseExecution,
         provider: { ...baseExecution.provider, selectedId: "claude-code" },
@@ -400,7 +412,6 @@ function ActiveModesPlusMenuRow() {
           showGoal
           planActive
           goalActive
-          apps={storyApps}
         />
       }
       modeConfig={{
@@ -437,6 +448,12 @@ export function Overview() {
       <StoryRow label="submitting" hint="create-thread mutation in flight">
         <SubmittingRow />
       </StoryRow>
+      <StoryRow
+        label="loading models"
+        hint="model options are loading; submit is disabled"
+      >
+        <LoadingModelsRow />
+      </StoryRow>
       <StoryRow label="claude-code provider" hint="no fast mode toggle">
         <ClaudeProviderRow />
       </StoryRow>
@@ -469,7 +486,7 @@ export function Overview() {
       </StoryRow>
       <StoryRow
         label="plus menu: unsupported"
-        hint="provider without command/mode/app affordances keeps only Create App"
+        hint="provider without command or mode affordances renders an empty menu"
       >
         <UnsupportedProviderPlusMenuRow />
       </StoryRow>

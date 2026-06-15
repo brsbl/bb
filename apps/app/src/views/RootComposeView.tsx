@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@bb/domain";
+import type { SidebarBootstrapResponse } from "@bb/server-contract";
 import {
   NewThreadPromptBox,
   type NewThreadProjectConfig,
@@ -26,13 +27,15 @@ import { useCreateThread } from "@/hooks/mutations/thread-runtime-mutations";
 import {
   useProjectPromptHistory,
   useProjectSourceBranches,
-  useSidebarNavigation,
   stripProjectThreads,
 } from "@/hooks/queries/project-queries";
-import { useApps, useThreads } from "@/hooks/queries/thread-queries";
+import { useProjectDefaultExecutionOptions } from "@/hooks/queries/project-default-execution-options-query";
+import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
+import { useThreads } from "@/hooks/queries/thread-queries";
 import { useCommandSuggestions } from "@/hooks/useCommandSuggestions";
 import { usePrimaryHost } from "@/hooks/queries/host-queries";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
+import { useEscapeToHide } from "@/hooks/useEscapeToHide";
 import { usePromptMentions } from "@/hooks/usePromptMentions";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import { useQuickCreateProjectController } from "@/hooks/useQuickCreateProject";
@@ -40,19 +43,16 @@ import { useThreadCreationOptions } from "@/hooks/useThreadCreationOptions";
 import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
 import { getProjectScopedStorageKey } from "@/lib/project-scoped-storage";
-import { isPromptDraftEmpty, promptDraftToInput } from "@/lib/prompt-draft";
-import {
-  CREATE_APP_PROMPT_REPLACE_CONFIRMATION,
-  createCreateAppPromptDraft,
-} from "@/lib/create-app-prompt";
+import { promptDraftToInput } from "@/lib/prompt-draft";
 import { useNavigateToThreadAfterCreatePreference } from "@/lib/root-compose-create-preference";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import {
   getRootComposeRoutePath,
-  getStandaloneAppRoutePath,
   getThreadRoutePath,
+  getSurfaceAwareThreadRoutePath,
   isProjectlessProjectId,
-} from "@/lib/app-route-paths";
+  type ThreadRoutePathArgs,
+} from "@/lib/route-paths";
 import {
   useRootComposeProjectId,
   useSetRootComposeProjectId,
@@ -72,6 +72,20 @@ type ProjectSelectionChangeHandler = NewThreadProjectConfig["onChange"];
 
 interface LegacyProjectComposeRedirectProps {
   projectId: string;
+}
+
+type RootComposeViewProps =
+  | {
+      surface: "page";
+    }
+  | {
+      onThreadCreated(args: ThreadRoutePathArgs): void;
+      onEscapeEmptyPrompt(): void;
+      surface: "popout";
+    };
+
+interface BuildMobileRecentThreadsArgs {
+  sidebarNavigation: SidebarBootstrapResponse | undefined;
 }
 
 // react-router's location.state is freeform unknown — narrow it here at the
@@ -146,6 +160,20 @@ function buildReuseThreadOptions(
   return options;
 }
 
+export function buildMobileRecentThreads({
+  sidebarNavigation,
+}: BuildMobileRecentThreadsArgs): ThreadListEntry[] {
+  if (!sidebarNavigation) return [];
+
+  const threads: ThreadListEntry[] = [
+    ...sidebarNavigation.personalProject.threads,
+  ];
+  for (const project of sidebarNavigation.projects) {
+    threads.push(...project.threads);
+  }
+  return threads;
+}
+
 function LegacyProjectComposeRedirect({
   projectId,
 }: LegacyProjectComposeRedirectProps) {
@@ -177,10 +205,10 @@ export function RootComposeRoute() {
     return <LegacyProjectComposeRedirect projectId={projectId} />;
   }
 
-  return <RootComposeView />;
+  return <RootComposeView surface="page" />;
 }
 
-export function RootComposeView() {
+export function RootComposeView(props: RootComposeViewProps) {
   const [rootComposeProjectId, setRootComposeProjectId] =
     useRootComposeProjectId();
   const location = useLocation();
@@ -228,7 +256,6 @@ export function RootComposeView() {
       environmentId: null,
     },
   );
-  const appsQuery = useApps();
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [planModeChecked, setPlanModeChecked] = useState(false);
   const [goalModeChecked, setGoalModeChecked] = useState(false);
@@ -262,17 +289,23 @@ export function RootComposeView() {
     () => currentProject?.sources ?? [],
     [currentProject?.sources],
   );
-  // Seed the picker with the project's stored execution defaults so the
-  // visible default matches what the server will use when the user submits
-  // without touching anything. Without this, the picker would show the
-  // system-wide first-provider/default-model (e.g. Codex / GPT-5.5) while
-  // the server falls back to the project's stored provider (e.g. Claude
-  // Code) — see resolveRequestedCreateExecutionValue, which discards
-  // submitted values that the client hasn't claimed in `executionInputSources`.
-  // Values ride along with the sidebar bootstrap so there's no extra
-  // round-trip per visit.
+  // Seed the picker from the server-resolved project defaults so the visible
+  // default matches what create-thread will use when the user submits without
+  // touching execution controls. Values normally ride along with sidebar
+  // bootstrap; optimistic sidebar entries use a one-off fallback fetch because
+  // their null means "not loaded into this cache entry", not a client default.
+  const projectDefaultExecutionOptionsQuery = useProjectDefaultExecutionOptions(
+    { projectId },
+    {
+      enabled:
+        currentProject !== undefined &&
+        currentProject.defaultExecutionOptions === null,
+    },
+  );
   const projectDefaultExecutionOptions =
-    currentProject?.defaultExecutionOptions ?? null;
+    currentProject?.defaultExecutionOptions ??
+    projectDefaultExecutionOptionsQuery.data ??
+    null;
   const creationOptions = useThreadCreationOptions({
     scope: "new-thread",
     projectId,
@@ -300,6 +333,7 @@ export function RootComposeView() {
     clearReuseEnvironment,
     activeModel,
     modelOptions,
+    isLoadingModels,
     modelLoadError,
     reasoningOptions,
     permissionModeOptions,
@@ -340,6 +374,13 @@ export function RootComposeView() {
     () => buildReuseThreadOptions(threadsQuery.data ?? []),
     [threadsQuery.data],
   );
+  const mobileRecentThreads = useMemo(
+    () =>
+      buildMobileRecentThreads({
+        sidebarNavigation: sidebarNavigationQuery.data,
+      }),
+    [sidebarNavigationQuery.data],
+  );
 
   // Projectless threads choose a host directly, not an environment mode. Keep
   // the underlying persisted value host-shaped for the create-thread contract,
@@ -369,6 +410,14 @@ export function RootComposeView() {
     setBranchSearchQuery("");
   }, [effectiveEnvironmentValue, projectId]);
   const isHostMode = parsedEnvironment?.type === "host";
+  const isHostLocalMode = isHostMode && parsedEnvironment.mode === "local";
+  const branchEnvironmentMode: RootComposeBranchEnvironmentMode = isProjectless
+    ? "other"
+    : isHostLocalMode
+      ? "local"
+      : isHostMode && parsedEnvironment.mode === "worktree"
+        ? "worktree"
+        : "other";
   const {
     selectedBranch,
     onBranchChange: handleBranchChange,
@@ -378,6 +427,7 @@ export function RootComposeView() {
   } = useScopedBranchSelection({
     environmentValue: effectiveEnvironmentValue,
     projectId,
+    rememberSelection: branchEnvironmentMode === "worktree",
   });
   const selectedBranchName = selectedBranch?.name ?? "";
   const hostBranchesQuery = useProjectSourceBranches(
@@ -400,14 +450,6 @@ export function RootComposeView() {
     activeBranchesQuery.data?.branches,
     activeBranchesQuery.data?.selectedBranch,
   ]);
-  const isHostLocalMode = isHostMode && parsedEnvironment.mode === "local";
-  const branchEnvironmentMode: RootComposeBranchEnvironmentMode = isProjectless
-    ? "other"
-    : isHostLocalMode
-      ? "local"
-      : isHostMode && parsedEnvironment.mode === "worktree"
-        ? "worktree"
-        : "other";
   const remoteBranchOptions = useMemo(() => {
     if (
       branchEnvironmentMode !== "local" &&
@@ -426,12 +468,6 @@ export function RootComposeView() {
     activeBranchesQuery.data?.selectedBranch,
     branchEnvironmentMode,
   ]);
-  const branchOptionsTruncated = Boolean(
-    activeBranchesQuery.data?.branchesTruncated ||
-    ((branchEnvironmentMode === "local" ||
-      branchEnvironmentMode === "worktree") &&
-      activeBranchesQuery.data?.remoteBranchesTruncated),
-  );
   const branchSelectionSeed =
     branchEnvironmentMode === "local" &&
     activeBranchesQuery.data?.checkout.kind === "branch"
@@ -517,29 +553,9 @@ export function RootComposeView() {
       setGoalModeChecked(false);
     }
   }, [canUseGoalMode, canUsePlanMode]);
-  const handleCreateAppPromptPrefill = useCallback(() => {
-    const currentDraft = promptDraft.getCurrent();
-    if (
-      !isPromptDraftEmpty(currentDraft) &&
-      !window.confirm(CREATE_APP_PROMPT_REPLACE_CONFIRMATION)
-    ) {
-      return;
-    }
-
-    promptDraft.setDraft(createCreateAppPromptDraft());
-    window.requestAnimationFrame(() => {
-      promptBoxRef.current?.focusEnd();
-    });
-  }, [promptDraft]);
   const handleOpenSkills = useCallback(() => {
     promptBoxRef.current?.openCommandTrigger();
   }, []);
-  const handleOpenStandaloneApp = useCallback(
-    (applicationId: string) => {
-      navigate(getStandaloneAppRoutePath(applicationId));
-    },
-    [navigate],
-  );
   const handleProjectChange = useCallback<ProjectSelectionChangeHandler>(
     (nextProjectId) => {
       const nextRootComposeProjectId = nextProjectId ?? PERSONAL_PROJECT_ID;
@@ -631,7 +647,12 @@ export function RootComposeView() {
       setLastCreatedThreadId(thread.id);
       clearReuseEnvironment();
       promptDraft.clearIfCurrentMatches(submittedDraft);
-      if (navigateToThreadAfterCreate) {
+      if (props.surface === "popout") {
+        props.onThreadCreated({
+          projectId: thread.projectId,
+          threadId: thread.id,
+        });
+      } else if (navigateToThreadAfterCreate) {
         navigate(
           getThreadRoutePath({
             projectId: thread.projectId,
@@ -652,6 +673,7 @@ export function RootComposeView() {
     permissionMode,
     planModeChecked,
     projectId,
+    props,
     promptDraft,
     reasoningLevel,
     selectedEnvironment,
@@ -665,6 +687,7 @@ export function RootComposeView() {
 
   const isSubmitDisabled =
     !selectedProviderId ||
+    isLoadingModels ||
     !selectedThreadModel ||
     createThread.isPending ||
     promptInput.length === 0 ||
@@ -672,6 +695,21 @@ export function RootComposeView() {
     (branchEnvironmentMode === "local" &&
       selectedBranch !== null &&
       branchUiState.mutationBlocker !== null);
+
+  const isPromptEmpty = useCallback(
+    () => promptInput.length === 0,
+    [promptInput.length],
+  );
+  const onEscapeEmptyPrompt =
+    props.surface === "popout" ? props.onEscapeEmptyPrompt : undefined;
+  const hideEmptyPopoutPrompt = useCallback(() => {
+    onEscapeEmptyPrompt?.();
+  }, [onEscapeEmptyPrompt]);
+  useEscapeToHide({
+    enabled: props.surface === "popout",
+    isEmpty: isPromptEmpty,
+    onHide: hideEmptyPopoutPrompt,
+  });
 
   const currentPromptDraft = useMemo(
     () => ({
@@ -697,13 +735,14 @@ export function RootComposeView() {
       resource.kind === "thread"
         ? () =>
             navigate(
-              getThreadRoutePath({
+              getSurfaceAwareThreadRoutePath({
                 projectId: resource.projectId ?? projectId,
+                surface: props.surface,
                 threadId: resource.threadId,
               }),
             )
         : null,
-    [navigate, projectId],
+    [navigate, projectId, props.surface],
   );
   // Mirrors the @-mention plumbing: the composer feeds the text typed after the
   // command trigger into `commandQuery`, which drives the project+provider-
@@ -780,6 +819,7 @@ export function RootComposeView() {
         active: activeModel,
         selected: selectedModel,
         options: modelOptions,
+        isLoading: isLoadingModels,
         loadError: modelLoadError,
         onChange: setSelectedModel,
       },
@@ -798,6 +838,7 @@ export function RootComposeView() {
     [
       activeModel,
       hasMultipleProviders,
+      isLoadingModels,
       modelLoadError,
       modelOptions,
       providerOptions,
@@ -852,7 +893,6 @@ export function RootComposeView() {
       isNew: selectedBranch?.isNew ?? false,
       options: branchOptions,
       remoteOptions: remoteBranchOptions,
-      optionsTruncated: branchOptionsTruncated,
       loading: activeBranchesQuery.isFetching,
       placeholder: branchUiState.placeholder,
       triggerLabel: branchUiState.triggerLabel,
@@ -878,7 +918,6 @@ export function RootComposeView() {
     }),
     [
       activeBranchesQuery.isFetching,
-      branchOptionsTruncated,
       branchOptions,
       branchEnvironmentMode,
       remoteBranchOptions,
@@ -915,13 +954,8 @@ export function RootComposeView() {
 
   const commandTrigger = commandTriggerForProvider(selectedProviderId);
   const promptActionsMenu = useMemo(() => {
-    const installedApps = appsQuery.data ?? [];
     return (
       <PromptBoxActionsMenu
-        createApp={{
-          disabled: !projectId,
-          onSelect: handleCreateAppPromptPrefill,
-        }}
         skills={
           commandTrigger
             ? { shortcut: commandTrigger, onSelect: handleOpenSkills }
@@ -943,24 +977,15 @@ export function RootComposeView() {
               }
             : undefined
         }
-        apps={
-          installedApps.length > 0
-            ? { apps: installedApps, onSelect: handleOpenStandaloneApp }
-            : undefined
-        }
       />
     );
   }, [
-    appsQuery.data,
     canUseGoalMode,
     canUsePlanMode,
     commandTrigger,
     goalModeChecked,
-    handleCreateAppPromptPrefill,
     handleOpenSkills,
-    handleOpenStandaloneApp,
     planModeChecked,
-    projectId,
   ]);
 
   const reuseHeader = useMemo(() => {
@@ -1013,50 +1038,58 @@ export function RootComposeView() {
     );
   }
 
+  const promptBox = (
+    <NewThreadPromptBox
+      id="root-compose-prompt"
+      promptBoxRef={promptBoxRef}
+      value={prompt}
+      mentionRanges={promptDraft.mentions}
+      onChange={promptDraft.setTextAndMentions}
+      onSubmit={submitPrompt}
+      actionsMenu={promptActionsMenu}
+      isSubmitting={createThread.isPending}
+      disabled={isSubmitDisabled}
+      zenModeStorageKey={rootComposeZenModeStorageKey}
+      history={historyConfig}
+      typeahead={typeaheadConfig}
+      attachments={attachmentsConfig}
+      modeConfig={{
+        environment: environmentConfig,
+        branch: branchConfig,
+        worktree: worktreeConfig,
+        permission: permissionConfig,
+        header: reuseHeader,
+      }}
+      project={{
+        projects: projectOptions,
+        value: isProjectless ? null : projectId,
+        onChange: handleProjectChange,
+        allowNoProject: true,
+        createProject: {
+          onCreate: quickCreateProject.openCreateDialog,
+          disabled:
+            !quickCreateProject.isAvailable || quickCreateProject.isCreating,
+          isCreating: quickCreateProject.isCreating,
+        },
+      }}
+      execution={executionConfig}
+    />
+  );
+
+  if (props.surface === "popout") {
+    return <div className="w-full">{promptBox}</div>;
+  }
+
   return (
     <PageShell
       contentClassName={ROOT_COMPOSE_SIDEBAR_ACTION_ALIGNED_TOP_PADDING_CLASS}
     >
-      <NewThreadPromptBox
-        id="root-compose-prompt"
-        promptBoxRef={promptBoxRef}
-        value={prompt}
-        mentionRanges={promptDraft.mentions}
-        onChange={promptDraft.setTextAndMentions}
-        onSubmit={submitPrompt}
-        actionsMenu={promptActionsMenu}
-        isSubmitting={createThread.isPending}
-        disabled={isSubmitDisabled}
-        zenModeStorageKey={rootComposeZenModeStorageKey}
-        history={historyConfig}
-        typeahead={typeaheadConfig}
-        attachments={attachmentsConfig}
-        modeConfig={{
-          environment: environmentConfig,
-          branch: branchConfig,
-          worktree: worktreeConfig,
-          permission: permissionConfig,
-          header: reuseHeader,
-        }}
-        project={{
-          projects: projectOptions,
-          value: isProjectless ? null : projectId,
-          onChange: handleProjectChange,
-          allowNoProject: true,
-          createProject: {
-            onCreate: quickCreateProject.openCreateDialog,
-            disabled:
-              !quickCreateProject.isAvailable || quickCreateProject.isCreating,
-            isCreating: quickCreateProject.isCreating,
-          },
-        }}
-        execution={executionConfig}
-      />
+      {promptBox}
       <RootComposeMobileRecents
         highlightedThreadId={lastCreatedThreadId}
         projectNamesById={mobileRecentProjectNamesById}
         showCreatingRow={createThread.isPending}
-        threads={threadsQuery.data ?? []}
+        threads={mobileRecentThreads}
       />
     </PageShell>
   );

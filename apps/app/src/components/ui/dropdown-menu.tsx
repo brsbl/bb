@@ -148,6 +148,7 @@ const DropdownMenuContent = React.forwardRef<
           open={open}
           onOpenChange={onOpenChange}
           srLabel={mobileTitle ?? "Menu"}
+          repositionInputs={false}
         >
           <div
             ref={ref}
