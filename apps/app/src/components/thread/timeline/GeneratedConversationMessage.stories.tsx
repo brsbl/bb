@@ -1,0 +1,235 @@
+import type { SystemMessageKind, SystemMessageSubject } from "@bb/domain";
+import type { TimelineTitleLink } from "@bb/thread-view";
+import type { ReactNode } from "react";
+import { ConversationMessageContent } from "@/components/thread/timeline/ConversationMessageContent";
+import { StoryCard, StoryRow } from "../../../../.ladle/story-card";
+
+export default {
+  title: "thread/timeline/Generated Conversation Message",
+};
+
+// ThreadTimelinePane caps content at 760px; match it so the rows reflect
+// production width.
+function TimelineStage({ children }: { children: ReactNode }) {
+  return <div className="w-full max-w-[760px]">{children}</div>;
+}
+
+function resolveThreadLink(link: TimelineTitleLink): string | null {
+  switch (link.kind) {
+    case "thread":
+      return `/projects/proj_demo/threads/${link.threadId}`;
+    default:
+      return null;
+  }
+}
+
+const acceptedMessage = {
+  kind: "message" as const,
+  status: "accepted" as const,
+};
+
+interface SystemRowFixture {
+  label: string;
+  hint: string;
+  systemMessageKind: SystemMessageKind;
+  systemMessageSubject: SystemMessageSubject | null;
+  text: string;
+}
+
+// One representative row per Family-B systemMessageKind. The title + icon are
+// derived from the kind/subject; the body text is the stripped message body.
+const SYSTEM_ROWS: readonly SystemRowFixture[] = [
+  {
+    label: "ownership-assigned (title-only)",
+    hint: "child assigned to this manager — body collapses into the title",
+    systemMessageKind: "ownership-assigned",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child1",
+      threadName: "Migrate sessions table",
+    },
+    text: "Migrate sessions table was assigned to you.",
+  },
+  {
+    label: "ownership-removed (title-only)",
+    hint: "child unassigned — body collapses into the title",
+    systemMessageKind: "ownership-removed",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child1",
+      threadName: "Migrate sessions table",
+    },
+    text: "Migrate sessions table was unassigned from you.",
+  },
+  {
+    label: "child-needs-attention",
+    hint: "child blocked on a pending interaction",
+    systemMessageKind: "child-needs-attention",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child2",
+      threadName: "Rebuild threaded comments from main",
+    },
+    text: "It is blocked on a pending interaction. Inspect the thread and decide if you can answer or resolve the question from existing context.",
+  },
+  {
+    label: "child-completed",
+    hint: "single child outcome, turnStatus completed",
+    systemMessageKind: "child-completed",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child2",
+      threadName: "Rebuild threaded comments from main",
+    },
+    text: "All work complete and committed. Here is the final report.\n\nBranch: bb/rebuild-threaded-comments — Ladle stories built and verified; PR ready to open.",
+  },
+  {
+    label: "child-failed",
+    hint: "single child outcome, turnStatus failed",
+    systemMessageKind: "child-failed",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child3",
+      threadName: "Codex worker",
+    },
+    text: "Provider error: there's an issue with the selected model (gpt-5.5). It may not exist or you may not have access to it.",
+  },
+  {
+    label: "child-interrupted",
+    hint: "single child outcome, turnStatus interrupted",
+    systemMessageKind: "child-interrupted",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child3",
+      threadName: "Codex worker",
+    },
+    text: "Stopped manually before the review step.",
+  },
+  {
+    label: "child-outcome-batch",
+    hint: "multiple children, mixed statuses — count in the title, detail in the body",
+    systemMessageKind: "child-outcome-batch",
+    systemMessageSubject: { kind: "thread-batch", count: 3 },
+    text: "Worker 1 completed: migration landed.\nWorker 2 was interrupted: stopped before review.\nWorker 3 completed: docs updated.",
+  },
+  {
+    label: "schedule-due",
+    hint: "scheduled wakeup — no subject, no link",
+    systemMessageKind: "schedule-due",
+    systemMessageSubject: null,
+    text: "Review open PRs and summarize the merge-ready ones for the team.",
+  },
+  {
+    label: "workflow-completed",
+    hint: "workflow run settled — run name emphasized, unlinked",
+    systemMessageKind: "workflow-completed",
+    systemMessageSubject: {
+      kind: "workflow",
+      name: "Nightly audit",
+      runId: "wf_77",
+    },
+    text: "Workflow run wf_77 (Nightly audit) completed. Fetch the result with bb workflow show wf_77.",
+  },
+  {
+    label: "workflow-failed",
+    hint: "workflow run failed",
+    systemMessageKind: "workflow-failed",
+    systemMessageSubject: {
+      kind: "workflow",
+      name: "Nightly audit",
+      runId: "wf_77",
+    },
+    text: "Workflow run wf_77 (Nightly audit) failed: script_invalid.",
+  },
+  {
+    label: "workflow-paused",
+    hint: "workflow run paused, resumable",
+    systemMessageKind: "workflow-paused",
+    systemMessageSubject: {
+      kind: "workflow",
+      name: "Nightly audit",
+      runId: "wf_77",
+    },
+    text: "Workflow run wf_77 (Nightly audit) was paused: host daemon unavailable. Resume it from the run page or with bb workflow resume wf_77.",
+  },
+  {
+    label: "workflow-cancelled",
+    hint: "workflow run cancelled",
+    systemMessageKind: "workflow-cancelled",
+    systemMessageSubject: {
+      kind: "workflow",
+      name: "Nightly audit",
+      runId: "wf_77",
+    },
+    text: "Workflow run wf_77 (Nightly audit) was cancelled.",
+  },
+];
+
+export function Overview() {
+  return (
+    <StoryCard>
+      {SYSTEM_ROWS.map((row) => (
+        <StoryRow key={row.systemMessageKind} label={row.label} hint={row.hint}>
+          <TimelineStage>
+            <ConversationMessageContent
+              role="user"
+              initiator="system"
+              senderThreadId={null}
+              senderThreadTitle={null}
+              resolveSegmentLinkHref={resolveThreadLink}
+              systemMessageKind={row.systemMessageKind}
+              systemMessageSubject={row.systemMessageSubject}
+              text={row.text}
+              attachments={null}
+              mentions={[]}
+              projectId="proj_demo"
+              turnRequest={acceptedMessage}
+            />
+          </TimelineStage>
+        </StoryRow>
+      ))}
+      <StoryRow
+        label="agent (reference pattern)"
+        hint="agent-to-agent message — 'Message from [thread]', the pattern Family B extends"
+      >
+        <TimelineStage>
+          <ConversationMessageContent
+            role="user"
+            initiator="agent"
+            senderThreadId="thr_worker2"
+            senderThreadTitle="Worker 2"
+            resolveSegmentLinkHref={resolveThreadLink}
+            systemMessageKind="unlabeled"
+            systemMessageSubject={null}
+            text="Can you take the migration step from here? I've finished the schema changes and pushed to the branch."
+            attachments={null}
+            mentions={[]}
+            projectId="proj_demo"
+            turnRequest={acceptedMessage}
+          />
+        </TimelineStage>
+      </StoryRow>
+      <StoryRow
+        label="unlabeled (legacy fallback)"
+        hint="pre-taxonomy system message — renders the generic 'System Message' title"
+      >
+        <TimelineStage>
+          <ConversationMessageContent
+            role="user"
+            initiator="system"
+            senderThreadId={null}
+            senderThreadTitle={null}
+            resolveSegmentLinkHref={resolveThreadLink}
+            systemMessageKind="unlabeled"
+            systemMessageSubject={null}
+            text="A system message persisted before the taxonomy existed."
+            attachments={null}
+            mentions={[]}
+            projectId="proj_demo"
+            turnRequest={acceptedMessage}
+          />
+        </TimelineStage>
+      </StoryRow>
+    </StoryCard>
+  );
+}
