@@ -1300,6 +1300,72 @@ function mapParentChangeSystemTitle(
   });
 }
 
+/**
+ * Compose the thread-name portion of a Family-A operation title as an
+ * emphasized, linked segment (the same treatment the agent "Message from
+ * [thread]" title uses), with the surrounding action verb left muted. The row
+ * carries a flat interpolated `title` plus its `threadId`; this splits the
+ * title around the thread name using the fixed template affixes the projection
+ * builds (see `parse-operation-message.ts`). Returns `null` when the title has
+ * no extractable thread name (unnamed thread → bare verb), so the caller falls
+ * back to a single neutral segment.
+ */
+function threadNamedSystemTitleSegments(
+  row: TimelineSystemViewRow,
+  shimmer: boolean,
+): TimelineTitleSegment[] | null {
+  if (row.systemKind !== "operation") return null;
+
+  const nameSegment = (name: string): TimelineTitleSegment =>
+    segment(name, {
+      em: true,
+      truncate: true,
+      shimmer,
+      ...(row.threadId.length > 0
+        ? { link: { kind: "thread", threadId: row.threadId } }
+        : {}),
+    });
+
+  // Leading-verb form: "Provisioning {name}".
+  const provisioningPrefix = "Provisioning ";
+  if (
+    row.operationKind === "thread-provisioning" &&
+    row.title.startsWith(provisioningPrefix) &&
+    row.title !== "Provisioning thread"
+  ) {
+    const name = row.title.slice(provisioningPrefix.length);
+    return [segment("Provisioning", { shimmer }), nameSegment(name)];
+  }
+
+  // Suffix form: "{name} {verb...}". The verbs are fixed strings the projection
+  // emits; matching the longest known suffix keeps the split unambiguous even
+  // when a thread name itself contains one of these words.
+  const suffixVerbs =
+    row.operationKind === "thread-provisioning"
+      ? [
+          "provisioned",
+          "failed to provision",
+          "provisioning stopped",
+          "provisioning interrupted",
+        ]
+      : row.operationKind === "thread-interrupted"
+        ? [
+            "stopped manually",
+            "stopped — host daemon restarted",
+            "stopped — provider turn stopped responding",
+          ]
+        : [];
+  for (const verb of suffixVerbs) {
+    const suffix = ` ${verb}`;
+    if (row.title.endsWith(suffix) && row.title.length > suffix.length) {
+      const name = row.title.slice(0, row.title.length - suffix.length);
+      return [nameSegment(name), segment(verb, { shimmer })];
+    }
+  }
+
+  return null;
+}
+
 function mapSystemTitle(row: TimelineSystemViewRow): TimelineTitle {
   const hasError = row.systemKind === "error" || row.status === "error";
   if (
@@ -1325,10 +1391,15 @@ function mapSystemTitle(row: TimelineSystemViewRow): TimelineTitle {
   // operations (provisioning, compaction) ever reach this branch with a pending
   // status; error rows are terminal and reconnect rows carry no status, so this
   // uniform rule leaves both static.
+  const shimmer = row.status === "pending";
+  // Provisioning and thread-interrupted rows link the thread name they concern;
+  // every other system row renders its flat title as a single neutral segment.
+  const threadNamedSegments = threadNamedSystemTitleSegments(row, shimmer);
+  if (threadNamedSegments !== null) {
+    return makeTitle({ segments: threadNamedSegments, decorations });
+  }
   return makeTitle({
-    segments: [
-      segment(titleText, { shimmer: row.status === "pending", truncate: true }),
-    ],
+    segments: [segment(titleText, { shimmer, truncate: true })],
     decorations,
   });
 }
