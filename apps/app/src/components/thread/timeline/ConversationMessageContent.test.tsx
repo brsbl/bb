@@ -92,6 +92,8 @@ describe("ConversationMessageContent", () => {
         initiator="user"
         senderThreadId={null}
         senderThreadTitle={null}
+        systemMessageKind="unlabeled"
+        systemMessageSubject={null}
         attachments={null}
         mentions={[]}
         text="Visit https://example.com/docs"
@@ -121,6 +123,8 @@ describe("ConversationMessageContent", () => {
           initiator="user"
           senderThreadId={null}
           senderThreadTitle={null}
+          systemMessageKind="unlabeled"
+          systemMessageSubject={null}
           attachments={null}
           mentions={[
             {
@@ -161,6 +165,8 @@ describe("ConversationMessageContent", () => {
         initiator="user"
         senderThreadId={null}
         senderThreadTitle={null}
+        systemMessageKind="unlabeled"
+        systemMessageSubject={null}
         attachments={null}
         mentions={[
           {
@@ -203,6 +209,8 @@ describe("ConversationMessageContent", () => {
           initiator="user"
           senderThreadId={null}
           senderThreadTitle={null}
+          systemMessageKind="unlabeled"
+          systemMessageSubject={null}
           attachments={null}
           mentions={[
             {
@@ -247,6 +255,8 @@ describe("ConversationMessageContent", () => {
             }}
             senderThreadId="thr_sender123"
             senderThreadTitle="Frontend thread"
+            systemMessageKind="unlabeled"
+            systemMessageSubject={null}
             attachments={null}
             mentions={[]}
             text={`[bb message from thread:thr_sender123]\n\n${messageBody}`}
@@ -302,6 +312,8 @@ describe("ConversationMessageContent", () => {
             }}
             senderThreadId="thr_sender123"
             senderThreadTitle="Frontend thread"
+            systemMessageKind="unlabeled"
+            systemMessageSubject={null}
             attachments={null}
             mentions={[]}
             text={"[bb message from thread:thr_sender123]\n\nDone."}
@@ -351,6 +363,8 @@ describe("ConversationMessageContent", () => {
                 }}
                 senderThreadId="thr_sender123"
                 senderThreadTitle="Frontend thread"
+                systemMessageKind="unlabeled"
+                systemMessageSubject={null}
                 attachments={null}
                 mentions={[]}
                 text={`[bb message from thread:thr_sender123]\n\n${messageBody}`}
@@ -402,6 +416,8 @@ describe("ConversationMessageContent", () => {
           initiator="system"
           senderThreadId={null}
           senderThreadTitle={null}
+          systemMessageKind="unlabeled"
+          systemMessageSubject={null}
           attachments={null}
           mentions={[
             {
@@ -435,6 +451,8 @@ describe("ConversationMessageContent", () => {
         initiator="agent"
         senderThreadId="thr_sender123"
         senderThreadTitle="Frontend thread"
+        systemMessageKind="unlabeled"
+        systemMessageSubject={null}
         attachments={null}
         mentions={[]}
         text={
@@ -477,6 +495,8 @@ describe("ConversationMessageContent", () => {
           }}
           senderThreadId="thr_sender123"
           senderThreadTitle="Frontend thread"
+          systemMessageKind="unlabeled"
+          systemMessageSubject={null}
           attachments={null}
           mentions={[
             {

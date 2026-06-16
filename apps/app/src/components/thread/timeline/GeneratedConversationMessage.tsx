@@ -1,6 +1,10 @@
 import { memo, useCallback, useMemo, useRef } from "react";
 import type { TimelineUserConversationRow } from "@bb/server-contract";
-import type { PromptTextMention } from "@bb/domain";
+import type {
+  PromptTextMention,
+  SystemMessageKind,
+  SystemMessageSubject,
+} from "@bb/domain";
 import type { TimelineTitle, TimelineTitleSegment } from "@bb/thread-view";
 import { type IconName } from "@/components/ui/icon.js";
 import {
@@ -27,9 +31,15 @@ interface GeneratedConversationMessageProps {
   onOpenLocalFileLink?: ThreadTimelineLocalFileLinkHandler;
   projectId?: string;
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
+  // `system` rows specialize their title/icon on `systemMessageKind` +
+  // `systemMessageSubject`; `agent` rows specialize on `sourceName` +
+  // `sourceThreadId`. Both groups are always supplied — the inactive group is
+  // ignored by the source-kind switch — so the props stay non-optional.
   sourceKind: GeneratedConversationSourceKind;
   sourceName: string;
   sourceThreadId: string | null;
+  systemMessageKind: SystemMessageKind;
+  systemMessageSubject: SystemMessageSubject | null;
   text: string;
   turnRequest: TimelineUserConversationRow["turnRequest"];
 }
@@ -58,6 +68,8 @@ interface GeneratedConversationTitleArgs {
   sourceKind: GeneratedConversationSourceKind;
   sourceName: string;
   sourceThreadId: string | null;
+  systemMessageKind: SystemMessageKind;
+  systemMessageSubject: SystemMessageSubject | null;
 }
 
 export function generatedConversationBodySlice({
@@ -97,10 +109,117 @@ function timelineTitleSegment({
   return segment;
 }
 
-function generatedConversationTitle({
+// A muted verb segment ("finished", "assigned to you", …) — the non-emphasized
+// connective text that frames the linked subject.
+function verbSegment(text: string): TimelineTitleSegment {
+  return timelineTitleSegment({
+    em: false,
+    link: null,
+    shimmer: false,
+    text,
+    truncate: false,
+  });
+}
+
+// The emphasized subject segment: a thread name links to its thread; an
+// unlinkable subject (workflow run, missing id) renders emphasized but plain.
+function subjectSegment(
+  text: string,
+  threadId: string | null,
+): TimelineTitleSegment {
+  return timelineTitleSegment({
+    em: true,
+    link: threadId === null ? null : { kind: "thread", threadId },
+    shimmer: false,
+    text,
+    truncate: true,
+  });
+}
+
+const SYSTEM_MESSAGE_FALLBACK_SEGMENTS: TimelineTitleSegment[] = [
+  timelineTitleSegment({
+    em: false,
+    link: null,
+    shimmer: false,
+    text: "System Message",
+    truncate: true,
+  }),
+];
+
+// A `thread`-subject verb title: `[name]` (linked) followed by the verb phrase.
+// Falls back to the generic "System Message" title when the row's subject shape
+// does not match the kind (defensive — should not happen for stamped rows).
+function threadSubjectTitleSegments(
+  subject: SystemMessageSubject | null,
+  verb: string,
+): TimelineTitleSegment[] {
+  if (subject === null || subject.kind !== "thread") {
+    return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+  }
+  return [
+    subjectSegment(subject.threadName, subject.threadId),
+    verbSegment(verb),
+  ];
+}
+
+// A workflow title: "Workflow" `[name]` (emphasized but unlinked — a workflow
+// run has no thread to navigate to) followed by the settled-state verb.
+function workflowTitleSegments(
+  subject: SystemMessageSubject | null,
+  verb: string,
+): TimelineTitleSegment[] {
+  if (subject === null || subject.kind !== "workflow") {
+    return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+  }
+  return [
+    verbSegment("Workflow"),
+    subjectSegment(subject.name, null),
+    verbSegment(verb),
+  ];
+}
+
+function systemMessageTitleSegments(
+  systemMessageKind: SystemMessageKind,
+  subject: SystemMessageSubject | null,
+): TimelineTitleSegment[] {
+  switch (systemMessageKind) {
+    case "ownership-assigned":
+      return threadSubjectTitleSegments(subject, "assigned to you");
+    case "ownership-removed":
+      return threadSubjectTitleSegments(subject, "unassigned");
+    case "child-needs-attention":
+      return threadSubjectTitleSegments(subject, "needs attention");
+    case "child-completed":
+      return threadSubjectTitleSegments(subject, "finished");
+    case "child-failed":
+      return threadSubjectTitleSegments(subject, "failed");
+    case "child-interrupted":
+      return threadSubjectTitleSegments(subject, "was interrupted");
+    case "child-outcome-batch":
+      return subject !== null && subject.kind === "thread-batch"
+        ? [verbSegment(`${subject.count} threads updated`)]
+        : SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+    case "schedule-due":
+      return [verbSegment("Scheduled turn due")];
+    case "workflow-completed":
+      return workflowTitleSegments(subject, "completed");
+    case "workflow-failed":
+      return workflowTitleSegments(subject, "failed");
+    case "workflow-paused":
+      return workflowTitleSegments(subject, "paused");
+    case "workflow-cancelled":
+      return workflowTitleSegments(subject, "cancelled");
+    case "unlabeled":
+      return SYSTEM_MESSAGE_FALLBACK_SEGMENTS;
+  }
+}
+
+export function generatedConversationTitle({
   sourceKind,
   sourceName,
   sourceThreadId,
+  systemMessageKind,
+  systemMessageSubject,
 }: GeneratedConversationTitleArgs): TimelineTitle {
   const segments: TimelineTitleSegment[] =
     sourceKind === "agent"
@@ -112,26 +231,9 @@ function generatedConversationTitle({
             text: "Message from",
             truncate: false,
           }),
-          timelineTitleSegment({
-            em: true,
-            link:
-              sourceThreadId === null
-                ? null
-                : { kind: "thread", threadId: sourceThreadId },
-            shimmer: false,
-            text: sourceName,
-            truncate: true,
-          }),
+          subjectSegment(sourceName, sourceThreadId),
         ]
-      : [
-          timelineTitleSegment({
-            em: false,
-            link: null,
-            shimmer: false,
-            text: "System Message",
-            truncate: true,
-          }),
-        ];
+      : systemMessageTitleSegments(systemMessageKind, systemMessageSubject);
 
   return {
     action: null,
@@ -155,15 +257,60 @@ function generatedConversationEmptyText(
   }
 }
 
+function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
+  switch (systemMessageKind) {
+    case "ownership-assigned":
+      return "UserRoundPlus";
+    case "ownership-removed":
+      return "UserRound";
+    case "child-needs-attention":
+      return "MessageQuestion";
+    case "child-completed":
+      return "CircleCheck";
+    case "child-failed":
+      return "CircleX";
+    case "child-interrupted":
+      return "Square";
+    case "child-outcome-batch":
+      return "ListTodo";
+    case "schedule-due":
+      return "Clock";
+    case "workflow-completed":
+    case "workflow-failed":
+    case "workflow-paused":
+    case "workflow-cancelled":
+      return "Workflow";
+    case "unlabeled":
+      return "Info";
+  }
+}
+
 function generatedConversationIconName(
   sourceKind: GeneratedConversationSourceKind,
+  systemMessageKind: SystemMessageKind,
 ): IconName {
   switch (sourceKind) {
     case "agent":
       return "MessageSquare";
     case "system":
-      return "Info";
+      return systemMessageIconName(systemMessageKind);
   }
+}
+
+// True only for the ownership kinds, whose one-line body restates the granular
+// title verbatim. Those rows render title-only (no body, no preview,
+// non-expandable); every other kind keeps its information-bearing body.
+function systemMessageIsTitleOnly(
+  sourceKind: GeneratedConversationSourceKind,
+  systemMessageKind: SystemMessageKind,
+): boolean {
+  if (sourceKind !== "system") {
+    return false;
+  }
+  return (
+    systemMessageKind === "ownership-assigned" ||
+    systemMessageKind === "ownership-removed"
+  );
 }
 
 export const GeneratedConversationMessage = memo(
@@ -176,6 +323,8 @@ export const GeneratedConversationMessage = memo(
     sourceKind,
     sourceName,
     sourceThreadId,
+    systemMessageKind,
+    systemMessageSubject,
     text,
     turnRequest,
   }: GeneratedConversationMessageProps) {
@@ -197,10 +346,24 @@ export const GeneratedConversationMessage = memo(
           sourceKind,
           sourceName,
           sourceThreadId,
+          systemMessageKind,
+          systemMessageSubject,
         }),
-      [sourceKind, sourceName, sourceThreadId],
+      [
+        sourceKind,
+        sourceName,
+        sourceThreadId,
+        systemMessageKind,
+        systemMessageSubject,
+      ],
     );
-    const leadingIcon = generatedConversationIconName(sourceKind);
+    const leadingIcon = generatedConversationIconName(
+      sourceKind,
+      systemMessageKind,
+    );
+    // Title-only rows (ownership assigned/removed) restate their body in the
+    // title; suppress the body, the collapsed preview, and expansion entirely.
+    const titleOnly = systemMessageIsTitleOnly(sourceKind, systemMessageKind);
     const hasExpandedOnlyContent =
       attachmentItems.filePaths.length > 0 ||
       attachmentItems.imageItems.length > 0 ||
@@ -211,19 +374,20 @@ export const GeneratedConversationMessage = memo(
     const collapsedPreviewTextRef = useRef<HTMLParagraphElement>(null);
     const collapsedPreviewOverflowMeasurement = useOverflowMeasurement({
       elementRef: collapsedPreviewTextRef,
-      enabled: messageText.length > 0,
+      enabled: !titleOnly && messageText.length > 0,
       measurementKey: messageText,
     });
     const expandable =
-      hasExpandedOnlyContent ||
-      hasAdditionalBodyLines ||
-      collapsedPreviewOverflowMeasurement === "overflowing";
+      !titleOnly &&
+      (hasExpandedOnlyContent ||
+        hasAdditionalBodyLines ||
+        collapsedPreviewOverflowMeasurement === "overflowing");
     const collapsedPreviewBody = clipMentionTextToVisibleRange({
       mentions: messageMentions,
       rangeStart: 0,
       text: collapsedPreviewLine,
     });
-    const collapsedPreview = collapsedPreviewBody.text ? (
+    const collapsedPreview = !titleOnly && collapsedPreviewBody.text ? (
       <div
         className={`${NESTED_TIMELINE_GROUP_LINE_CLASS_NAME} max-w-full min-w-0`}
       >

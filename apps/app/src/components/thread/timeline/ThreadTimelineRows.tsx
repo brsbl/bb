@@ -680,6 +680,8 @@ function ConversationRow({ row }: ConversationRowProps) {
         resolveSegmentLinkHref={resolveSegmentLinkHref}
         senderThreadId={row.senderThreadId}
         senderThreadTitle={senderThreadMetadata?.title ?? null}
+        systemMessageKind={row.systemMessageKind}
+        systemMessageSubject={row.systemMessageSubject}
         text={row.text}
         turnRequest={row.turnRequest}
       />
