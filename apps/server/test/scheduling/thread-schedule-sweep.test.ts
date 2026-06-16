@@ -240,6 +240,12 @@ describe("thread schedule sweep", () => {
         }),
         target: { kind: "new-turn" },
       });
+      // The sweep stamps the Family-B taxonomy at the real emit site: a
+      // schedule wakeup is `schedule-due` with no thread/workflow subject.
+      // Deleting the stamping lines from `thread-schedule-sweep.ts` turns this
+      // assertion red.
+      expect(requestData.systemMessageKind).toBe("schedule-due");
+      expect(requestData.systemMessageSubject ?? null).toBeNull();
     });
   });
 

@@ -6,6 +6,10 @@ import type {
 import { ownershipChangeOperationMetadataSchema } from "@bb/domain";
 import { assertNever } from "./assert-never.js";
 import { getCompactionKey } from "./compaction-lifecycle.js";
+import {
+  OWNERSHIP_CHANGE_VERBS,
+  PROVISIONING_LEADING_VERB,
+} from "./family-a-verbs.js";
 import type { EventMeta } from "./event-decode.js";
 import { capitalize, messageId } from "./format-helpers.js";
 import { buildProviderUnhandledDetail } from "./provider-unhandled-detail.js";
@@ -169,19 +173,19 @@ function ownershipChangeOperationTitle(
         case "assign":
           return ownershipTitleWithParent(
             threadName,
-            "assigned to",
+            OWNERSHIP_CHANGE_VERBS.assign,
             meta.metadata?.nextParentThreadTitle ?? null,
           );
         case "release":
           return ownershipTitleWithParent(
             threadName,
-            "released from",
+            OWNERSHIP_CHANGE_VERBS.release,
             meta.metadata?.previousParentThreadTitle ?? null,
           );
         case "transfer":
           return ownershipTitleWithParent(
             threadName,
-            "transferred to",
+            OWNERSHIP_CHANGE_VERBS.transfer,
             meta.metadata?.nextParentThreadTitle ?? null,
           );
         case undefined:
@@ -502,7 +506,10 @@ export function parseOperationMessage(
     const title = (() => {
       switch (status) {
         case "active":
-          return leadingVerbWithThreadName("Provisioning", threadName);
+          return leadingVerbWithThreadName(
+            PROVISIONING_LEADING_VERB,
+            threadName,
+          );
         case "completed":
           return withThreadName(threadName, "provisioned");
         case "failed":
@@ -510,7 +517,10 @@ export function parseOperationMessage(
         case "cancelled":
           return withThreadName(threadName, "provisioning stopped");
         default:
-          return leadingVerbWithThreadName("Provisioning", threadName);
+          return leadingVerbWithThreadName(
+            PROVISIONING_LEADING_VERB,
+            threadName,
+          );
       }
     })();
     return op(decoded, meta, "thread-provisioning", {

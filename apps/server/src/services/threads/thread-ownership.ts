@@ -16,6 +16,7 @@ import { NotificationBuffer } from "../lib/notification-buffer.js";
 import {
   buildParentSystemInputFromTemplateSlot,
   buildParentSystemThreadMention,
+  parentSystemThreadLabel,
   queueParentSystemMessage,
 } from "./parent-system-messages.js";
 import { systemMessageKindForTemplate } from "./system-message-kind.js";
@@ -93,10 +94,6 @@ async function queueParentSystemMessageBestEffort(
   }
 }
 
-function threadOwnershipSubjectName(thread: ThreadLabelSource): string {
-  return thread.title?.trim() || thread.id;
-}
-
 function buildThreadOwnershipSystemInput(
   templateId: ThreadOwnershipTemplateId,
   thread: ThreadLabelSource,
@@ -143,7 +140,7 @@ export async function handleThreadOwnershipChange(
       ),
       reason: "assigned",
       templateId: "systemMessageThreadOwnershipAssigned",
-      threadName: threadOwnershipSubjectName(args.updatedThread),
+      threadName: parentSystemThreadLabel(args.updatedThread),
     });
   }
   if (args.previousThread.parentThreadId) {
@@ -156,7 +153,7 @@ export async function handleThreadOwnershipChange(
       ),
       reason: "removed",
       templateId: "systemMessageThreadOwnershipRemoved",
-      threadName: threadOwnershipSubjectName(args.updatedThread),
+      threadName: parentSystemThreadLabel(args.updatedThread),
     });
   }
 }

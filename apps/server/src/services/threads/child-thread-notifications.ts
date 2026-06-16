@@ -8,6 +8,7 @@ import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import {
   buildParentSystemInputFromTemplateSlot,
   buildParentSystemThreadMention,
+  parentSystemThreadLabel,
   queueParentSystemMessage,
   type ParentSystemInputSegment,
   type ParentSystemMessageTaxonomy,
@@ -300,17 +301,13 @@ export function renderChildThreadTurnStatusBatchMessage(
   });
 }
 
-function childThreadSubjectName(thread: ChildThreadNotificationSource): string {
-  return thread.title?.trim() || thread.id;
-}
-
 function childThreadSubject(
   thread: ChildThreadNotificationSource,
 ): SystemMessageSubject {
   return {
     kind: "thread",
     threadId: thread.id,
-    threadName: childThreadSubjectName(thread),
+    threadName: parentSystemThreadLabel(thread),
   };
 }
 

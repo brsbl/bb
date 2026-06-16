@@ -17,8 +17,6 @@ import {
 } from "../../src/services/threads/child-thread-notifications.js";
 import { handleThreadOwnershipChange } from "../../src/services/threads/thread-ownership.js";
 import { runWorkflowRunPendingNotificationSweep } from "../../src/services/workflows/workflow-run-pending-notifications.js";
-import { appendClientTurnEvent } from "../../src/services/threads/thread-events.js";
-import { textInput } from "../helpers/prompt-input.js";
 import {
   seedEnvironment,
   seedHostSession,
@@ -40,7 +38,6 @@ import {
 type TestHarness = Awaited<ReturnType<typeof createTestAppHarness>>;
 
 interface ParentFixture {
-  environmentId: string;
   hostId: string;
   parentThreadId: string;
   projectId: string;
@@ -73,7 +70,6 @@ function seedParentFixture(
     model: "fake-model",
   });
   return {
-    environmentId: environment.id,
     hostId: host.id,
     parentThreadId: parent.id,
     projectId: project.id,
@@ -278,51 +274,11 @@ describe("Family B emit-site discriminator stamping", () => {
     });
   });
 
-  it("stamps a schedule-due wakeup as schedule-due with a null subject", async () => {
-    await withTestHarness(async (harness) => {
-      // The schedule sweep stamps `schedule-due` with a null subject; assert
-      // the persisted shape directly (the full sweep is covered by the
-      // schedule-sweep suite) so the null-subject branch is exercised here.
-      const fixture = seedParentFixture(harness, "host-schedule-due");
-      const request = appendClientTurnEvent(harness.deps, {
-        threadId: fixture.parentThreadId,
-        environmentId: fixture.environmentId,
-        type: "client/turn/requested",
-        input: textInput("Run the scheduled prompt."),
-        execution: {
-          model: "gpt-5",
-          reasoningLevel: "medium",
-          permissionMode: "full",
-          serviceTier: "default",
-          source: "client/turn/requested",
-        },
-        initiator: "system",
-        senderThreadId: null,
-        systemMessageKind: "schedule-due",
-        systemMessageSubject: null,
-        requestMethod: "turn/start",
-        source: "tell",
-        target: { kind: "new-turn" },
-      });
-
-      const row = harness.db
-        .select()
-        .from(events)
-        .where(
-          and(
-            eq(events.threadId, fixture.parentThreadId),
-            eq(events.sequence, request.sequence),
-          ),
-        )
-        .get();
-      if (!row) {
-        throw new Error("Expected the schedule-due event row");
-      }
-      const data = turnRequestEventDataSchema.parse(JSON.parse(row.data));
-      expect(data.systemMessageKind).toBe("schedule-due");
-      expect(data.systemMessageSubject ?? null).toBeNull();
-    });
-  });
+  // schedule-due stamping is asserted at its real emit site in
+  // `scheduling/thread-schedule-sweep.test.ts` (after a due schedule fires),
+  // so deleting the stamping lines from `thread-schedule-sweep.ts` turns a test
+  // red. A synthetic `appendClientTurnEvent` here would only exercise the
+  // plumbing, not the sweep.
 
   const settledWorkflowStates: ReadonlyArray<{
     status: "completed" | "failed" | "cancelled";

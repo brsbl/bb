@@ -179,15 +179,27 @@ export function buildParentSystemInputFromTemplateSlot(
   });
 }
 
+/**
+ * Canonical display label for a thread that is the subject of a parent-facing
+ * system message: the trimmed title, or the thread id when untitled. Shared by
+ * the stamped `systemMessageSubject.threadName` and the body's `@thread`
+ * mention label so the two can't drift.
+ */
+export function parentSystemThreadLabel(thread: {
+  id: string;
+  title: string | null;
+}): string {
+  return thread.title?.trim() || thread.id;
+}
+
 export function buildParentSystemThreadMention(
   args: BuildParentSystemThreadMentionArgs,
 ): ParentSystemRenderedMention {
-  const label = args.thread.title?.trim() || args.thread.id;
   return {
     serializedText: `@thread:${args.thread.id}`,
     resource: {
       kind: "thread",
-      label,
+      label: parentSystemThreadLabel(args.thread),
       projectId: args.thread.projectId,
       threadId: args.thread.id,
     },
