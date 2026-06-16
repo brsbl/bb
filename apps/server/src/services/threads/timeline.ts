@@ -828,6 +828,7 @@ function buildThreadTimelineInternal(
     includeProviderUnhandledOperations,
     isLatestPage: options.page.kind === "latest",
     threadStatus: thread.status,
+    threadName: thread.title ?? thread.titleFallback ?? "",
     workspaceRoot: resolveThreadWorkspaceRoot(db, thread),
   };
   const contextWindowEvents = measureThreadTimelineStage(
@@ -1018,6 +1019,7 @@ export function buildTimelineTurnSummaryDetails(
       sourceSeqEnd: sourceRange.sourceSeqEnd,
       sourceSeqStart: sourceRange.sourceSeqStart,
       threadStatus: thread.status,
+      threadName: thread.title ?? thread.titleFallback ?? "",
       workspaceRoot: resolveThreadWorkspaceRoot(db, thread),
     },
   });

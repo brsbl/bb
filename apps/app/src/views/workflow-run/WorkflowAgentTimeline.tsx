@@ -60,6 +60,9 @@ function buildAgentTimelineRows(rows: ThreadEventRow[]): TimelineRow[] {
       includeProviderUnhandledOperations: false,
       isLatestPage: true,
       threadStatus: "idle",
+      // Workflow agent timelines render in a read-only panel without the agent
+      // thread's name in scope; Family-A titles fall back to bare verbs.
+      threadName: "",
       turnMessageDetail: "full",
       workspaceRoot: null,
     },

@@ -1049,6 +1049,46 @@ function leadingIconForWorkRow(
   }
 }
 
+/**
+ * Per-action leading glyph for Family-A system operation rows, keyed by
+ * `operationKind` (and the parent-change action) so each lifecycle event reads
+ * at a glance. Warning / deprecation / provider-unhandled / generic and
+ * non-operation system rows keep no leading glyph.
+ */
+function leadingIconForSystemRow(
+  row: ThreadTimelineViewRow,
+): IconName | undefined {
+  if (row.kind !== "system" || row.systemKind !== "operation") {
+    return undefined;
+  }
+  if (row.operationKind === "parent-change") {
+    return row.parentChange.action === "release"
+      ? "UserRound"
+      : "UserRoundPlus";
+  }
+  const operationKind = row.operationKind;
+  switch (operationKind) {
+    case "thread-provisioning":
+      return "Terminal";
+    case "thread-interrupted":
+      return "Square";
+    case "compaction":
+      return "RotateCcw";
+    case "generic":
+    case "warning":
+    case "deprecation":
+    case "provider-unhandled":
+      return undefined;
+    default:
+      return assertNever(operationKind);
+  }
+}
+
+/** Leading glyph for any timeline row: work rows by kind, system rows by action. */
+function leadingIconForRow(row: ThreadTimelineViewRow): IconName | undefined {
+  return leadingIconForWorkRow(row) ?? leadingIconForSystemRow(row);
+}
+
 function TimelineRowView({
   activeLatestBundleId,
   compactActivityIntents,
@@ -1099,7 +1139,7 @@ function TimelineRowView({
   }
 
   if (!isRowExpandable(row)) {
-    const staticLeadingIcon = leadingIconForWorkRow(row);
+    const staticLeadingIcon = leadingIconForRow(row);
     return (
       <TimelineStaticRow
         horizontalPadding={horizontalPadding}
@@ -1164,7 +1204,7 @@ function TimelineExpandableRowView({
     [activeLatestBundleId, compactActivityIntents, row],
   );
 
-  const leadingIcon = leadingIconForWorkRow(row);
+  const leadingIcon = leadingIconForRow(row);
 
   return (
     <ExpandableTimelineRow
