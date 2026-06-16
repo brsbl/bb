@@ -56,6 +56,11 @@ export interface ConversationMessageContentUserProps extends ConversationMessage
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
   senderThreadId: TimelineUserConversationRow["senderThreadId"];
   senderThreadTitle: string | null;
+  // Family-B taxonomy fields off the row, required and always supplied (legacy
+  // rows carry `unlabeled` + `null`). They drive the `system`-initiated message
+  // title, icon, and title-only collapse in `GeneratedConversationMessage`.
+  systemMessageKind: TimelineUserConversationRow["systemMessageKind"];
+  systemMessageSubject: TimelineUserConversationRow["systemMessageSubject"];
   turnRequest: TimelineUserConversationRow["turnRequest"];
 }
 
@@ -89,6 +94,8 @@ interface UserConversationMessageProps {
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
   senderThreadId: TimelineUserConversationRow["senderThreadId"];
   senderThreadTitle: string | null;
+  systemMessageKind: TimelineUserConversationRow["systemMessageKind"];
+  systemMessageSubject: TimelineUserConversationRow["systemMessageSubject"];
   text: string;
   turnRequest: TimelineUserConversationRow["turnRequest"];
 }
@@ -204,6 +211,8 @@ function UserConversationMessage({
   resolveSegmentLinkHref,
   senderThreadId,
   senderThreadTitle,
+  systemMessageKind,
+  systemMessageSubject,
   text,
   turnRequest,
 }: UserConversationMessageProps) {
@@ -224,6 +233,8 @@ function UserConversationMessage({
         sourceKind="agent"
         sourceName={senderThreadTitle ?? "Agent"}
         sourceThreadId={senderThreadId}
+        systemMessageKind={systemMessageKind}
+        systemMessageSubject={systemMessageSubject}
         text={body.text}
         turnRequest={turnRequest}
       />
@@ -247,6 +258,8 @@ function UserConversationMessage({
         sourceKind="system"
         sourceName="BB"
         sourceThreadId={null}
+        systemMessageKind={systemMessageKind}
+        systemMessageSubject={systemMessageSubject}
         text={body.text}
         turnRequest={turnRequest}
       />
@@ -385,6 +398,8 @@ export function ConversationMessageContent(
         resolveSegmentLinkHref={props.resolveSegmentLinkHref}
         senderThreadId={props.senderThreadId}
         senderThreadTitle={props.senderThreadTitle}
+        systemMessageKind={props.systemMessageKind}
+        systemMessageSubject={props.systemMessageSubject}
         text={text}
         turnRequest={props.turnRequest}
       />
