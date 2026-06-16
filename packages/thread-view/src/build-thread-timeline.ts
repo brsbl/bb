@@ -478,6 +478,8 @@ function convertMessage(
           attachments: toConversationAttachments(message.attachments),
           initiator: message.initiator,
           senderThreadId: message.senderThreadId,
+          systemMessageKind: message.systemMessageKind,
+          systemMessageSubject: message.systemMessageSubject,
           turnRequest: message.turnRequest,
         },
       ];
@@ -751,6 +753,8 @@ function convertPendingSteerMessage(
     attachments: toConversationAttachments(message.attachments),
     initiator: message.initiator,
     senderThreadId: message.senderThreadId,
+    systemMessageKind: message.systemMessageKind,
+    systemMessageSubject: message.systemMessageSubject,
     turnRequest: message.turnRequest,
   };
 }

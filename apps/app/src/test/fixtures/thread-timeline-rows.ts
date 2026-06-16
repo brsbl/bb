@@ -438,6 +438,8 @@ export function conversationRow({
           : resolvedInitiator === "agent"
             ? "thr_sender"
             : null,
+      systemMessageKind: "unlabeled",
+      systemMessageSubject: null,
       turnRequest: turnRequest ?? { kind: "message", status: "accepted" },
     };
   }

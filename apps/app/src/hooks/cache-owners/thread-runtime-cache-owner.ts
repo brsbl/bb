@@ -297,6 +297,8 @@ function buildOptimisticUserMessageRow({
     attachments: timelineAttachments,
     initiator: "user",
     senderThreadId: null,
+    systemMessageKind: "unlabeled",
+    systemMessageSubject: null,
     turnRequest: {
       kind: optimisticTurnRequestKind({ mode, threadStatus }),
       status: "pending",
