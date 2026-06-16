@@ -5,7 +5,11 @@ import {
   type DbTransaction,
   updateThread,
 } from "@bb/db";
-import type { PromptInput, Thread } from "@bb/domain";
+import type {
+  PromptInput,
+  SystemMessageSubject,
+  Thread,
+} from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { NotificationBuffer } from "../lib/notification-buffer.js";
@@ -14,6 +18,7 @@ import {
   buildParentSystemThreadMention,
   queueParentSystemMessage,
 } from "./parent-system-messages.js";
+import { systemMessageKindForTemplate } from "./system-message-kind.js";
 import {
   appendThreadOwnershipChangeEvent,
   appendThreadOwnershipChangeEventInTransaction,
@@ -34,6 +39,8 @@ interface QueueParentSystemMessageBestEffortArgs {
   input: PromptInput[];
   parentThreadId: string;
   reason: "assigned" | "removed";
+  templateId: ThreadOwnershipTemplateId;
+  threadName: string;
 }
 
 interface HandleThreadOwnershipChangeArgs {
@@ -62,9 +69,16 @@ async function queueParentSystemMessageBestEffort(
   args: QueueParentSystemMessageBestEffortArgs,
 ): Promise<void> {
   try {
+    const subject: SystemMessageSubject = {
+      kind: "thread",
+      threadId: args.childThreadId,
+      threadName: args.threadName,
+    };
     await queueParentSystemMessage(deps, {
       input: args.input,
       parentThreadId: args.parentThreadId,
+      systemMessageKind: systemMessageKindForTemplate(args.templateId),
+      systemMessageSubject: subject,
     });
   } catch (error) {
     deps.logger.error(
@@ -77,6 +91,10 @@ async function queueParentSystemMessageBestEffort(
       "Failed to queue parent ownership system message",
     );
   }
+}
+
+function threadOwnershipSubjectName(thread: ThreadLabelSource): string {
+  return thread.title?.trim() || thread.id;
 }
 
 function buildThreadOwnershipSystemInput(
@@ -124,6 +142,8 @@ export async function handleThreadOwnershipChange(
         args.updatedThread,
       ),
       reason: "assigned",
+      templateId: "systemMessageThreadOwnershipAssigned",
+      threadName: threadOwnershipSubjectName(args.updatedThread),
     });
   }
   if (args.previousThread.parentThreadId) {
@@ -135,6 +155,8 @@ export async function handleThreadOwnershipChange(
         args.updatedThread,
       ),
       reason: "removed",
+      templateId: "systemMessageThreadOwnershipRemoved",
+      threadName: threadOwnershipSubjectName(args.updatedThread),
     });
   }
 }

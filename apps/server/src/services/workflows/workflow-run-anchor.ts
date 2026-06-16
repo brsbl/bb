@@ -25,13 +25,19 @@ import {
   threadScope,
   workflowProgressSnapshotSchema,
   type BackgroundTaskStatus,
+  type SystemMessageSubject,
   type ThreadEventBackgroundTaskItem,
   type WorkflowProgressSnapshot,
 } from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { appendThreadEventsInTransaction } from "../threads/thread-events.js";
-import { queueManagerSystemMessage } from "../threads/manager-system-messages.js";
+import {
+  queueManagerSystemMessage,
+  type ManagerSystemMessage,
+} from "../threads/manager-system-messages.js";
+
+export type { ManagerSystemMessage } from "../threads/manager-system-messages.js";
 
 interface WorkflowRunAnchorWriteDeps {
   db: DbTransaction;
@@ -158,6 +164,15 @@ export function appendWorkflowRunAnchorEventInTransaction(
   return { sequence, threadId: thread.id };
 }
 
+// The workflow builders return a `ManagerSystemMessage` directly, so the
+// rendered text plus Family-B taxonomy (kind + subject) travel together from
+// the builder to the persisted `client/turn/requested` event. The subject is
+// otherwise unrecoverable downstream — `senderThreadId` is null for these
+// `initiator: "system"` messages.
+function workflowRunSubject(run: WorkflowRunRow): SystemMessageSubject {
+  return { kind: "workflow", name: run.workflowName, runId: run.id };
+}
+
 /**
  * The "run paused" informational message for interruption (reconciliation
  * bucket (b) and the lease/sweep backstops) — a different message about a
@@ -168,36 +183,59 @@ export function appendWorkflowRunAnchorEventInTransaction(
  */
 export function buildWorkflowRunPausedManagerMessage(
   run: WorkflowRunRow,
-): string {
-  return renderTemplate("systemMessageWorkflowRunPaused", {
-    runId: run.id,
-    workflowName: run.workflowName,
-    reason: run.failureReason ?? "host daemon unavailable",
-  });
+): ManagerSystemMessage {
+  return {
+    messageText: renderTemplate("systemMessageWorkflowRunPaused", {
+      runId: run.id,
+      workflowName: run.workflowName,
+      reason: run.failureReason ?? "host daemon unavailable",
+    }),
+    systemMessageKind: "workflow-paused",
+    systemMessageSubject: workflowRunSubject(run),
+  };
 }
 
 /** The single terminal notification for a settled run (plan §8 COMPLETION). */
 export function buildWorkflowRunSettledManagerMessage(
   run: WorkflowRunRow,
-): string {
+): ManagerSystemMessage {
   const variables = { runId: run.id, workflowName: run.workflowName };
+  const subject = workflowRunSubject(run);
   switch (run.status) {
     case "completed":
-      return renderTemplate("systemMessageWorkflowRunCompleted", variables);
+      return {
+        messageText: renderTemplate(
+          "systemMessageWorkflowRunCompleted",
+          variables,
+        ),
+        systemMessageKind: "workflow-completed",
+        systemMessageSubject: subject,
+      };
     case "failed":
-      return renderTemplate("systemMessageWorkflowRunFailed", {
-        ...variables,
-        failureSuffix:
-          run.failureReason !== null ? `: ${run.failureReason}` : "",
-      });
+      return {
+        messageText: renderTemplate("systemMessageWorkflowRunFailed", {
+          ...variables,
+          failureSuffix:
+            run.failureReason !== null ? `: ${run.failureReason}` : "",
+        }),
+        systemMessageKind: "workflow-failed",
+        systemMessageSubject: subject,
+      };
     default:
-      return renderTemplate("systemMessageWorkflowRunCancelled", variables);
+      return {
+        messageText: renderTemplate(
+          "systemMessageWorkflowRunCancelled",
+          variables,
+        ),
+        systemMessageKind: "workflow-cancelled",
+        systemMessageSubject: subject,
+      };
   }
 }
 
 export interface QueueWorkflowRunManagerNotificationArgs {
   managerThreadId: string;
-  messageText: string;
+  message: ManagerSystemMessage;
   runId: string;
 }
 
@@ -225,7 +263,7 @@ export async function queueWorkflowRunManagerNotificationBestEffort(
   try {
     const outcome = await queueManagerSystemMessage(deps, {
       managerThreadId: args.managerThreadId,
-      messageText: args.messageText,
+      message: args.message,
     });
     if (outcome === "skipped-pending-command") {
       setWorkflowRunPendingManagerNotification(deps.db, {

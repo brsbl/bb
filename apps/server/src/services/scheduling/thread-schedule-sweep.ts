@@ -43,6 +43,7 @@ import {
   startLiveHostCommand,
 } from "../hosts/live-command.js";
 import { tryTransition } from "../threads/thread-transitions.js";
+import { systemMessageKindForTemplate } from "../threads/system-message-kind.js";
 import {
   computeNextScheduledTime,
   ScheduleValidationError,
@@ -544,6 +545,12 @@ function queueDueThreadScheduleInTransaction(
     execution: args.preparation.execution,
     initiator: "system",
     senderThreadId: null,
+    // A scheduled wakeup concerns this thread but has no thread/workflow
+    // subject (the prompt is the payload), so the subject is null.
+    systemMessageKind: systemMessageKindForTemplate(
+      "systemMessageThreadScheduleDue",
+    ),
+    systemMessageSubject: null,
     requestMethod: "turn/start",
     source: "tell",
     target: renderThreadScheduleTurnRequestTarget(

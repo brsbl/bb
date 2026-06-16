@@ -1,4 +1,8 @@
-import type { PromptInput, ThreadEventTurnStatus } from "@bb/domain";
+import type {
+  PromptInput,
+  SystemMessageSubject,
+  ThreadEventTurnStatus,
+} from "@bb/domain";
 import { renderTemplate } from "@bb/templates";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import {
@@ -6,9 +10,14 @@ import {
   buildParentSystemThreadMention,
   queueParentSystemMessage,
   type ParentSystemInputSegment,
+  type ParentSystemMessageTaxonomy,
   type ParentSystemRenderedMention,
   type ParentSystemThreadMentionSource,
 } from "./parent-system-messages.js";
+import {
+  childOutcomeSystemMessageKind,
+  systemMessageKindForTemplate,
+} from "./system-message-kind.js";
 import {
   getLastThreadCommandFailureOutput,
   getLastThreadOutput,
@@ -291,6 +300,39 @@ export function renderChildThreadTurnStatusBatchMessage(
   });
 }
 
+function childThreadSubjectName(thread: ChildThreadNotificationSource): string {
+  return thread.title?.trim() || thread.id;
+}
+
+function childThreadSubject(
+  thread: ChildThreadNotificationSource,
+): SystemMessageSubject {
+  return {
+    kind: "thread",
+    threadId: thread.id,
+    threadName: childThreadSubjectName(thread),
+  };
+}
+
+// One child stamps its outcome kind (derived from turnStatus) and names that
+// child; a multi-child batch stamps `child-outcome-batch` and carries only the
+// count, since no single thread is the subject.
+function childThreadTurnStatusBatchTaxonomy(
+  items: ChildThreadTurnNotificationBatchItem[],
+): ParentSystemMessageTaxonomy {
+  const single = items.length === 1 ? items[0] : undefined;
+  if (single) {
+    return {
+      systemMessageKind: childOutcomeSystemMessageKind(single.turnStatus),
+      systemMessageSubject: childThreadSubject(single.childThread),
+    };
+  }
+  return {
+    systemMessageKind: "child-outcome-batch",
+    systemMessageSubject: { kind: "thread-batch", count: items.length },
+  };
+}
+
 export function buildChildThreadTurnStatusBatchInput(
   args: BuildChildThreadTurnStatusBatchInputArgs,
 ): PromptInput[] {
@@ -357,6 +399,7 @@ async function flushChildThreadTurnNotificationBatch(
         items: batch.items,
       }),
       parentThreadId,
+      ...childThreadTurnStatusBatchTaxonomy(batch.items),
     });
   } catch (error) {
     deps.logger.error(
@@ -453,6 +496,10 @@ export async function queueChildThreadNeedsAttentionNotificationBestEffort(
         childThread: args.childThread,
       }),
       parentThreadId: args.parentThreadId,
+      systemMessageKind: systemMessageKindForTemplate(
+        "systemMessageChildThreadNeedsAttention",
+      ),
+      systemMessageSubject: childThreadSubject(args.childThread),
     });
   } catch (error) {
     deps.logger.error(

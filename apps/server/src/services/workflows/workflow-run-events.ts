@@ -51,6 +51,7 @@ import {
   parseWorkflowRunProgressSnapshotColumn,
   queueWorkflowRunManagerNotificationBestEffort,
   type AppendedWorkflowRunAnchorEvent,
+  type ManagerSystemMessage,
 } from "./workflow-run-anchor.js";
 
 /**
@@ -109,7 +110,7 @@ export function hashWorkflowRunEventPayload(args: {
 
 interface ManagerNotificationFollowUp {
   managerThreadId: string;
-  messageText: string;
+  message: ManagerSystemMessage;
   runId: string;
 }
 
@@ -421,7 +422,7 @@ function applyTerminalRunEventInTransaction(
   if (result.run.anchorThreadId !== null) {
     args.collector.followUps.push({
       managerThreadId: result.run.anchorThreadId,
-      messageText: buildWorkflowRunSettledManagerMessage(result.run),
+      message: buildWorkflowRunSettledManagerMessage(result.run),
       runId: result.run.id,
     });
   }

@@ -4,6 +4,8 @@ import {
   type PromptInput,
   type ProvisioningTranscriptEntry,
   type ResolvedThreadExecutionOptions,
+  type SystemMessageKind,
+  type SystemMessageSubject,
   type Thread,
   type ThreadTurnInitiator,
   type TurnRequestTarget,
@@ -54,6 +56,8 @@ interface RequestThreadReprovisionArgs {
   initiator: ThreadTurnInitiator;
   provisioningId: string;
   senderThreadId: string | null;
+  systemMessageKind?: SystemMessageKind;
+  systemMessageSubject?: SystemMessageSubject | null;
   thread: Thread;
 }
 
@@ -240,6 +244,8 @@ export function requestThreadReprovision(
     execution: args.execution,
     initiator: args.initiator,
     senderThreadId: args.senderThreadId,
+    systemMessageKind: args.systemMessageKind,
+    systemMessageSubject: args.systemMessageSubject,
     requestMethod: "turn/start",
     source: "tell",
     target: { kind: "new-turn" },

@@ -978,8 +978,7 @@ export function settleWorkflowStartCommandResult(
               run: (postCommitDeps) =>
                 queueWorkflowRunManagerNotificationBestEffort(postCommitDeps, {
                   managerThreadId,
-                  messageText:
-                    buildWorkflowRunSettledManagerMessage(settledRun),
+                  message: buildWorkflowRunSettledManagerMessage(settledRun),
                   runId: settledRun.id,
                 }),
             },

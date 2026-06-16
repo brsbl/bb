@@ -1,5 +1,9 @@
 import { getThread } from "@bb/db";
-import type { PromptInput } from "@bb/domain";
+import type {
+  PromptInput,
+  SystemMessageKind,
+  SystemMessageSubject,
+} from "@bb/domain";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { hasLiveThreadStartInFlight } from "./thread-lifecycle.js";
 import { queueParentSystemMessage } from "./parent-system-messages.js";
@@ -22,7 +26,16 @@ export type QueueManagerSystemMessageOutcome =
 
 interface QueueManagerSystemMessageArgs {
   managerThreadId: string;
+  message: ManagerSystemMessage;
+}
+
+// A manager system message carries its rendered text plus the Family-B
+// taxonomy stamping. The subject is stamped at emit time because
+// `senderThreadId` is null for these `initiator: "system"` messages.
+export interface ManagerSystemMessage {
   messageText: string;
+  systemMessageKind: SystemMessageKind;
+  systemMessageSubject: SystemMessageSubject;
 }
 
 function buildSystemInput(messageText: string): PromptInput[] {
@@ -50,7 +63,9 @@ export async function queueManagerSystemMessage(
   }
   const queued = await queueParentSystemMessage(deps, {
     parentThreadId: args.managerThreadId,
-    input: buildSystemInput(args.messageText),
+    input: buildSystemInput(args.message.messageText),
+    systemMessageKind: args.message.systemMessageKind,
+    systemMessageSubject: args.message.systemMessageSubject,
   });
   return queued ? "queued" : "skipped";
 }

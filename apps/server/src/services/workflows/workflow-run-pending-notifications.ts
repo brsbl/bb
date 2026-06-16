@@ -190,7 +190,7 @@ async function deliverPendingNotification(
   if (!run || !pendingNotificationStillCurrent(run, args.kind)) {
     return;
   }
-  const messageText =
+  const message =
     args.kind === "paused"
       ? buildWorkflowRunPausedManagerMessage(run)
       : buildWorkflowRunSettledManagerMessage(run);
@@ -198,7 +198,7 @@ async function deliverPendingNotification(
   try {
     const outcome = await queueManagerSystemMessage(deps, {
       managerThreadId: args.managerThreadId,
-      messageText,
+      message,
     });
     if (outcome === "skipped-pending-command") {
       // Transient: the manager thread's live `thread.start` RPC is still in
