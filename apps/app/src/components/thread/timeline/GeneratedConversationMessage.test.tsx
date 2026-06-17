@@ -1,0 +1,212 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import type { TimelineTitleLink } from "@bb/thread-view";
+import { ConversationMessageContent } from "./ConversationMessageContent";
+import { AppRouteNavigationProvider } from "@/components/ui/app-route-anchor";
+import {
+  restoreMatchMedia,
+  setupMatchMedia,
+} from "@/test/helpers/match-media.js";
+
+function resolveThreadLink(link: TimelineTitleLink): string | null {
+  return link.kind === "thread"
+    ? `/projects/proj_demo/threads/${link.threadId}`
+    : null;
+}
+
+const MARKDOWN_BODY = [
+  "# Final report",
+  "",
+  "Status: **done**. Handed off to @thread:thr_child.",
+  "",
+  "- migration landed",
+  "- `pnpm test` green",
+].join("\n");
+
+function renderChildCompleted() {
+  setupMatchMedia();
+  const token = "@thread:thr_child";
+  const start = MARKDOWN_BODY.indexOf(token);
+  return render(
+    <MemoryRouter>
+      <AppRouteNavigationProvider>
+        <ConversationMessageContent
+          role="user"
+          initiator="system"
+          senderThreadId={null}
+          senderThreadTitle={null}
+          resolveSegmentLinkHref={resolveThreadLink}
+          systemMessageKind="child-completed"
+          systemMessageSubject={{
+            kind: "thread",
+            threadId: "thr_child",
+            threadName: "Rebuild comments",
+          }}
+          attachments={null}
+          mentions={[
+            {
+              start,
+              end: start + token.length,
+              resource: {
+                kind: "thread",
+                threadId: "thr_child",
+                projectId: "proj_demo",
+                label: "Rebuild comments",
+              },
+            },
+          ]}
+          text={MARKDOWN_BODY}
+          turnRequest={{ kind: "message", status: "accepted" }}
+          projectId="proj_demo"
+        />
+      </AppRouteNavigationProvider>
+    </MemoryRouter>,
+  );
+}
+
+afterEach(() => {
+  cleanup();
+  restoreMatchMedia();
+});
+
+const TWO_LINE_BODY = "first report line\nsecond report line";
+
+function renderChildCompletedBody(text: string) {
+  setupMatchMedia();
+  return render(
+    <MemoryRouter>
+      <AppRouteNavigationProvider>
+        <ConversationMessageContent
+          role="user"
+          initiator="system"
+          senderThreadId={null}
+          senderThreadTitle={null}
+          resolveSegmentLinkHref={resolveThreadLink}
+          systemMessageKind="child-completed"
+          systemMessageSubject={{
+            kind: "thread",
+            threadId: "thr_child",
+            threadName: "Rebuild comments",
+          }}
+          attachments={null}
+          mentions={[]}
+          text={text}
+          turnRequest={{ kind: "message", status: "accepted" }}
+          projectId="proj_demo"
+        />
+      </AppRouteNavigationProvider>
+    </MemoryRouter>,
+  );
+}
+
+// An agent-generated body that carries an offset-based `path` mention and a
+// leading `#` (markdown heading syntax). The agent path must NOT route through
+// markdown — it keeps the offset renderer — so the `#` stays literal text and
+// the path mention still renders.
+const AGENT_BODY = "# notes\nedited path:src/app.ts here";
+const AGENT_PATH_TOKEN = "path:src/app.ts";
+const AGENT_PATH_START = AGENT_BODY.indexOf(AGENT_PATH_TOKEN);
+
+function renderAgentMessage() {
+  setupMatchMedia();
+  return render(
+    <MemoryRouter>
+      <AppRouteNavigationProvider>
+        <ConversationMessageContent
+          role="user"
+          initiator="agent"
+          senderThreadId="thr_agent"
+          senderThreadTitle="Worker"
+          resolveSegmentLinkHref={resolveThreadLink}
+          systemMessageKind="unlabeled"
+          systemMessageSubject={null}
+          attachments={null}
+          mentions={[
+            {
+              start: AGENT_PATH_START,
+              end: AGENT_PATH_START + AGENT_PATH_TOKEN.length,
+              resource: {
+                kind: "path",
+                source: "workspace",
+                entryKind: "file",
+                path: "src/app.ts",
+                label: "src/app.ts",
+              },
+            },
+          ]}
+          text={AGENT_BODY}
+          turnRequest={{ kind: "message", status: "accepted" }}
+          projectId="proj_demo"
+        />
+      </AppRouteNavigationProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("GeneratedConversationMessage markdown body", () => {
+  it("renders a single-newline system body on two visual lines (remark-breaks)", () => {
+    const { container } = renderChildCompletedBody(TWO_LINE_BODY);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Rebuild comments finished/u }),
+    );
+
+    // remark-breaks turns the single `\n` into a hard <br>, so the two lines
+    // don't collapse onto one (the prior `whitespace-pre-wrap` behavior).
+    expect(container.querySelector("br")).not.toBeNull();
+    expect(screen.getByText(/first report line/u)).toBeTruthy();
+    expect(screen.getByText(/second report line/u)).toBeTruthy();
+  });
+
+  it("keeps the agent body on the offset renderer (no markdown, no <br>) and renders its path mention", () => {
+    const { container } = renderAgentMessage();
+
+    fireEvent.click(screen.getByRole("button", { name: /Message from/u }));
+
+    // Offset renderer: markdown is not parsed (leading `#` stays literal text,
+    // no <h1>) and remark-breaks does not run (no <br>).
+    expect(container.querySelector("h1")).toBeNull();
+    expect(container.querySelector("br")).toBeNull();
+    expect(container.querySelector("p.whitespace-pre-wrap")).not.toBeNull();
+
+    // The offset-based `path` mention is preserved (would regress to plain text
+    // under the markdown path, which only understands `@thread:<id>` tokens).
+    expect(screen.getByText("src/app.ts")).toBeTruthy();
+  });
+});
+
+describe("GeneratedConversationMessage markdown body (system)", () => {
+  it("keeps the collapsed preview plain text (no markdown elements)", () => {
+    const { container } = renderChildCompleted();
+
+    // Collapsed: only the first body line shows, as plain text — no heading.
+    expect(container.querySelector("h1")).toBeNull();
+    expect(container.querySelector("li")).toBeNull();
+    expect(screen.getByText(/Final report/u)).toBeTruthy();
+  });
+
+  it("renders the expanded body as markdown with a linked mention pill", () => {
+    const { container } = renderChildCompleted();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Rebuild comments finished/u }),
+    );
+
+    // Expanded: real markdown elements.
+    expect(container.querySelector("h1")?.textContent).toBe("Final report");
+    expect(container.querySelector("strong")?.textContent).toBe("done");
+    expect(container.querySelector("code")?.textContent).toBe("pnpm test");
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+
+    // The @thread token rendered as a linked pill via resolveSegmentLinkHref.
+    const pill = screen.getAllByText("Rebuild comments").find((node) =>
+      node.closest("a"),
+    );
+    expect(pill?.closest("a")?.getAttribute("href")).toBe(
+      "/projects/proj_demo/threads/thr_child",
+    );
+  });
+});

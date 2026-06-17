@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { PromptMentionResource, PromptTextMention } from "@bb/domain";
 import { Icon } from "@/components/ui/icon.js";
+import { AppRouteAnchor } from "@/components/ui/app-route-anchor.js";
 import { getThreadRoutePath } from "@/lib/app-route-paths";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +15,13 @@ import { promptMentionClipboardDataAttributes } from "@/components/promptbox/men
 interface PromptMentionPillProps {
   resource: PromptMentionResource;
   serializedText: string;
+  /**
+   * Explicit href for a thread mention, used by the markdown body renderer to
+   * route through the timeline's `resolveSegmentLinkHref` (consistent with the
+   * title links). When absent, a thread mention falls back to its
+   * `resource.projectId` react-router link; a non-thread mention ignores this.
+   */
+  linkHref?: string;
 }
 
 interface NormalizeMentionsArgs {
@@ -108,9 +116,10 @@ function mentionPillClassName(interactive: boolean): string {
   );
 }
 
-function PromptMentionPill({
+export function PromptMentionPill({
   resource,
   serializedText,
+  linkHref,
 }: PromptMentionPillProps) {
   const title = promptMentionTooltipLabel(resource);
   const clipboardAttributes = promptMentionClipboardDataAttributes({
@@ -127,6 +136,22 @@ function PromptMentionPill({
       <span className="truncate">{resource.label}</span>
     </>
   );
+
+  // Markdown bodies route thread mentions through `resolveSegmentLinkHref`
+  // (same resolver the title links use); the plain-text path passes no
+  // `linkHref` and keeps the `resource.projectId` react-router link below.
+  if (resource.kind === "thread" && linkHref) {
+    return (
+      <AppRouteAnchor
+        className={mentionPillClassName(true)}
+        {...clipboardAttributes}
+        href={linkHref}
+        title={title}
+      >
+        {labelNode}
+      </AppRouteAnchor>
+    );
+  }
 
   if (resource.kind === "thread" && resource.projectId) {
     return (
@@ -194,4 +219,25 @@ export function renderMentionTextSegments({
     segments.push(text.slice(cursor));
   }
   return segments;
+}
+
+/**
+ * Resolves a thread mention's display resource for the markdown body renderer:
+ * the `@thread:<id>` token carries only the id, so the label/projectId are
+ * recovered from the body `mentions` array (matched by `threadId`). Falls back
+ * to a display-only resource labelled with the id when no mention matches.
+ */
+export function resolveThreadMentionResource(
+  mentions: readonly PromptTextMention[],
+  threadId: string,
+): PromptMentionResource {
+  for (const mention of mentions) {
+    if (
+      mention.resource.kind === "thread" &&
+      mention.resource.threadId === threadId
+    ) {
+      return mention.resource;
+    }
+  }
+  return { kind: "thread", threadId, label: threadId };
 }

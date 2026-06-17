@@ -7,6 +7,7 @@ import type {
 } from "@bb/domain";
 import type { TimelineTitle, TimelineTitleSegment } from "@bb/thread-view";
 import { type IconName } from "@/components/ui/icon.js";
+import { MarkdownPreview } from "@/components/ui/markdown-preview.js";
 import {
   ConversationAttachments,
   type ConversationAttachmentItems,
@@ -410,12 +411,35 @@ export const GeneratedConversationMessage = memo(
         <div className={NESTED_TIMELINE_GROUP_LINE_CLASS_NAME}>
           <div className="pl-2 text-sm leading-relaxed text-foreground">
             {messageText ? (
-              <p className="whitespace-pre-wrap break-words">
-                {renderMentionTextSegments({
-                  mentions: messageMentions,
-                  text: messageText,
-                })}
-              </p>
+              // `system` bodies render full markdown while preserving the
+              // `@thread:<id>` mention pills (resolved from `messageMentions`).
+              // `agent` bodies stay on the offset-based `renderMentionTextSegments`
+              // renderer: the markdown path only understands `@thread:<id>`
+              // tokens and would silently drop the offset-based `path` mentions
+              // an agent message can carry. The collapsed preview above stays
+              // plain text for both. Both branches share the surrounding
+              // `pl-2 text-sm leading-relaxed text-foreground` container, so
+              // typography is identical.
+              sourceKind === "system" ? (
+                <MarkdownPreview
+                  content={messageText}
+                  threadMentions={
+                    resolveSegmentLinkHref
+                      ? {
+                          mentions: messageMentions,
+                          resolveLinkHref: resolveSegmentLinkHref,
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <p className="whitespace-pre-wrap break-words">
+                  {renderMentionTextSegments({
+                    mentions: messageMentions,
+                    text: messageText,
+                  })}
+                </p>
+              )
             ) : (
               <p className="text-muted-foreground">
                 {generatedConversationEmptyText(sourceKind)}
@@ -443,6 +467,7 @@ export const GeneratedConversationMessage = memo(
         messageMentions,
         onOpenLocalFileLink,
         projectId,
+        resolveSegmentLinkHref,
         sourceKind,
         requestLabel,
         turnRequest,

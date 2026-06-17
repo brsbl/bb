@@ -1,4 +1,8 @@
-import type { SystemMessageKind, SystemMessageSubject } from "@bb/domain";
+import type {
+  PromptTextMention,
+  SystemMessageKind,
+  SystemMessageSubject,
+} from "@bb/domain";
 import type { TimelineTitleLink } from "@bb/thread-view";
 import type { ReactNode } from "react";
 import { ConversationMessageContent } from "@/components/thread/timeline/ConversationMessageContent";
@@ -34,7 +38,39 @@ interface SystemRowFixture {
   systemMessageKind: SystemMessageKind;
   systemMessageSubject: SystemMessageSubject | null;
   text: string;
+  // Optional body mentions; the expanded body renders `@thread:<id>` tokens as
+  // pills resolved from these. Most rows carry none.
+  mentions?: readonly PromptTextMention[];
 }
+
+// The child-completed body is a realistic markdown report — heading, bold, a
+// list, inline code, and an `@thread:` mention — so the markdown rendering of
+// generated bodies is visible in the story.
+const CHILD_COMPLETED_BODY = [
+  "# Rebuild threaded comments — final report",
+  "",
+  "All work **complete and committed**. Handed the follow-up to @thread:thr_child2.",
+  "",
+  "- Branch: `bb/rebuild-threaded-comments`",
+  "- Ladle stories built and verified",
+  "- PR ready to open on your go",
+].join("\n");
+
+const CHILD_COMPLETED_TOKEN = "@thread:thr_child2";
+const CHILD_COMPLETED_TOKEN_START =
+  CHILD_COMPLETED_BODY.indexOf(CHILD_COMPLETED_TOKEN);
+const CHILD_COMPLETED_MENTIONS: readonly PromptTextMention[] = [
+  {
+    start: CHILD_COMPLETED_TOKEN_START,
+    end: CHILD_COMPLETED_TOKEN_START + CHILD_COMPLETED_TOKEN.length,
+    resource: {
+      kind: "thread",
+      threadId: "thr_child2",
+      projectId: "proj_demo",
+      label: "Rebuild threaded comments from main",
+    },
+  },
+];
 
 // One representative row per Family-B systemMessageKind. The title + icon are
 // derived from the kind/subject; the body text is the stripped message body.
@@ -73,15 +109,16 @@ const SYSTEM_ROWS: readonly SystemRowFixture[] = [
     text: "It is blocked on a pending interaction. Inspect the thread and decide if you can answer or resolve the question from existing context.",
   },
   {
-    label: "child-completed",
-    hint: "single child outcome, turnStatus completed",
+    label: "child-completed (markdown body)",
+    hint: "single child outcome — markdown report with a heading, bold, list, code, and an @thread mention pill",
     systemMessageKind: "child-completed",
     systemMessageSubject: {
       kind: "thread",
       threadId: "thr_child2",
       threadName: "Rebuild threaded comments from main",
     },
-    text: "All work complete and committed. Here is the final report.\n\nBranch: bb/rebuild-threaded-comments — Ladle stories built and verified; PR ready to open.",
+    text: CHILD_COMPLETED_BODY,
+    mentions: CHILD_COMPLETED_MENTIONS,
   },
   {
     label: "child-failed",
@@ -181,7 +218,7 @@ export function Overview() {
               systemMessageSubject={row.systemMessageSubject}
               text={row.text}
               attachments={null}
-              mentions={[]}
+              mentions={row.mentions ?? []}
               projectId="proj_demo"
               turnRequest={acceptedMessage}
             />
