@@ -527,9 +527,7 @@ function buildSenderThreadMetadataById({
   return metadataById;
 }
 
-function shouldSyncSenderThreadMetadata(
-  event: QueryCacheNotifyEvent,
-): boolean {
+function shouldSyncSenderThreadMetadata(event: QueryCacheNotifyEvent): boolean {
   if (event.type !== "updated") {
     return false;
   }
@@ -990,7 +988,7 @@ function LazyTurnRowBody({
           variant="outline"
           size="sm"
           onClick={handleRetry}
-          className="h-7 border-destructive px-2 text-destructive hover:text-destructive"
+          className="h-7 cursor-pointer border-destructive px-2 text-destructive hover:text-destructive"
         >
           <Icon name="RotateCcw" />
           Retry
