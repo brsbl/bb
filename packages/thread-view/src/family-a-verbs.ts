@@ -40,10 +40,3 @@ export const OWNERSHIP_CHANGE_VERBS = {
   release: "released from",
   transfer: "transferred to",
 } as const;
-
-export type OwnershipChangeVerbAction = keyof typeof OWNERSHIP_CHANGE_VERBS;
-
-/** Every ownership verb, longest-first, for unambiguous splitter matching. */
-export const OWNERSHIP_CHANGE_VERB_LIST = Object.values(
-  OWNERSHIP_CHANGE_VERBS,
-);
