@@ -745,16 +745,11 @@ export function BottomAnchoredScrollBody({
 
   return (
     <BottomAnchorContext.Provider value={bottomAnchorContextValue}>
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {scrollOverlay ? (
-          <div className="pointer-events-none absolute left-0 top-1/2 z-30 h-0 w-0 -translate-y-1/2">
-            <div className="pointer-events-auto">{scrollOverlay}</div>
-          </div>
-        ) : null}
+      <div className="grid min-h-0 flex-1 overflow-hidden">
         <div
           ref={scrollAreaRef}
           className={cn(
-            "@container/page min-h-0 flex-1 overflow-x-hidden overflow-y-auto",
+            "@container/page col-start-1 row-start-1 min-h-0 overflow-x-hidden overflow-y-auto",
             scrollAreaClassName,
           )}
         >
@@ -781,6 +776,11 @@ export function BottomAnchoredScrollBody({
             ) : null}
           </div>
         </div>
+        {scrollOverlay ? (
+          <div className="pointer-events-none z-30 col-start-1 row-start-1 flex min-h-0 min-w-0 items-center">
+            <div className="pointer-events-auto h-0 w-0">{scrollOverlay}</div>
+          </div>
+        ) : null}
       </div>
     </BottomAnchorContext.Provider>
   );
