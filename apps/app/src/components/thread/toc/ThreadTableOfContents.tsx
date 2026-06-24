@@ -40,7 +40,7 @@ function TocPanelTab({
       onClick={onSelect}
       aria-pressed={active}
       className={cn(
-        "flex h-7 flex-1 items-center justify-center rounded-md text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "flex h-7 flex-1 cursor-pointer items-center justify-center rounded-md text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         active
           ? "bg-muted text-foreground"
           : "text-muted-foreground hover:bg-state-hover",
@@ -297,7 +297,7 @@ export function ThreadTableOfContents({
       <div className="relative">
         <div
           aria-hidden
-          className="flex w-8 flex-col items-center gap-2 py-2"
+          className="flex w-8 cursor-pointer flex-col items-center gap-2 py-2"
         >
           {userItems.map((item) => (
             <span
@@ -314,88 +314,88 @@ export function ThreadTableOfContents({
 
         <div
           className={cn(
-            "absolute left-full top-0 ml-1 w-72 max-w-[calc(100vw-3rem)] rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
+            "absolute left-full top-0 w-[18.25rem] max-w-[calc(100vw-3rem)] pl-1 transition-all duration-150",
             open
               ? "pointer-events-auto translate-x-0 opacity-100"
               : "pointer-events-none -translate-x-1 opacity-0",
           )}
         >
-          <div className="flex items-center gap-1 pb-1">
-            {hasAgentMessages ? (
+          <div className="rounded-lg border border-border bg-popover p-1 shadow-lg">
+            <div className="flex items-center gap-1 pb-1">
+              {hasAgentMessages ? (
+                <TocPanelTab
+                  label="Agent messages"
+                  active={activeTab === "agent"}
+                  onSelect={() => setTab("agent")}
+                />
+              ) : null}
               <TocPanelTab
-                label="Agent messages"
-                active={activeTab === "agent"}
-                onSelect={() => setTab("agent")}
-              />
-            ) : null}
-            <TocPanelTab
-              label="Your messages"
-              active={activeTab === "user"}
-              onSelect={() => setTab("user")}
-            />
-          </div>
-          <div className="relative isolate">
-            <div
-              ref={scrollRef}
-              className="max-h-64 overflow-y-auto overflow-x-hidden"
-            >
-              <div
-                ref={topSentinelRef}
-                aria-hidden
-                className="h-px w-full"
-              />
-              <ul className="flex flex-col">
-                {items.map((item) => {
-                  const active = item.id === activeId;
-                  return (
-                    <li key={item.id}>
-                      <button
-                        ref={(node) => {
-                          if (node) itemEls.current.set(item.id, node);
-                          else itemEls.current.delete(item.id);
-                        }}
-                        type="button"
-                        onClick={() => handleSelect(item.id)}
-                        className={cn(
-                          "flex w-full rounded-md px-2 py-1.5 text-left transition-colors",
-                          active
-                            ? "bg-state-hover"
-                            : "hover:bg-state-hover",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "line-clamp-2 text-xs leading-snug",
-                            active
-                              ? "text-foreground"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {item.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div
-                ref={bottomSentinelRef}
-                aria-hidden
-                className="h-px w-full"
+                label="Your messages"
+                active={activeTab === "user"}
+                onSelect={() => setTab("user")}
               />
             </div>
-            {aboveOverflow ? (
+            <div className="relative isolate">
               <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-popover/90 via-popover/60 to-transparent"
-              />
-            ) : null}
-            {belowOverflow || listOverflows ? (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-popover/90 via-popover/60 to-transparent"
-              />
-            ) : null}
+                ref={scrollRef}
+                className="max-h-64 overflow-y-auto overflow-x-hidden"
+              >
+                <div
+                  ref={topSentinelRef}
+                  aria-hidden
+                  className="h-px w-full"
+                />
+                <ul className="flex flex-col">
+                  {items.map((item) => {
+                    const active = item.id === activeId;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          ref={(node) => {
+                            if (node) itemEls.current.set(item.id, node);
+                            else itemEls.current.delete(item.id);
+                          }}
+                          type="button"
+                          onClick={() => handleSelect(item.id)}
+                          className={cn(
+                            "flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors",
+                            active ? "bg-state-hover" : "hover:bg-state-hover",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "line-clamp-2 text-xs leading-snug",
+                              active
+                                ? "text-foreground"
+                                : "text-muted-foreground",
+                            )}
+                          >
+                            {item.label}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div
+                  ref={bottomSentinelRef}
+                  aria-hidden
+                  className="h-px w-full"
+                />
+              </div>
+              {aboveOverflow ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-popover/90 via-popover/60 to-transparent"
+                />
+              ) : null}
+              {belowOverflow || listOverflows ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-popover/90 via-popover/60 to-transparent"
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
