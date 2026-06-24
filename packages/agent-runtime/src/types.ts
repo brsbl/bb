@@ -137,6 +137,7 @@ export interface StartThreadArgs {
   providerId: string;
   clientRequestId?: ClientTurnRequestId;
   input?: PromptInput[];
+  inputGroups?: PromptInput[][];
   options: AgentRuntimeExecutionOptions;
   instructions?: string;
   dynamicTools?: DynamicTool[];
@@ -179,6 +180,7 @@ export interface ResumeThreadResult {
 export interface RunTurnArgs {
   threadId: string;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   clientRequestId: ClientTurnRequestId;
   options: AgentRuntimeExecutionOptions;
   instructions?: string;
@@ -188,6 +190,7 @@ export interface SteerTurnArgs {
   threadId: string;
   expectedTurnId: string;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   clientRequestId: ClientTurnRequestId;
   options: AgentRuntimeExecutionOptions;
   instructions?: string;

@@ -1325,9 +1325,25 @@ async function handleThreadFork(
   sendThreadIdentity(threadId, forkedProviderThreadId);
 }
 
+function buildPromptTexts(
+  input: unknown,
+  inputGroups: unknown[][] | undefined,
+): string[] | undefined {
+  const groups = inputGroups ?? [input];
+  const texts: string[] = [];
+  for (const group of groups) {
+    const text = buildPromptText(group);
+    if (text === undefined) {
+      return undefined;
+    }
+    texts.push(text);
+  }
+  return texts;
+}
+
 function handleTurnStart(id: string | number, params: TurnStartParams): void {
-  const input = buildPromptText(params.input);
-  if (!input) {
+  const inputs = buildPromptTexts(params.input, params.inputGroups);
+  if (!inputs) {
     sendError(id, -32602, "Missing input text");
     return;
   }
@@ -1338,7 +1354,9 @@ function handleTurnStart(id: string | number, params: TurnStartParams): void {
     return;
   }
 
-  ignoreInputConsumption(threadSession.session.pushInput(input));
+  for (const input of inputs) {
+    ignoreInputConsumption(threadSession.session.pushInput(input));
+  }
   sendResult(id, { threadId: params.threadId });
 }
 
@@ -1346,8 +1364,8 @@ async function handleTurnSteer(
   id: string | number,
   params: TurnSteerParams,
 ): Promise<void> {
-  const input = buildPromptText(params.input);
-  if (!input) {
+  const inputs = buildPromptTexts(params.input, params.inputGroups);
+  if (!inputs) {
     sendError(id, -32602, "Missing input text");
     return;
   }
@@ -1359,7 +1377,9 @@ async function handleTurnSteer(
   }
 
   try {
-    await threadSession.session.pushInput(input);
+    await Promise.all(
+      inputs.map((input) => threadSession.session.pushInput(input)),
+    );
     sendResult(id, { threadId: params.threadId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

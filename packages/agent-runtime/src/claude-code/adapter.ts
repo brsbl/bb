@@ -1195,7 +1195,17 @@ export function createClaudeCodeProviderAdapter(
             params: {
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
-              input: stripClaudePlanCommandInput(command.input, command.options),
+              input: stripClaudePlanCommandInput(
+                command.input,
+                command.options,
+              ),
+              ...(command.inputGroups !== undefined
+                ? {
+                    inputGroups: command.inputGroups.map((inputGroup) =>
+                      stripClaudePlanCommandInput(inputGroup, command.options),
+                    ),
+                  }
+                : {}),
               ...(command.options?.model
                 ? { model: command.options.model }
                 : {}),
@@ -1209,7 +1219,17 @@ export function createClaudeCodeProviderAdapter(
               threadId: command.threadId,
               providerThreadId: command.providerThreadId,
               expectedTurnId: command.expectedTurnId,
-              input: stripClaudePlanCommandInput(command.input, command.options),
+              input: stripClaudePlanCommandInput(
+                command.input,
+                command.options,
+              ),
+              ...(command.inputGroups !== undefined
+                ? {
+                    inputGroups: command.inputGroups.map((inputGroup) =>
+                      stripClaudePlanCommandInput(inputGroup, command.options),
+                    ),
+                  }
+                : {}),
             },
           };
         case "thread/fork": {

@@ -1975,7 +1975,8 @@ describe("public thread data routes", () => {
       expect(response.status).toBe(409);
       await expect(readJson(response)).resolves.toMatchObject({
         code: "invalid_request",
-        message: "Queued messages with different execution options cannot be grouped",
+        message:
+          "Queued messages with different execution options cannot be grouped",
       });
     });
   });
@@ -2164,6 +2165,21 @@ describe("public thread data routes", () => {
           providerThreadId: "provider-queued-message-create-idle-auto-send",
         },
       });
+      expect("inputGroups" in queued.command).toBe(false);
+      const requestedEvent = harness.db
+        .select({ data: events.data })
+        .from(events)
+        .where(
+          and(
+            eq(events.threadId, thread.id),
+            eq(events.type, "client/turn/requested"),
+          ),
+        )
+        .get();
+      expect(requestedEvent).toBeTruthy();
+      expect(
+        Object.hasOwn(JSON.parse(requestedEvent!.data), "inputGroups"),
+      ).toBe(false);
       expect(getQueuedThreadMessage(harness.db, queuedMessage.id)).toBeNull();
       expect(getThread(harness.db, thread.id)?.status).toBe("active");
     });
@@ -2224,6 +2240,10 @@ describe("public thread data routes", () => {
           { type: "text", text: "First grouped queued message" },
           { type: "text", text: "\n\n" },
           { type: "text", text: "Second grouped queued message" },
+        ],
+        inputGroups: [
+          [{ type: "text", text: "First grouped queued message" }],
+          [{ type: "text", text: "Second grouped queued message" }],
         ],
         target: { mode: "start" },
       });
@@ -2770,10 +2790,12 @@ describe("public thread data routes", () => {
       const requestedData = JSON.parse(requestedEvent?.data ?? "{}") as {
         inputGroups?: { text: string; type: "text" }[][];
       };
-      expect(requestedData.inputGroups?.map((group) => group[0]?.text)).toEqual([
-        "First reprovision grouped message",
-        "Second reprovision grouped message",
-      ]);
+      expect(requestedData.inputGroups?.map((group) => group[0]?.text)).toEqual(
+        [
+          "First reprovision grouped message",
+          "Second reprovision grouped message",
+        ],
+      );
     });
   });
 

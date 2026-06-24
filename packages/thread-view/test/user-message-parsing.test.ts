@@ -188,7 +188,7 @@ describe("user message parsing", () => {
       "Second",
     ]);
     expect(messages.map((message) => message.id)).toEqual([
-      `${event.threadId}:user-seed:${meta.seq}-0`,
+      `${event.threadId}:user-seed:${meta.seq}`,
       `${event.threadId}:user-seed:${meta.seq}-1`,
     ]);
     expect(messages.map((message) => message.turnRequest)).toEqual([

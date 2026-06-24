@@ -1,4 +1,7 @@
-import type { TimelinePaginationCursor, TimelineRow } from "@bb/server-contract";
+import type {
+  TimelinePaginationCursor,
+  TimelineRow,
+} from "@bb/server-contract";
 import { ApiError } from "../../errors.js";
 
 export type ThreadTimelinePageKind = "latest" | "older";
@@ -64,7 +67,11 @@ function buildTimelineLogicalSegments(
   let currentRows: TimelineRow[] = [];
 
   for (const row of rows) {
-    if (isTimelineSegmentAnchorRow(row) && currentRows.length > 0) {
+    if (
+      isTimelineSegmentAnchorRow(row) &&
+      currentRows.length > 0 &&
+      currentRows[0]?.sourceSeqStart !== row.sourceSeqStart
+    ) {
       segments.push(buildTimelineLogicalSegment(currentRows));
       currentRows = [row];
       continue;

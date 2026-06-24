@@ -790,6 +790,33 @@ describe("claude-code provider adapter", () => {
     });
   });
 
+  it("buildCommand turn/start preserves grouped input", () => {
+    const adapter = createClaudeCodeProviderAdapter();
+    const cmd = adapter.buildCommandPlan({
+      type: "turn/start",
+      clientRequestId: "creq_2222222297",
+      threadId: "bb-thread-1",
+      providerThreadId: "claude-session-1",
+      input: [
+        promptTextInput({ text: "first" }),
+        promptTextInput({ text: "\n\n" }),
+        promptTextInput({ text: "second" }),
+      ],
+      inputGroups: [
+        [promptTextInput({ text: "first" })],
+        [promptTextInput({ text: "second" })],
+      ],
+      options: fullProviderExecutionContext,
+    });
+
+    expect(cmd?.params).toMatchObject({
+      inputGroups: [
+        [{ type: "text", text: "first" }],
+        [{ type: "text", text: "second" }],
+      ],
+    });
+  });
+
   it("buildCommand uses native plan mode and strips the plan command pill", () => {
     const adapter = createClaudeCodeProviderAdapter();
     const startCmd = adapter.buildCommandPlan({

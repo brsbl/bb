@@ -20,7 +20,10 @@ import type {
   ProviderCommandPlan,
   ProviderInteractiveResponse,
 } from "../provider-adapter.js";
-import { noPreparedProviderCommandDispatch } from "../provider-adapter.js";
+import {
+  flattenPromptInputGroups,
+  noPreparedProviderCommandDispatch,
+} from "../provider-adapter.js";
 import type {
   ProviderInboundRequest,
   ProviderRuntimeEvent,
@@ -132,7 +135,7 @@ function buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
         kind: "request",
         method: "turn/start",
         params: {
-          input: command.input,
+          input: flattenPromptInputGroups(command.input, command.inputGroups),
           options: command.options,
           providerThreadId: command.providerThreadId,
           threadId: command.threadId,
@@ -144,7 +147,7 @@ function buildCommandPlan(command: AdapterCommand): ProviderCommandPlan {
         method: "turn/steer",
         params: {
           expectedTurnId: command.expectedTurnId,
-          input: command.input,
+          input: flattenPromptInputGroups(command.input, command.inputGroups),
           providerThreadId: command.providerThreadId,
           threadId: command.threadId,
         },
@@ -460,8 +463,9 @@ export function createFakeAdapter(
       supportedPermissionModes: ["full", "workspace-write", "readonly"],
     },
     decodeToolCallRequest,
-    decodeInteractiveRequest:
-      supportsUserQuestion ? decodeInteractiveRequest : undefined,
+    decodeInteractiveRequest: supportsUserQuestion
+      ? decodeInteractiveRequest
+      : undefined,
     displayName: options.displayName ?? DEFAULT_DISPLAY_NAME,
     id: options.id ?? DEFAULT_ADAPTER_ID,
     parseModelListResult,
@@ -476,7 +480,8 @@ export function createFakeAdapter(
     translateAcceptedCommand() {
       return [];
     },
-    buildInteractiveResponse:
-      supportsUserQuestion ? buildInteractiveResponse : undefined,
+    buildInteractiveResponse: supportsUserQuestion
+      ? buildInteractiveResponse
+      : undefined,
   };
 }

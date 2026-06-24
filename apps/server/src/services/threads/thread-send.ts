@@ -445,6 +445,7 @@ export async function sendThreadMessage(
       // happens at create time.
       fork: null,
       input,
+      ...(inputGroups !== undefined ? { inputGroups } : {}),
       requestId,
       execution,
       permissionEscalation,
@@ -533,6 +534,7 @@ export async function sendThreadMessage(
   const preparedCommand = await prepareTurnSubmitCommandPayload(deps, {
     thread,
     input,
+    ...(inputGroups !== undefined ? { inputGroups } : {}),
     execution,
     permissionEscalation,
     target: {

@@ -179,6 +179,7 @@ export const threadStartCommandSchema = hostDaemonThreadTargetSchema
     // carries no input. A non-fork start always runs a first turn and requires
     // at least one input, enforced by the refinement below.
     input: z.array(promptInputSchema),
+    inputGroups: z.array(z.array(promptInputSchema).min(1)).min(1).optional(),
     threadStoragePath: z.string().min(1).optional(),
     /** Present means fork the new thread from this source provider session
      *  instead of starting fresh; absent means a normal start. */
@@ -219,6 +220,7 @@ const turnSubmitCommandSchema = hostDaemonThreadTargetSchema
     type: z.literal("turn.submit"),
     requestId: clientTurnRequestIdSchema,
     input: z.array(promptInputSchema).min(1),
+    inputGroups: z.array(z.array(promptInputSchema).min(1)).min(1).optional(),
     options: runtimeThreadExecutionOptionsSchema,
     acpLaunchSpec: hostDaemonAcpLaunchSpecSchema.optional(),
     resumeContext: turnResumeContextSchema,

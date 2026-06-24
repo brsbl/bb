@@ -2,7 +2,6 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import type {
   PromptHistoryEntry,
-  PromptInput,
   ResolvedThreadExecutionOptions,
   ThreadQueuedMessage,
   ThreadWithRuntime,
@@ -317,19 +316,6 @@ function queuedMessageSendIds(
   const group = queuedMessageSendGroup(queuedMessages, queuedMessageId);
   if (group.length === 0) return new Set([queuedMessageId]);
   return new Set(group.map((queuedMessage) => queuedMessage.id));
-}
-
-function groupedQueuedMessageInputForRuntime(
-  queuedMessages: readonly ThreadQueuedMessage[],
-): PromptInput[] {
-  return queuedMessages.flatMap((queuedMessage, index) =>
-    index === 0
-      ? queuedMessage.content
-      : [
-          { type: "text" as const, text: "\n\n", mentions: [] },
-          ...queuedMessage.content,
-        ],
-  );
 }
 
 function getCachedDefaultExecutionOptions(
@@ -893,9 +879,16 @@ export async function beginSendQueuedMessageTransaction({
     queryClient,
     threadId: request.id,
   });
+  if (queuedMessageGroup.length > 1) {
+    return {
+      optimisticRowId: null,
+      previousQueuedMessages,
+      previousThread,
+    };
+  }
   const optimisticRow = buildOptimisticUserMessageRow({
     createdAt: optimisticCreatedAt,
-    input: groupedQueuedMessageInputForRuntime(queuedMessageGroup),
+    input: queuedMessage.content,
     mode: request.mode,
     threadId: request.id,
     threadStatus: previousThread?.status ?? null,

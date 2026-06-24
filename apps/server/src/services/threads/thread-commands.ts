@@ -85,6 +85,7 @@ export interface ThreadStartCommandArgs {
   fork: ThreadForkDescriptor | null;
   permissionEscalation: PermissionEscalation;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   projectId: string;
   providerId: string;
   requestId: ClientTurnRequestId;
@@ -99,6 +100,7 @@ interface PreparedTurnSubmitCommandBuildArgs {
   execution: ResolvedThreadExecutionOptions;
   permissionEscalation: PermissionEscalation;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   providerThreadId: string;
   runtimeContext: ResolvedThreadRuntimeCommandConfig;
   target: TurnSubmitTarget;
@@ -110,6 +112,7 @@ interface PrepareTurnSubmitCommandPayloadArgs {
   execution: ResolvedThreadExecutionOptions;
   permissionEscalation: PermissionEscalation;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   providerThreadId?: string;
   target: TurnSubmitTarget;
   thread: Thread;
@@ -321,6 +324,9 @@ export async function buildThreadStartCommand(
     ...(acpLaunchSpec !== undefined ? { acpLaunchSpec } : {}),
     requestId: args.requestId,
     input: args.input,
+    ...(args.inputGroups !== undefined
+      ? { inputGroups: args.inputGroups }
+      : {}),
     options: toRuntimeExecutionOptions({
       ...args,
       claudeCodeMockCliTraffic: resolveClaudeCodeMockCliTrafficConfig(deps),
@@ -348,6 +354,9 @@ function buildPreparedTurnSubmitCommandPayload(
     threadId: args.threadId,
     ...(acpLaunchSpec !== undefined ? { acpLaunchSpec } : {}),
     input: args.input,
+    ...(args.inputGroups !== undefined
+      ? { inputGroups: args.inputGroups }
+      : {}),
     options: toRuntimeExecutionOptions({
       ...args,
       claudeCodeMockCliTraffic: args.claudeCodeMockCliTraffic,
@@ -400,6 +409,9 @@ export async function prepareTurnSubmitCommandPayload(
     execution: args.execution,
     permissionEscalation: args.permissionEscalation,
     input: args.input,
+    ...(args.inputGroups !== undefined
+      ? { inputGroups: args.inputGroups }
+      : {}),
     providerThreadId,
     runtimeContext,
     target: args.target,

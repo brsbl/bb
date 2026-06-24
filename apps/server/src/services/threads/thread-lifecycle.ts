@@ -897,6 +897,9 @@ export async function prepareReadyThreadTurnCommand(
       environment: args.environment,
       execution: args.execution,
       input: args.input,
+      ...(args.inputGroups !== undefined
+        ? { inputGroups: args.inputGroups }
+        : {}),
       permissionEscalation: args.permissionEscalation,
       providerThreadId,
       target: { mode: "start" },

@@ -348,7 +348,7 @@ describe("thread runtime cache owner", () => {
     ).toEqual([]);
   });
 
-  it("optimistically removes the lead queued-message group when sending", async () => {
+  it("optimistically removes the lead queued-message group without merging timeline text", async () => {
     const queryClient = createAppQueryClient({
       defaultOptions: { queries: { gcTime: Infinity, retry: false } },
       showMutationErrorToasts: false,
@@ -392,17 +392,7 @@ describe("thread runtime cache owner", () => {
     const timeline = queryClient.getQueryData<ThreadTimelineResponse>(
       threadTimelineQueryKey("thread-1"),
     );
-    expect(timeline?.rows).toHaveLength(1);
-    expect(timeline?.rows[0]).toMatchObject({
-      kind: "conversation",
-      role: "user",
-    });
-    const optimisticRow = timeline?.rows[0];
-    if (optimisticRow?.kind !== "conversation") {
-      throw new Error("Expected optimistic conversation row");
-    }
-    expect(optimisticRow.text).toContain("Queued message");
-    expect(optimisticRow.text).toContain("Second");
+    expect(timeline?.rows).toEqual([]);
 
     rollbackRemoveQueuedMessageTransaction({
       queryClient,
@@ -416,5 +406,10 @@ describe("thread runtime cache owner", () => {
     expect(
       queryClient.getQueryData(threadQueuedMessagesQueryKey("thread-1")),
     ).toEqual(previousQueue);
+    expect(
+      queryClient.getQueryData<ThreadTimelineResponse>(
+        threadTimelineQueryKey("thread-1"),
+      )?.rows,
+    ).toEqual([]);
   });
 });

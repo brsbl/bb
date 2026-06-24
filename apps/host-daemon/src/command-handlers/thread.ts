@@ -17,6 +17,22 @@ interface ResumeThreadRuntimeIfMissingArgs {
   entry: RuntimeEntry;
 }
 
+interface StageThreadCommandInputArgs {
+  command: Pick<
+    TurnSubmitCommand,
+    "input" | "inputGroups" | "requestId" | "threadId"
+  >;
+  fetchProjectAttachment: CommandDispatchOptions["fetchProjectAttachment"];
+  projectId: string;
+  threadStorageRootPath: string;
+}
+
+interface StagedThreadCommandInput {
+  cleanup: () => Promise<void>;
+  input: TurnSubmitCommand["input"];
+  inputGroups?: TurnSubmitCommand["inputGroups"];
+}
+
 function requireConfinedPath(rootPath: string, candidatePath: string): string {
   const resolved = resolveContainedPath({
     rootPath,
@@ -38,6 +54,59 @@ async function cleanupAfterPostStagingFailure(
     await cleanup();
   } catch {
     // Preserve the runtime/provisioning failure that triggered cleanup.
+  }
+}
+
+async function cleanupStagedInputs(
+  cleanups: readonly (() => Promise<void>)[],
+): Promise<void> {
+  await Promise.all(cleanups.map((cleanup) => cleanup()));
+}
+
+async function stageThreadCommandInput(
+  args: StageThreadCommandInputArgs,
+): Promise<StagedThreadCommandInput> {
+  const cleanups: (() => Promise<void>)[] = [];
+  const stagedInput = await stagePromptAttachments({
+    fetchProjectAttachment: args.fetchProjectAttachment,
+    input: args.command.input,
+    projectId: args.projectId,
+    requestId: args.command.requestId,
+    threadStorageRootPath: args.threadStorageRootPath,
+    threadId: args.command.threadId,
+  });
+  cleanups.push(stagedInput.cleanup);
+
+  try {
+    if (args.command.inputGroups === undefined) {
+      return {
+        cleanup: () => cleanupStagedInputs(cleanups),
+        input: stagedInput.input,
+      };
+    }
+
+    const inputGroups: TurnSubmitCommand["inputGroups"] = [];
+    for (const inputGroup of args.command.inputGroups) {
+      const stagedGroup = await stagePromptAttachments({
+        fetchProjectAttachment: args.fetchProjectAttachment,
+        input: inputGroup,
+        projectId: args.projectId,
+        requestId: args.command.requestId,
+        threadStorageRootPath: args.threadStorageRootPath,
+        threadId: args.command.threadId,
+      });
+      cleanups.push(stagedGroup.cleanup);
+      inputGroups.push(stagedGroup.input);
+    }
+
+    return {
+      cleanup: () => cleanupStagedInputs(cleanups),
+      input: stagedInput.input,
+      inputGroups,
+    };
+  } catch (error) {
+    await cleanupAfterPostStagingFailure(() => cleanupStagedInputs(cleanups));
+    throw error;
   }
 }
 
@@ -85,13 +154,11 @@ export async function startThread(
     );
     await fs.mkdir(confined, { recursive: true });
   }
-  const staged = await stagePromptAttachments({
+  const staged = await stageThreadCommandInput({
+    command,
     fetchProjectAttachment: options.fetchProjectAttachment,
-    input: command.input,
     projectId: command.projectId,
-    requestId: command.requestId,
     threadStorageRootPath: options.threadStorageRootPath,
-    threadId: command.threadId,
   });
   try {
     const entry = await requireResolvedWorkspaceForCommand({
@@ -112,6 +179,9 @@ export async function startThread(
       providerId: command.providerId,
       clientRequestId: command.requestId,
       input: staged.input,
+      ...(staged.inputGroups !== undefined
+        ? { inputGroups: staged.inputGroups }
+        : {}),
       options: command.options,
       instructions: command.instructions,
       dynamicTools: command.dynamicTools,
@@ -151,6 +221,9 @@ async function runSubmittedTurn(
   await entry.runtime.runTurn({
     threadId: command.threadId,
     input: command.input,
+    ...(command.inputGroups !== undefined
+      ? { inputGroups: command.inputGroups }
+      : {}),
     clientRequestId: command.requestId,
     options: command.options,
     instructions: command.resumeContext.instructions,
@@ -167,6 +240,9 @@ async function steerSubmittedTurn(
     threadId: command.threadId,
     expectedTurnId,
     input: command.input,
+    ...(command.inputGroups !== undefined
+      ? { inputGroups: command.inputGroups }
+      : {}),
     clientRequestId: command.requestId,
     options: command.options,
     instructions: command.resumeContext.instructions,
@@ -192,17 +268,18 @@ export async function submitTurn(
   entry: RuntimeEntry,
   options: CommandDispatchOptions,
 ): Promise<HostDaemonCommandResult<"turn.submit">> {
-  const staged = await stagePromptAttachments({
+  const staged = await stageThreadCommandInput({
+    command,
     fetchProjectAttachment: options.fetchProjectAttachment,
-    input: command.input,
     projectId: command.resumeContext.projectId,
-    requestId: command.requestId,
     threadStorageRootPath: options.threadStorageRootPath,
-    threadId: command.threadId,
   });
   const stagedCommand = {
     ...command,
     input: staged.input,
+    ...(staged.inputGroups !== undefined
+      ? { inputGroups: staged.inputGroups }
+      : {}),
   };
   try {
     await resumeThreadRuntimeIfMissing({ command: stagedCommand, entry });

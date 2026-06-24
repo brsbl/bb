@@ -68,7 +68,10 @@ import type {
   ProviderExecutionContext,
   ProviderTranslationContext,
 } from "../provider-adapter.js";
-import { noPreparedProviderCommandDispatch } from "../provider-adapter.js";
+import {
+  flattenPromptInputGroups,
+  noPreparedProviderCommandDispatch,
+} from "../provider-adapter.js";
 import type {
   JsonRpcMessage,
   ProviderInboundRequest,
@@ -1331,7 +1334,10 @@ export function createPiProviderAdapter(
             method: "turn/start",
             params: {
               threadId: command.providerThreadId,
-              input: command.input,
+              input: flattenPromptInputGroups(
+                command.input,
+                command.inputGroups,
+              ),
               ...(command.options?.model
                 ? { model: command.options.model }
                 : {}),
@@ -1344,7 +1350,10 @@ export function createPiProviderAdapter(
             params: {
               threadId: command.providerThreadId,
               expectedTurnId: command.expectedTurnId,
-              input: command.input,
+              input: flattenPromptInputGroups(
+                command.input,
+                command.inputGroups,
+              ),
             },
           };
         case "thread/fork": {

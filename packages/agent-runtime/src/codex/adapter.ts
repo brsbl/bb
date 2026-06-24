@@ -52,6 +52,7 @@ import type {
   ProviderCommandPlan,
   ProviderExecutionContext,
 } from "../provider-adapter.js";
+import { flattenPromptInputGroups } from "../provider-adapter.js";
 import type {
   JsonRpcMessage,
   ProviderInboundRequest,
@@ -833,9 +834,7 @@ function getCodexDelegationToolCall(
   };
 }
 
-function getCodexEventProviderThreadId(
-  event: ThreadEvent,
-): string | undefined {
+function getCodexEventProviderThreadId(event: ThreadEvent): string | undefined {
   if (
     "providerThreadId" in event &&
     typeof event.providerThreadId === "string" &&
@@ -846,9 +845,7 @@ function getCodexEventProviderThreadId(
   return undefined;
 }
 
-function getCodexEventParentToolCallId(
-  event: ThreadEvent,
-): string | undefined {
+function getCodexEventParentToolCallId(event: ThreadEvent): string | undefined {
   switch (event.type) {
     case "item/started":
     case "item/completed":
@@ -1369,16 +1366,11 @@ export function createCodexProviderAdapter(
           args.providerThreadId,
         );
       }
-      delegationParentToolCallIdsByTurnId.set(
-        args.turnId,
-        pendingLink.callId,
-      );
+      delegationParentToolCallIdsByTurnId.set(args.turnId, pendingLink.callId);
       return pendingLink.callId;
     }
 
-    pendingDelegationTurnLinksByProviderThreadId.delete(
-      args.providerThreadId,
-    );
+    pendingDelegationTurnLinksByProviderThreadId.delete(args.providerThreadId);
     return undefined;
   }
 
@@ -1748,7 +1740,9 @@ export function createCodexProviderAdapter(
             method: "turn/start",
             params: {
               threadId: command.providerThreadId,
-              input: toCodexUserInput(command.input),
+              input: toCodexUserInput(
+                flattenPromptInputGroups(command.input, command.inputGroups),
+              ),
               approvalPolicy: permissionSettings.approvalPolicy,
               sandboxPolicy: permissionSettings.sandboxPolicy,
               model: command.options?.model ?? undefined,
@@ -1763,7 +1757,9 @@ export function createCodexProviderAdapter(
             params: {
               threadId: command.providerThreadId,
               expectedTurnId: command.expectedTurnId,
-              input: toCodexUserInput(command.input),
+              input: toCodexUserInput(
+                flattenPromptInputGroups(command.input, command.inputGroups),
+              ),
             },
           };
         case "thread/name/set":

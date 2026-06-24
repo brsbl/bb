@@ -112,6 +112,7 @@ const claudeCodeCommandSchema = z.discriminatedUnion("method", [
       threadId: z.string(),
       providerThreadId: z.string().nullable(),
       input: z.array(z.unknown()),
+      inputGroups: z.array(z.array(z.unknown()).min(1)).optional(),
       model: z.string().optional(),
       config: z.record(z.string(), z.unknown()).optional(),
     }),
@@ -123,6 +124,7 @@ const claudeCodeCommandSchema = z.discriminatedUnion("method", [
       providerThreadId: z.string().nullable(),
       expectedTurnId: z.string(),
       input: z.array(z.unknown()),
+      inputGroups: z.array(z.array(z.unknown()).min(1)).optional(),
     }),
   }),
   z.object({

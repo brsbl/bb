@@ -990,6 +990,7 @@ function createAgentRuntimeInternal(
       acpLaunchSpec,
       clientRequestId,
       input,
+      inputGroups,
       options: execOpts,
       instructions,
       dynamicTools,
@@ -1122,6 +1123,7 @@ function createAgentRuntimeInternal(
             await runtime.runTurn({
               threadId,
               input,
+              ...(inputGroups !== undefined ? { inputGroups } : {}),
               clientRequestId,
               options: execOpts,
               instructions,
@@ -1264,6 +1266,7 @@ function createAgentRuntimeInternal(
     async runTurn({
       threadId,
       input,
+      inputGroups,
       clientRequestId,
       options: execOpts,
       instructions,
@@ -1294,6 +1297,7 @@ function createAgentRuntimeInternal(
             threadId,
             providerThreadId: requireProviderThreadId(threadId),
             input,
+            ...(inputGroups !== undefined ? { inputGroups } : {}),
             clientRequestId,
             options: toProviderExecutionContext({
               envVars: {},
@@ -1335,6 +1339,7 @@ function createAgentRuntimeInternal(
       threadId,
       expectedTurnId,
       input,
+      inputGroups,
       clientRequestId,
       options: execOpts,
       instructions,
@@ -1378,6 +1383,7 @@ function createAgentRuntimeInternal(
             providerThreadId: requireProviderThreadId(threadId),
             expectedTurnId,
             input,
+            ...(inputGroups !== undefined ? { inputGroups } : {}),
             clientRequestId,
             options: toProviderExecutionContext({
               envVars: {},

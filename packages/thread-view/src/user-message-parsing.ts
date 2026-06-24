@@ -371,7 +371,7 @@ export function parseUsersFromClientRequest(
       buildClientUserMessage({
         acceptedClientRequest,
         decoded,
-        idSuffix: groups.length > 1 ? String(index) : undefined,
+        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
         input,
         meta,
         requestStatus: acceptedClientRequest ? "accepted" : "pending",

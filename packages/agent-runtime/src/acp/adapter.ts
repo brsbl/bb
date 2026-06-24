@@ -36,7 +36,10 @@ import type {
   ProviderExecutionContext,
   ProviderTranslationContext,
 } from "../provider-adapter.js";
-import { noPreparedProviderCommandDispatch } from "../provider-adapter.js";
+import {
+  flattenPromptInputGroups,
+  noPreparedProviderCommandDispatch,
+} from "../provider-adapter.js";
 import { ProviderResponseEncodeError } from "../runtime-json-rpc.js";
 import type {
   ProviderInboundRequest,
@@ -1274,7 +1277,10 @@ export function createAcpProviderAdapter(
             method: "turn/start",
             params: {
               threadId: command.providerThreadId,
-              input: command.input,
+              input: flattenPromptInputGroups(
+                command.input,
+                command.inputGroups,
+              ),
             },
           };
         case "turn/steer":
@@ -1284,7 +1290,10 @@ export function createAcpProviderAdapter(
             params: {
               threadId: command.providerThreadId,
               expectedTurnId: command.expectedTurnId,
-              input: command.input,
+              input: flattenPromptInputGroups(
+                command.input,
+                command.inputGroups,
+              ),
             },
           };
         case "thread/stop":
