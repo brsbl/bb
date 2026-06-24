@@ -146,6 +146,7 @@ export function ThreadTableOfContents({
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [listOverflows, setListOverflows] = useState(false);
   const {
+    aboveOverflow,
     belowOverflow,
     bottomSentinelRef,
     scrollRef,
@@ -383,10 +384,16 @@ export function ThreadTableOfContents({
                 className="h-px w-full"
               />
             </div>
+            {aboveOverflow ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-popover via-popover/90 to-transparent"
+              />
+            ) : null}
             {belowOverflow || listOverflows ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-popover to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-popover via-popover/90 to-transparent"
               />
             ) : null}
           </div>
