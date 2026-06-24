@@ -5,10 +5,6 @@ import {
   type QueuedMessageReorderRequest,
 } from "@/lib/queued-message-reorder";
 import { QueuedMessagesList } from "@/components/promptbox/banner/QueuedMessagesList";
-import {
-  QueuedMessageGroupingDemo,
-  type QueuedMessageItem,
-} from "@/components/prototypes/QueuedMessageGrouping";
 import { StoryCard, StoryRow } from "../../../../.ladle/story-card";
 
 export default {
@@ -28,9 +24,7 @@ function PromptStage({ children, size }: PromptStageProps) {
   return (
     <div
       data-promptbox-shell=""
-      className={
-        size === "desktop" ? "min-w-0 flex-1" : "w-[20rem] shrink-0"
-      }
+      className={size === "desktop" ? "min-w-0 flex-1" : "w-[20rem] shrink-0"}
     >
       {children}
     </div>
@@ -73,6 +67,7 @@ function makeQueuedMessage({
     reasoningLevel: "medium",
     permissionMode: "workspace-write",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 0,
     updatedAt: 0,
   };
@@ -211,6 +206,7 @@ function StaticQueuedMessagesList({
       processingAction={null}
       onSendImmediately={noop}
       onReorder={noop}
+      onSetGroupBoundary={noop}
       onEdit={noop}
       onDelete={noop}
     />
@@ -290,10 +286,18 @@ function ReorderableQueuedMessagesList() {
     useState<readonly ThreadQueuedMessage[]>(multipleMessages);
   const handleReorder = useCallback((request: QueuedMessageReorderRequest) => {
     setQueuedMessages((currentQueuedMessages) =>
-      applyQueuedMessageReorder({
-        queuedMessages: currentQueuedMessages,
-        request,
-      }),
+      applyStoryGroupBoundary(
+        applyQueuedMessageReorder({
+          queuedMessages: currentQueuedMessages,
+          request,
+        }),
+        request.groupBoundaryQueuedMessageId,
+      ),
+    );
+  }, []);
+  const handleSetGroupBoundary = useCallback((boundaryId: string) => {
+    setQueuedMessages((currentQueuedMessages) =>
+      applyStoryGroupBoundary(currentQueuedMessages, boundaryId),
     );
   }, []);
 
@@ -306,10 +310,25 @@ function ReorderableQueuedMessagesList() {
       processingAction={null}
       onSendImmediately={noop}
       onReorder={handleReorder}
+      onSetGroupBoundary={handleSetGroupBoundary}
       onEdit={noop}
       onDelete={noop}
     />
   );
+}
+
+function applyStoryGroupBoundary(
+  queuedMessages: readonly ThreadQueuedMessage[],
+  boundaryId: string,
+): ThreadQueuedMessage[] {
+  const boundaryIndex = queuedMessages.findIndex(
+    (queuedMessage) => queuedMessage.id === boundaryId,
+  );
+  if (boundaryIndex === -1) return [...queuedMessages];
+  return queuedMessages.map((queuedMessage, index) => ({
+    ...queuedMessage,
+    groupWithNext: index < boundaryIndex,
+  }));
 }
 
 export function Overview() {
@@ -325,6 +344,7 @@ export function Overview() {
             processingAction={null}
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -348,6 +368,7 @@ export function Overview() {
             processingAction={null}
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -366,6 +387,7 @@ export function Overview() {
             processingAction={null}
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -384,6 +406,7 @@ export function Overview() {
             processingAction={null}
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -402,6 +425,7 @@ export function Overview() {
             processingAction="send"
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -420,6 +444,7 @@ export function Overview() {
             processingAction={null}
             onSendImmediately={noop}
             onReorder={noop}
+            onSetGroupBoundary={noop}
             onEdit={noop}
             onDelete={noop}
           />
@@ -429,18 +454,21 @@ export function Overview() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// PROTOTYPE — grouping queued messages into one turn
-// ---------------------------------------------------------------------------
-// The divider (revealed on hover, like the reorder grip) is a dnd-kit sortable
-// item, so dragging it — or dragging a row across it — uses the same smooth
-// reorder UX. Drop it to set how many leading messages send together.
-
-const groupingOneMessage: readonly QueuedMessageItem[] = [
-  { id: "g_one", text: "Refactor the queued-message reorder helper" },
+const oneGroupedStoryMessage: readonly ThreadQueuedMessage[] = [
+  makeQueuedMessage({
+    id: "g_one",
+    text: "Refactor the queued-message reorder helper",
+  }),
 ];
 
-export function Grouping() {
+const groupedMessages: readonly ThreadQueuedMessage[] = multipleMessages.map(
+  (message, index) => ({
+    ...message,
+    groupWithNext: index === 0,
+  }),
+);
+
+export function GroupedSendDivider() {
   return (
     <StoryCard>
       <StoryRow
@@ -448,7 +476,7 @@ export function Grouping() {
         hint="no divider — grouping needs at least two queued messages"
       >
         <ResponsivePromptStage>
-          <QueuedMessageGroupingDemo initialMessages={groupingOneMessage} />
+          <StaticQueuedMessagesList queuedMessages={oneGroupedStoryMessage} />
         </ResponsivePromptStage>
       </StoryRow>
       <StoryRow
@@ -456,7 +484,7 @@ export function Grouping() {
         hint="hover the divider and drag it down to group; drag a row's grip to reorder"
       >
         <ResponsivePromptStage>
-          <QueuedMessageGroupingDemo />
+          <StaticQueuedMessagesList queuedMessages={groupedMessages} />
         </ResponsivePromptStage>
       </StoryRow>
     </StoryCard>

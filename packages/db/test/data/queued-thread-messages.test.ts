@@ -4,7 +4,9 @@ import { createConnection } from "../../src/connection.js";
 import { migrate } from "../../src/migrate.js";
 import { noopNotifier } from "../../src/notifier.js";
 import {
+  claimNextQueuedThreadMessageGroup,
   claimQueuedThreadMessage,
+  claimQueuedThreadMessageGroup,
   claimNextQueuedThreadMessage,
   createQueuedThreadMessage,
   deleteClaimedQueuedThreadMessage,
@@ -15,6 +17,7 @@ import {
   releaseQueuedMessageClaim,
   releaseStaleQueuedMessageClaims,
   reorderQueuedThreadMessage,
+  setQueuedThreadMessageGroupBoundary,
 } from "../../src/data/queued-thread-messages.js";
 import { createProject } from "../../src/data/projects.js";
 import { createThread } from "../../src/data/threads.js";
@@ -62,6 +65,7 @@ describe("queued thread messages", () => {
     expect(queuedMessage.content).toBe(JSON.stringify(defaultInput));
     expect(queuedMessage.model).toBe("gpt-5");
     expect(queuedMessage.serviceTier).toBe("default");
+    expect(queuedMessage.groupWithNext).toBe(false);
   });
 
   it("gets a queued message by ID", () => {
@@ -273,6 +277,149 @@ describe("queued thread messages", () => {
     } finally {
       nowSpy.mockRestore();
     }
+  });
+
+  it("persists the contiguous lead group boundary", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "high",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+
+    const result = setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(result.kind).toBe("updated");
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: true },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("claims the contiguous lead group together", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "high",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    const claimedQueuedMessages = claimNextQueuedThreadMessageGroup(
+      db,
+      noopNotifier,
+      thread.id,
+    );
+
+    expect(claimedQueuedMessages?.map((queuedMessage) => queuedMessage.id)).toEqual([
+      firstQueuedMessage.id,
+      secondQueuedMessage.id,
+    ]);
+    expect(listQueuedThreadMessages(db, thread.id).map((queuedMessage) => queuedMessage.id)).toEqual([
+      thirdQueuedMessage.id,
+    ]);
+  });
+
+  it("claims only the selected message when sending outside the lead group", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "high",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    const claimedQueuedMessages = claimQueuedThreadMessageGroup(
+      db,
+      noopNotifier,
+      thirdQueuedMessage.id,
+    );
+
+    expect(claimedQueuedMessages?.map((queuedMessage) => queuedMessage.id)).toEqual([
+      thirdQueuedMessage.id,
+    ]);
+    expect(listQueuedThreadMessages(db, thread.id).map((queuedMessage) => queuedMessage.id)).toEqual([
+      firstQueuedMessage.id,
+      secondQueuedMessage.id,
+    ]);
   });
 
   it("reorders queued messages to the front, middle, and end", () => {

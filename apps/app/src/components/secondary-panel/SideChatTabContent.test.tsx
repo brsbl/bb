@@ -316,6 +316,9 @@ vi.mock("@/hooks/mutations/thread-runtime-mutations", () => ({
   useCreateThreadQueuedMessage: () => ({ mutateAsync: mocks.noopMutateAsync }),
   useDeleteThreadQueuedMessage: () => ({ mutateAsync: mocks.noopMutateAsync }),
   useReorderThreadQueuedMessage: () => ({ mutateAsync: mocks.noopMutateAsync }),
+  useSetThreadQueuedMessageGroupBoundary: () => ({
+    mutateAsync: mocks.noopMutateAsync,
+  }),
   useSendThreadMessage: () => ({
     isPending: false,
     mutate: mocks.noopMutate,

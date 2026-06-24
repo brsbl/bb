@@ -46,6 +46,7 @@ import type {
   ReorderQueuedMessageRequest,
   SendQueuedMessageRequest,
   SendQueuedMessageResponse,
+  SetQueuedMessageGroupBoundaryRequest,
   SendMessageRequest,
   SystemConfigResponse,
   SystemExecutionOptionsResponse,
@@ -932,9 +933,7 @@ export async function listThreads(
           ...(filters.originKind ? { originKind: filters.originKind } : {}),
           ...(filters.excludeSideChats !== undefined
             ? {
-                excludeSideChats: toBooleanQueryValue(
-                  filters.excludeSideChats,
-                ),
+                excludeSideChats: toBooleanQueryValue(filters.excludeSideChats),
               }
             : {}),
           ...(filters.childOrigin ? { childOrigin: filters.childOrigin } : {}),
@@ -1246,6 +1245,18 @@ export async function reorderThreadQueuedMessage(
       ":queuedMessageId"
     ].order.$patch({
       param: { id, queuedMessageId },
+      json: req,
+    }),
+  );
+}
+
+export async function setThreadQueuedMessageGroupBoundary(
+  id: string,
+  req: SetQueuedMessageGroupBoundaryRequest,
+): Promise<ThreadQueuedMessageListResponse> {
+  return request<ThreadQueuedMessageListResponse>(
+    apiClient.threads[":id"]["queued-messages"]["group-boundary"].$patch({
+      param: { id },
       json: req,
     }),
   );

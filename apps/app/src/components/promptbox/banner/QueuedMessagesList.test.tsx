@@ -21,9 +21,21 @@ function makeQueuedMessage(id: string, text: string): ThreadQueuedMessage {
     reasoningLevel: "medium",
     permissionMode: "workspace-write",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 0,
     updatedAt: 0,
   };
+}
+
+function makeGroupedQueuedMessages(): ThreadQueuedMessage[] {
+  return [
+    {
+      ...makeQueuedMessage("q_one", "First queued message"),
+      groupWithNext: true,
+    },
+    makeQueuedMessage("q_two", "Second queued message"),
+    makeQueuedMessage("q_three", "Third queued message"),
+  ];
 }
 
 function renderQueuedMessages(queuedMessages: readonly ThreadQueuedMessage[]) {
@@ -36,6 +48,7 @@ function renderQueuedMessages(queuedMessages: readonly ThreadQueuedMessage[]) {
       processingAction={null}
       onSendImmediately={noop}
       onReorder={noop}
+      onSetGroupBoundary={noop}
       onEdit={noop}
       onDelete={noop}
     />,
@@ -98,6 +111,20 @@ describe("QueuedMessagesList", () => {
         container.querySelector('[data-queued-messages-fade="below"]'),
       ).not.toBeNull();
     });
+  });
+
+  it("renders the draggable group divider without filling grouped rows", () => {
+    const { container, getByLabelText } = renderQueuedMessages(
+      makeGroupedQueuedMessages(),
+    );
+
+    expect(getByLabelText("Messages above send together")).not.toBeNull();
+    expect(
+      container.querySelectorAll("[data-queued-message-row]"),
+    ).toHaveLength(3);
+    expect(
+      container.querySelector("[data-queued-message-group-fill]"),
+    ).toBeNull();
   });
 
   it("does not show a fade when stale observer entries report hidden sentinels without overflow", async () => {

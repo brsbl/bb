@@ -7,11 +7,13 @@ import {
   pinThread,
   reorderPinnedThread,
   reorderQueuedThreadMessage,
+  setQueuedThreadMessageGroupBoundary,
   unarchiveThread,
   unpinThread,
   updateThread,
   type ReorderPinnedThreadResult,
   type ReorderQueuedThreadMessageResult,
+  type SetQueuedThreadMessageGroupBoundaryResult,
 } from "@bb/db";
 import {
   publicApiRoutes,
@@ -89,6 +91,24 @@ function toQueuedMessageOrderResponse(
         409,
         "invalid_request",
         "Queued message order is invalid",
+      );
+  }
+}
+
+function toQueuedMessageGroupBoundaryResponse(
+  result: SetQueuedThreadMessageGroupBoundaryResult,
+): ThreadQueuedMessage[] {
+  switch (result.kind) {
+    case "updated":
+    case "unchanged":
+      return result.queuedMessages.map(toThreadQueuedMessage);
+    case "not_found":
+      throw new ApiError(404, "invalid_request", "Queued message not found");
+    case "claimed":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued message is already being sent",
       );
   }
 }
@@ -259,6 +279,22 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
           queuedMessageId: context.req.param("queuedMessageId"),
           previousQueuedMessageId: payload.previousQueuedMessageId,
           nextQueuedMessageId: payload.nextQueuedMessageId,
+          groupBoundaryQueuedMessageId: payload.groupBoundaryQueuedMessageId,
+        }),
+      ),
+    );
+  });
+
+  patch(routes.setQueuedMessageGroupBoundary, (context, payload) => {
+    const thread = requirePublicThread(deps.db, context.req.param("id"));
+    ensureThreadIsWritable(thread);
+    return context.json(
+      toQueuedMessageGroupBoundaryResponse(
+        setQueuedThreadMessageGroupBoundary({
+          db: deps.db,
+          notifier: deps.hub,
+          threadId: thread.id,
+          groupBoundaryQueuedMessageId: payload.groupBoundaryQueuedMessageId,
         }),
       ),
     );

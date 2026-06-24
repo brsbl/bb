@@ -90,6 +90,7 @@ import type {
   ReorderQueuedMessageRequest,
   ResolvePendingInteractionRequest,
   SendMessageRequest,
+  SetQueuedMessageGroupBoundaryRequest,
   SendQueuedMessageRequest,
   SendQueuedMessageResponse,
   SidebarBootstrapResponse,
@@ -183,6 +184,7 @@ import {
   reorderQueuedMessageRequestSchema,
   resolvePendingInteractionRequestSchema,
   sendMessageRequestSchema,
+  setQueuedMessageGroupBoundaryRequestSchema,
   sendQueuedMessageRequestSchema,
   systemExecutionOptionsQuerySchema,
   threadEventWaitQuerySchema,
@@ -694,6 +696,14 @@ export const publicApiRoutes = {
         PathThreadAndQueuedMessage,
         ReorderQueuedMessageRequest
       >(reorderQueuedMessageRequestSchema),
+      response: jsonResponse<ThreadQueuedMessageListResponse>(),
+    }),
+    setQueuedMessageGroupBoundary: defineRoute({
+      path: "/threads/:id/queued-messages/group-boundary",
+      method: "patch",
+      request: jsonRequest<PathId, SetQueuedMessageGroupBoundaryRequest>(
+        setQueuedMessageGroupBoundaryRequestSchema,
+      ),
       response: jsonResponse<ThreadQueuedMessageListResponse>(),
     }),
     promptHistory: defineRoute({

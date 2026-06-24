@@ -140,6 +140,7 @@ export const turnRequestEventDataSchema = z.object({
   systemMessageKind: systemMessageKindSchema.optional(),
   systemMessageSubject: systemMessageSubjectSchema.nullable().optional(),
   input: z.array(promptInputSchema),
+  inputGroups: z.array(z.array(promptInputSchema).min(1)).min(1).optional(),
   target: turnRequestTargetSchema,
   request: z.object({
     method: z.enum(["thread/start", "turn/start"]),

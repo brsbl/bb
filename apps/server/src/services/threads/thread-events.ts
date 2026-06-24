@@ -62,6 +62,7 @@ export interface ClientTurnRequestedEventArgs {
   execution: ResolvedThreadExecutionOptions;
   initiator: ThreadTurnInitiator;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   requestMethod: "thread/start" | "turn/start";
   senderThreadId: string | null;
   source: "spawn" | "tell";
@@ -251,6 +252,9 @@ function buildClientTurnRequestedEventData(
       ? { systemMessageSubject: args.systemMessageSubject }
       : {}),
     input: args.input,
+    ...(args.inputGroups !== undefined
+      ? { inputGroups: args.inputGroups }
+      : {}),
     target: args.target,
     execution: args.execution,
   };
@@ -666,6 +670,9 @@ export function parseStoredTurnRequestEvent(
       systemMessageKind: event.systemMessageKind,
       systemMessageSubject: event.systemMessageSubject,
       input: event.input,
+      ...(event.inputGroups !== undefined
+        ? { inputGroups: event.inputGroups }
+        : {}),
       target: event.target,
       request: event.request,
       execution: event.execution,

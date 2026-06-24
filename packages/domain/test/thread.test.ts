@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import { threadQueuedMessageSchema } from "../src/thread.js";
+
+describe("thread queued message schema", () => {
+  it("requires the explicit grouping boundary flag", () => {
+    expect(
+      threadQueuedMessageSchema.parse({
+        id: "qmsg_123",
+        content: [{ type: "text", text: "Queued message", mentions: [] }],
+        model: "gpt-5",
+        reasoningLevel: "medium",
+        permissionMode: "workspace-write",
+        serviceTier: "default",
+        groupWithNext: false,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).toMatchObject({
+      id: "qmsg_123",
+      groupWithNext: false,
+    });
+
+    expect(() =>
+      threadQueuedMessageSchema.parse({
+        id: "qmsg_123",
+        content: [{ type: "text", text: "Queued message", mentions: [] }],
+        model: "gpt-5",
+        reasoningLevel: "medium",
+        permissionMode: "workspace-write",
+        serviceTier: "default",
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).toThrow();
+  });
+});

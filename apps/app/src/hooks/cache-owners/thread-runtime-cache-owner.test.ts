@@ -50,6 +50,7 @@ function makeQueuedMessage(
     reasoningLevel: "medium",
     permissionMode: "readonly",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 1,
     updatedAt: 1,
     ...message,
@@ -345,5 +346,61 @@ describe("thread runtime cache owner", () => {
         threadTimelineQueryKey("thread-1"),
       )?.rows,
     ).toEqual([]);
+  });
+
+  it("optimistically removes the lead queued-message group when sending", async () => {
+    const queryClient = createAppQueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      showMutationErrorToasts: false,
+    });
+    const previousQueue = [
+      makeQueuedMessage({ id: "qmsg-1", groupWithNext: true }),
+      makeQueuedMessage({
+        id: "qmsg-2",
+        content: [{ type: "text", text: "Second", mentions: [] }],
+      }),
+      makeQueuedMessage({
+        id: "qmsg-3",
+        content: [{ type: "text", text: "Third", mentions: [] }],
+      }),
+    ];
+    queryClient.setQueryData(
+      threadQueuedMessagesQueryKey("thread-1"),
+      previousQueue,
+    );
+    queryClient.setQueryData(
+      threadTimelineQueryKey("thread-1"),
+      makeTimelineResponse(),
+    );
+
+    const transaction = await beginSendQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        mode: "auto",
+        queuedMessageId: "qmsg-1",
+      },
+    });
+
+    expect(
+      queryClient
+        .getQueryData<
+          ThreadQueuedMessage[]
+        >(threadQueuedMessagesQueryKey("thread-1"))
+        ?.map((queuedMessage) => queuedMessage.id),
+    ).toEqual(["qmsg-3"]);
+
+    rollbackRemoveQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        queuedMessageId: "qmsg-1",
+      },
+      transaction,
+    });
+
+    expect(
+      queryClient.getQueryData(threadQueuedMessagesQueryKey("thread-1")),
+    ).toEqual(previousQueue);
   });
 });

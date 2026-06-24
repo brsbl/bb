@@ -15,6 +15,7 @@ import {
   applyCreateThreadResult,
   applyQueuedMessageCreateResult,
   applyQueuedMessageDeleteResult,
+  applyQueuedMessageGroupBoundaryResult,
   applyQueuedMessageReorderResult,
   applyQueuedMessageSendResult,
   applySendThreadMessageSuccess,
@@ -22,6 +23,7 @@ import {
   beginCreateThreadTransaction,
   beginRemoveQueuedMessageTransaction,
   beginReorderQueuedMessageTransaction,
+  beginSetQueuedMessageGroupBoundaryTransaction,
   beginSendQueuedMessageTransaction,
   beginSendThreadMessageTransaction,
   beginStopThreadTransaction,
@@ -54,6 +56,11 @@ interface DeleteThreadQueuedMessageMutationRequest {
 }
 
 interface ReorderThreadQueuedMessageMutationRequest extends QueuedMessageReorderRequest {
+  id: string;
+}
+
+interface SetThreadQueuedMessageGroupBoundaryMutationRequest {
+  groupBoundaryQueuedMessageId: string;
   id: string;
 }
 
@@ -268,11 +275,13 @@ export function useReorderThreadQueuedMessage() {
       id,
       nextQueuedMessageId,
       previousQueuedMessageId,
+      groupBoundaryQueuedMessageId,
       queuedMessageId,
     }: ReorderThreadQueuedMessageMutationRequest): Promise<ThreadQueuedMessageListResponse> =>
       api.reorderThreadQueuedMessage(id, queuedMessageId, {
         previousQueuedMessageId,
         nextQueuedMessageId,
+        groupBoundaryQueuedMessageId,
       }),
     onMutate: async (variables): Promise<ReorderQueuedMessageTransaction> =>
       beginReorderQueuedMessageTransaction({
@@ -288,6 +297,49 @@ export function useReorderThreadQueuedMessage() {
     },
     onSuccess: (queuedMessages, variables) => {
       applyQueuedMessageReorderResult({
+        queryClient,
+        queuedMessages,
+        request: variables,
+      });
+    },
+  });
+}
+
+export function useSetThreadQueuedMessageGroupBoundary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: {
+      errorMessage: "Failed to group queued messages.",
+      lifecycleOperation: "set_queued_message_group_boundary",
+      showErrorToast: false,
+    },
+    mutationFn: ({
+      groupBoundaryQueuedMessageId,
+      id,
+    }: SetThreadQueuedMessageGroupBoundaryMutationRequest): Promise<ThreadQueuedMessageListResponse> =>
+      api.setThreadQueuedMessageGroupBoundary(id, {
+        groupBoundaryQueuedMessageId,
+      }),
+    onMutate: async (variables): Promise<ReorderQueuedMessageTransaction> =>
+      beginSetQueuedMessageGroupBoundaryTransaction({
+        queryClient,
+        request: variables,
+      }),
+    onError: (_error, variables, context) => {
+      rollbackReorderQueuedMessageTransaction({
+        queryClient,
+        request: {
+          ...variables,
+          queuedMessageId: variables.groupBoundaryQueuedMessageId,
+          previousQueuedMessageId: null,
+          nextQueuedMessageId: null,
+        },
+        transaction: context,
+      });
+    },
+    onSuccess: (queuedMessages, variables) => {
+      applyQueuedMessageGroupBoundaryResult({
         queryClient,
         queuedMessages,
         request: variables,

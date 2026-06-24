@@ -10,6 +10,7 @@ import { threadQueuedMessagesQueryKey } from "../queries/query-keys";
 import {
   useCreateThreadQueuedMessage,
   useDeleteThreadQueuedMessage,
+  useSetThreadQueuedMessageGroupBoundary,
   useSendThreadMessage,
 } from "./thread-runtime-mutations";
 
@@ -19,6 +20,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...actual,
     createThreadQueuedMessage: vi.fn(),
     deleteThreadQueuedMessage: vi.fn(),
+    setThreadQueuedMessageGroupBoundary: vi.fn(),
     sendThreadMessage: vi.fn(),
   };
 });
@@ -39,6 +41,7 @@ function makeQueuedMessage(
     reasoningLevel: "medium",
     permissionMode: "readonly",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 1,
     updatedAt: 1,
     ...message,
@@ -58,6 +61,7 @@ beforeEach(() => {
     makeQueuedMessage(),
   );
   vi.mocked(api.deleteThreadQueuedMessage).mockResolvedValue(undefined);
+  vi.mocked(api.setThreadQueuedMessageGroupBoundary).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -148,5 +152,25 @@ describe("thread runtime mutations", () => {
         >(threadQueuedMessagesQueryKey("thread-1"))
         ?.map((queuedMessage) => queuedMessage.id),
     ).toEqual(["qmsg-2"]);
+  });
+
+  it("sets the queued-message group boundary through the API", async () => {
+    const { wrapper } = createQueryClientTestHarness();
+    const { result } = renderHook(
+      () => useSetThreadQueuedMessageGroupBoundary(),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        id: "thread-1",
+        groupBoundaryQueuedMessageId: "qmsg-2",
+      });
+    });
+
+    expect(api.setThreadQueuedMessageGroupBoundary).toHaveBeenCalledWith(
+      "thread-1",
+      { groupBoundaryQueuedMessageId: "qmsg-2" },
+    );
   });
 });

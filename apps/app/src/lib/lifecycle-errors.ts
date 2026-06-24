@@ -19,6 +19,7 @@ export type LifecycleErrorOperation =
   | "resolve_interaction"
   | "send_message"
   | "send_queued_message"
+  | "set_queued_message_group_boundary"
   | "squash_merge"
   | "stop_thread"
   | "update_merge_base";
@@ -53,10 +54,7 @@ interface EnvironmentNotReadyDescriptionArgs {
 }
 
 interface ThreadEnvironmentUnavailableDescriptionArgs {
-  error: Extract<
-    LifecycleApiError,
-    { code: "thread_environment_unavailable" }
-  >;
+  error: Extract<LifecycleApiError, { code: "thread_environment_unavailable" }>;
   operation?: LifecycleErrorOperation | undefined;
 }
 
@@ -106,6 +104,8 @@ function operationTitle(operation: LifecycleErrorOperation): string {
       return "Failed to send message";
     case "send_queued_message":
       return "Failed to send queued message";
+    case "set_queued_message_group_boundary":
+      return "Failed to group queued messages";
     case "squash_merge":
       return "Squash merge failed";
     case "stop_thread":
@@ -416,9 +416,7 @@ function describeParentThreadInvalid({
   }
 }
 
-export function parseLifecycleError(
-  error: unknown,
-): LifecycleApiError | null {
+export function parseLifecycleError(error: unknown): LifecycleApiError | null {
   if (!(error instanceof HttpError)) {
     return null;
   }

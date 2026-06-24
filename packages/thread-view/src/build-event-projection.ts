@@ -48,7 +48,7 @@ import {
 } from "./accepted-client-request-context.js";
 import {
   parseAcceptedSteerFromClientRequest,
-  parseUserFromClientRequest,
+  parseUsersFromClientRequest,
   parseLegacyUserMessage,
 } from "./user-message-parsing.js";
 import { isTerminalBufferedTextFlushEvent } from "./assistant-buffering.js";
@@ -384,10 +384,7 @@ function consumePendingDelegationTurnLink(
         providerThreadId,
       );
     }
-    state.delegationParentToolCallIdsByTurnId.set(
-      turnId,
-      pendingLink.callId,
-    );
+    state.delegationParentToolCallIdsByTurnId.set(turnId, pendingLink.callId);
     return pendingLink.callId;
   }
 
@@ -556,14 +553,16 @@ function buildFlatProjectionData(
       )
         ? acceptedClientRequest
         : undefined;
-    const userFromClientRequest = parseUserFromClientRequest({
+    const usersFromClientRequest = parseUsersFromClientRequest({
       acceptedClientRequest: visibleProjectionAcceptedClientRequest,
       decoded,
       meta,
       options: args.options,
     });
-    if (userFromClientRequest) {
-      appendProjectedUserMessage(state, userFromClientRequest);
+    if (usersFromClientRequest.length > 0) {
+      for (const userFromClientRequest of usersFromClientRequest) {
+        appendProjectedUserMessage(state, userFromClientRequest);
+      }
       continue;
     }
 

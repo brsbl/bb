@@ -82,6 +82,7 @@ import {
   useReorderThreadQueuedMessage,
   useSendThreadQueuedMessage,
   useSendThreadMessage,
+  useSetThreadQueuedMessageGroupBoundary,
   useStopThread,
 } from "@/hooks/mutations/thread-runtime-mutations";
 import { useMarkThreadRead } from "@/hooks/mutations/thread-state-mutations";
@@ -328,6 +329,8 @@ export function SideChatTabContent({
   const markThreadRead = useMarkThreadRead();
   const reorderQueuedMessage = useReorderThreadQueuedMessage();
   const sendQueuedMessage = useSendThreadQueuedMessage();
+  const setQueuedMessageGroupBoundary =
+    useSetThreadQueuedMessageGroupBoundary();
   const sendThreadMessage = useSendThreadMessage();
   const stopThread = useStopThread();
   const { isLocalDaemonHost } = useHostDaemon();
@@ -539,59 +542,62 @@ export function SideChatTabContent({
     }
   }, [childHasUserMessage]);
 
-  const createSideChatThread = useCallback(async (
-    input: ReturnType<typeof buildSideChatMessageInput>,
-  ): Promise<string | null> => {
-    const existingThreadId = childThreadIdRef.current;
-    if (existingThreadId !== null) {
-      return existingThreadId;
-    }
-    if (createThreadPromiseRef.current !== null) {
-      return createThreadPromiseRef.current;
-    }
-    const executionOptions = defaultExecutionOptions;
-    if (!canCreateSideChatThread || !executionOptions) {
-      return null;
-    }
-    const request = buildSideChatCreateRequest({
-      input,
-      projectId: sourceThread.projectId,
-      sourceThreadId: sourceThread.id,
-      sourceEnvironment,
-      providerId: sourceThread.providerId,
-      model: executionOptions.model,
-      reasoningLevel: executionOptions.reasoningLevel,
-      serviceTier: executionOptions.serviceTier,
-      sourceSeqEnd: tab.sourceSeqEnd ?? undefined,
-      title: tab.title,
-    });
-    const promise = createThread
-      .mutateAsync(request)
-      .then((thread) => {
-        childThreadIdRef.current = thread.id;
-        childHasUserMessageRef.current = true;
-        createdInitialMessageThreadIdRef.current = thread.id;
-        onSetThreadId({ tabId: tab.id, threadId: thread.id });
-        return thread.id;
-      })
-      .finally(() => {
-        createThreadPromiseRef.current = null;
+  const createSideChatThread = useCallback(
+    async (
+      input: ReturnType<typeof buildSideChatMessageInput>,
+    ): Promise<string | null> => {
+      const existingThreadId = childThreadIdRef.current;
+      if (existingThreadId !== null) {
+        return existingThreadId;
+      }
+      if (createThreadPromiseRef.current !== null) {
+        return createThreadPromiseRef.current;
+      }
+      const executionOptions = defaultExecutionOptions;
+      if (!canCreateSideChatThread || !executionOptions) {
+        return null;
+      }
+      const request = buildSideChatCreateRequest({
+        input,
+        projectId: sourceThread.projectId,
+        sourceThreadId: sourceThread.id,
+        sourceEnvironment,
+        providerId: sourceThread.providerId,
+        model: executionOptions.model,
+        reasoningLevel: executionOptions.reasoningLevel,
+        serviceTier: executionOptions.serviceTier,
+        sourceSeqEnd: tab.sourceSeqEnd ?? undefined,
+        title: tab.title,
       });
-    createThreadPromiseRef.current = promise;
-    return promise;
-  }, [
-    canCreateSideChatThread,
-    createThread,
-    defaultExecutionOptions,
-    onSetThreadId,
-    sourceEnvironment,
-    sourceThread.id,
-    sourceThread.projectId,
-    sourceThread.providerId,
-    tab.id,
-    tab.sourceSeqEnd,
-    tab.title,
-  ]);
+      const promise = createThread
+        .mutateAsync(request)
+        .then((thread) => {
+          childThreadIdRef.current = thread.id;
+          childHasUserMessageRef.current = true;
+          createdInitialMessageThreadIdRef.current = thread.id;
+          onSetThreadId({ tabId: tab.id, threadId: thread.id });
+          return thread.id;
+        })
+        .finally(() => {
+          createThreadPromiseRef.current = null;
+        });
+      createThreadPromiseRef.current = promise;
+      return promise;
+    },
+    [
+      canCreateSideChatThread,
+      createThread,
+      defaultExecutionOptions,
+      onSetThreadId,
+      sourceEnvironment,
+      sourceThread.id,
+      sourceThread.projectId,
+      sourceThread.providerId,
+      tab.id,
+      tab.sourceSeqEnd,
+      tab.title,
+    ],
+  );
 
   const sendOrQueueSideChatInput = useCallback(
     async (visibleInput: ReturnType<typeof buildSideChatMessageInput>) => {
@@ -665,10 +671,10 @@ export function SideChatTabContent({
     );
 
   const sideChatRuntimeDisplayStatus =
-    childThreadQuery.data?.runtime.displayStatus ??
-    "idle";
-  const canSendMessageToMain =
-    !isRunningThreadRuntimeDisplayStatus(sideChatRuntimeDisplayStatus);
+    childThreadQuery.data?.runtime.displayStatus ?? "idle";
+  const canSendMessageToMain = !isRunningThreadRuntimeDisplayStatus(
+    sideChatRuntimeDisplayStatus,
+  );
   const isDefaultExecutionOptionsLoading =
     defaultExecutionOptions === undefined && executionOptionsQuery.isLoading;
   const isSideChatStopRequested =
@@ -704,8 +710,8 @@ export function SideChatTabContent({
   const composerPlaceholder = isSideChatStopRequested
     ? "Stopping side chat..."
     : isSideChatProvisioning
-        ? "Provisioning side chat..."
-        : "Reply in the side chat…";
+      ? "Provisioning side chat..."
+      : "Reply in the side chat…";
   const handleAttachFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) {
@@ -791,6 +797,7 @@ export function SideChatTabContent({
   const queuedMessageActionPending =
     deleteQueuedMessage.isPending ||
     reorderQueuedMessage.isPending ||
+    setQueuedMessageGroupBoundary.isPending ||
     sendQueuedMessage.isPending;
 
   const handleSendQueuedImmediately = useCallback(
@@ -980,6 +987,29 @@ export function SideChatTabContent({
     [childThreadId, reorderQueuedMessage],
   );
 
+  const handleSetQueuedMessageGroupBoundary = useCallback(
+    (groupBoundaryQueuedMessageId: string) => {
+      if (childThreadId === null) {
+        return;
+      }
+      void setQueuedMessageGroupBoundary
+        .mutateAsync({
+          id: childThreadId,
+          groupBoundaryQueuedMessageId,
+        })
+        .catch((error) => {
+          appToast.error(
+            getMutationErrorMessage({
+              error,
+              fallbackMessage: "Failed to group queued messages",
+              lifecycleOperation: "set_queued_message_group_boundary",
+            }),
+          );
+        });
+    },
+    [childThreadId, setQueuedMessageGroupBoundary],
+  );
+
   const queuedMessagesStack = useMemo(
     () =>
       queuedMessages.length > 0 ? (
@@ -995,6 +1025,7 @@ export function SideChatTabContent({
           processingAction={processingQueuedMessage?.action ?? null}
           onSendImmediately={handleSendQueuedImmediately}
           onReorder={handleReorderQueuedMessage}
+          onSetGroupBoundary={handleSetQueuedMessageGroupBoundary}
           onEdit={handleEditQueuedMessage}
           onDelete={handleDeleteQueuedMessage}
         />
@@ -1005,6 +1036,7 @@ export function SideChatTabContent({
       handleEditQueuedMessage,
       handleReorderQueuedMessage,
       handleSendQueuedImmediately,
+      handleSetQueuedMessageGroupBoundary,
       isSideChatProvisioning,
       processingQueuedMessage?.action,
       processingQueuedMessage?.id,

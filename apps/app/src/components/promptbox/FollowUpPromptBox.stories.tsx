@@ -506,6 +506,7 @@ const queuedMessages: readonly ThreadQueuedMessage[] = [
     reasoningLevel: "medium",
     permissionMode: "workspace-write",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 0,
     updatedAt: 0,
   },
@@ -522,6 +523,7 @@ const queuedMessages: readonly ThreadQueuedMessage[] = [
     reasoningLevel: "medium",
     permissionMode: "workspace-write",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 0,
     updatedAt: 0,
   },
@@ -536,6 +538,7 @@ const queuedMessagesElement: ReactNode = (
     processingAction={null}
     onSendImmediately={noop}
     onReorder={noop}
+    onSetGroupBoundary={noop}
     onEdit={noop}
     onDelete={noop}
   />
@@ -564,7 +567,9 @@ interface RowConfig {
   /** Defaults to the editable permission picker; override to show the read-only permission config. */
   permission?: RowPermission;
   /** Active provider prompt mode banner state; used to lock plan-mode controls. */
-  activePromptMode?: Parameters<typeof FollowUpPromptBox>[0]["activePromptMode"];
+  activePromptMode?: Parameters<
+    typeof FollowUpPromptBox
+  >[0]["activePromptMode"];
   /** Render the footer pickers disabled (side chat). The same controls, non-interactive. */
   readOnly?: boolean;
 }

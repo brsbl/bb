@@ -362,6 +362,7 @@ export const threadQueuedMessageSchema = z.object({
   reasoningLevel: reasoningLevelSchema,
   permissionMode: permissionModeSchema,
   serviceTier: serviceTierSchema,
+  groupWithNext: z.boolean(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

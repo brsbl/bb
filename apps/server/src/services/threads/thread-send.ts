@@ -62,9 +62,13 @@ type SendThreadMessageMode = SendMessageRequest["mode"];
 type TextPromptInput = Extract<PromptInput, { type: "text" }>;
 export type SendThreadMessageTrigger = "auto-dispatch" | "user";
 
+type SendThreadMessagePayload = SendMessageRequest & {
+  inputGroups?: PromptInput[][];
+};
+
 export interface SendThreadMessageArgs {
   environment: Environment;
-  payload: SendMessageRequest;
+  payload: SendThreadMessagePayload;
   thread: Thread;
   trigger: SendThreadMessageTrigger;
 }
@@ -114,6 +118,7 @@ interface AppendAndQueueSendThreadMessageArgs {
   execution: ResolvedThreadExecutionOptions;
   initiator: ThreadTurnInitiator;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   queueInTransaction: SendThreadMessageQueueRequest;
   requestId: ClientTurnRequestId;
   senderThreadId: string | null;
@@ -289,6 +294,7 @@ function appendAndQueueSendThreadMessageInTransaction({
   execution,
   initiator,
   input,
+  inputGroups,
   queueInTransaction,
   requestId,
   senderThreadId,
@@ -307,6 +313,7 @@ function appendAndQueueSendThreadMessageInTransaction({
             environmentId,
             type: "client/turn/requested",
             input,
+            ...(inputGroups !== undefined ? { inputGroups } : {}),
             execution,
             initiator,
             senderThreadId,
@@ -365,6 +372,16 @@ export async function sendThreadMessage(
         senderThreadId,
       })
     : payload.input;
+  const inputGroups = payload.inputGroups
+    ? payload.inputGroups.map((inputGroup) =>
+        senderThreadId
+          ? formatAgentThreadInput({
+              input: inputGroup,
+              senderThreadId,
+            })
+          : inputGroup,
+      )
+    : undefined;
   await validatePromptAttachmentReferences({
     dataDir: deps.config.dataDir,
     input,
@@ -448,6 +465,7 @@ export async function sendThreadMessage(
       execution,
       initiator,
       input,
+      inputGroups,
       queueInTransaction: ({ tx }) => {
         const dispatchKind = prepareReadyThreadTurnDispatchInTransaction(tx, {
           command,
@@ -535,6 +553,7 @@ export async function sendThreadMessage(
     execution,
     initiator,
     input,
+    inputGroups,
     queueInTransaction: () => {
       return { threadBecameActive: false };
     },

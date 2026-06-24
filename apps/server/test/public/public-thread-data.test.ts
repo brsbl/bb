@@ -12,6 +12,7 @@ import {
   listQueuedThreadMessages,
   getThread,
   queuedThreadMessages,
+  setQueuedThreadMessageGroupBoundary,
   setThreadExecutionOverride,
   upsertProjectExecutionDefaults,
 } from "@bb/db";
@@ -2121,6 +2122,118 @@ describe("public thread data routes", () => {
       });
       expect(getQueuedThreadMessage(harness.db, queuedMessage.id)).toBeNull();
       expect(getThread(harness.db, thread.id)?.status).toBe("active");
+    });
+  });
+
+  it("sends the contiguous lead queued-message group as one turn request", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, thread } = seedThreadFixture(harness, {
+        thread: {
+          status: "idle",
+        },
+      });
+      seedThreadRuntimeState(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-queued-message-group",
+      });
+      const firstQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("First grouped queued message"),
+      });
+      const secondQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Second grouped queued message"),
+      });
+      const thirdQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Ungrouped queued message"),
+      });
+      expect(
+        setQueuedThreadMessageGroupBoundary({
+          db: harness.db,
+          notifier: harness.hub,
+          threadId: thread.id,
+          groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+        }).kind,
+      ).toBe("updated");
+
+      const sendResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/queued-messages/${firstQueuedMessage.id}/send`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ mode: "auto" }),
+        },
+      );
+      expect(sendResponse.status, await sendResponse.clone().text()).toBe(200);
+
+      const queued = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "turn.submit" && command.threadId === thread.id,
+      );
+      expect(queued.command).toMatchObject({
+        input: [
+          { type: "text", text: "First grouped queued message" },
+          { type: "text", text: "\n\n" },
+          { type: "text", text: "Second grouped queued message" },
+        ],
+        target: { mode: "start" },
+      });
+
+      expect(
+        getQueuedThreadMessage(harness.db, firstQueuedMessage.id),
+      ).toBeNull();
+      expect(
+        getQueuedThreadMessage(harness.db, secondQueuedMessage.id),
+      ).toBeNull();
+      expect(
+        getQueuedThreadMessage(harness.db, thirdQueuedMessage.id),
+      ).toMatchObject({
+        id: thirdQueuedMessage.id,
+      });
+
+      const requestedEvents = harness.db
+        .select({
+          data: events.data,
+        })
+        .from(events)
+        .where(
+          and(
+            eq(events.threadId, thread.id),
+            eq(events.type, "client/turn/requested"),
+          ),
+        )
+        .all();
+      const groupedRequestEvents = requestedEvents.filter((event) =>
+        Object.hasOwn(JSON.parse(event.data), "inputGroups"),
+      );
+      expect(groupedRequestEvents).toHaveLength(1);
+      const eventData = JSON.parse(groupedRequestEvents[0]!.data) as {
+        inputGroups: { text: string; type: "text" }[][];
+      };
+      expect(eventData.inputGroups.map((group) => group[0]?.text)).toEqual([
+        "First grouped queued message",
+        "Second grouped queued message",
+      ]);
+
+      const timelineResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/timeline`,
+      );
+      expect(timelineResponse.status).toBe(200);
+      const timeline = threadTimelineResponseSchema.parse(
+        await readJson(timelineResponse),
+      );
+      const userRows = timeline.rows.filter(
+        (row) => row.kind === "conversation" && row.role === "user",
+      );
+      expect(userRows.map((row) => row.text).slice(-2)).toEqual([
+        "First grouped queued message",
+        "Second grouped queued message",
+      ]);
     });
   });
 

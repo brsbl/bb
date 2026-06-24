@@ -1129,7 +1129,8 @@ function skipEventLargeValuesRoundTripForInlineEvents(
     expectedMigrations,
     "0029_drop_workflow_tables",
   );
-  const latestAppliedMigrationCreatedAt = readLatestAppliedMigrationCreatedAt(db);
+  const latestAppliedMigrationCreatedAt =
+    readLatestAppliedMigrationCreatedAt(db);
   if (latestAppliedMigrationCreatedAt === null) {
     return;
   }
@@ -1146,6 +1147,21 @@ function skipEventLargeValuesRoundTripForInlineEvents(
 
   markMigrationApplied(db, largeValuesMigration);
   markMigrationApplied(db, restoreMigration);
+}
+
+function applyQueuedMessageGroupingSchema(db: DbConnection): void {
+  if (
+    !tableExists(db, "queued_thread_messages") ||
+    columnExists(db, "queued_thread_messages", "group_with_next")
+  ) {
+    return;
+  }
+
+  db.$client
+    .prepare(
+      "ALTER TABLE queued_thread_messages ADD COLUMN group_with_next integer DEFAULT 0 NOT NULL",
+    )
+    .run();
 }
 
 function repairBranchLocalThreadSearchMigrations(db: DbConnection): void {
@@ -1308,6 +1324,7 @@ export function migrate(db: DbConnection, options: MigrateOptions = {}): void {
     skipEventLargeValuesRoundTripForInlineEvents(db, migrationsFolder);
     drizzleMigrate(db, { migrationsFolder });
     applyReorderedCleanupMigrations(db, migrationsFolder);
+    applyQueuedMessageGroupingSchema(db);
   } finally {
     sqlite.pragma("foreign_keys = ON");
   }

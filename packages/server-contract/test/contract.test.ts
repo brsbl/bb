@@ -154,6 +154,11 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
+      "Queued-message reorder requests may omit the grouping boundary to leave grouping unchanged.",
+    fields: ["reorderQueuedMessageRequestSchema.groupBoundaryQueuedMessageId"],
+  },
+  {
+    reason:
       "File listing queries may omit search and limit parameters to use unfiltered/default result windows.",
     fields: [
       "threadStorageFilesQuerySchema.limit",

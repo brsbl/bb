@@ -12,6 +12,7 @@ import {
   parseAcceptedSteerFromClientRequest,
   parsePendingSteerFromClientRequest,
   parseUserFromClientRequest,
+  parseUsersFromClientRequest,
 } from "../src/user-message-parsing.js";
 
 type ClientTurnRequestedEventRow = ReturnType<
@@ -159,6 +160,41 @@ describe("user message parsing", () => {
       turnRequest: { kind: "message", status: "pending" },
       text: "Hello",
     });
+  });
+
+  it("renders grouped queued turn requests as separate user messages", () => {
+    const factory = createTimelineEventFactory({ threadId: "thread-1" });
+    const row = factory.clientTurnRequested({
+      initiator: "user",
+      target: { kind: "new-turn" },
+      text: "First\n\nSecond",
+      input: [{ type: "text", text: "First\n\nSecond", mentions: [] }],
+      inputGroups: [
+        [{ type: "text", text: "First", mentions: [] }],
+        [{ type: "text", text: "Second", mentions: [] }],
+      ],
+    });
+    const { event, meta } = decodeThreadEventRow(row);
+
+    const messages = parseUsersFromClientRequest({
+      decoded: event,
+      meta,
+      options: standardProjectionOptions,
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.text)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(messages.map((message) => message.id)).toEqual([
+      `${event.threadId}:user-seed:${meta.seq}-0`,
+      `${event.threadId}:user-seed:${meta.seq}-1`,
+    ]);
+    expect(messages.map((message) => message.turnRequest)).toEqual([
+      { kind: "message", status: "pending" },
+      { kind: "message", status: "pending" },
+    ]);
   });
 
   it("populates initiator, senderThreadId, and turnRequest for agent-initiated messages", () => {

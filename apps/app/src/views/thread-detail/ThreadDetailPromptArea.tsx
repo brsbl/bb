@@ -56,6 +56,7 @@ import {
   useDeleteThreadQueuedMessage,
   useReorderThreadQueuedMessage,
   useSendThreadQueuedMessage,
+  useSetThreadQueuedMessageGroupBoundary,
   useStopThread,
 } from "@/hooks/mutations/thread-runtime-mutations";
 import { useUnarchiveThread } from "@/hooks/mutations/thread-state-mutations";
@@ -280,6 +281,8 @@ export function ThreadDetailPromptArea({
   const sendQueuedMessage = useSendThreadQueuedMessage();
   const deleteQueuedMessage = useDeleteThreadQueuedMessage();
   const reorderQueuedMessage = useReorderThreadQueuedMessage();
+  const setQueuedMessageGroupBoundary =
+    useSetThreadQueuedMessageGroupBoundary();
   const stopThread = useStopThread();
   const unarchiveThread = useUnarchiveThread();
   const uploadPromptAttachment = useUploadPromptAttachment();
@@ -304,8 +307,8 @@ export function ThreadDetailPromptArea({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [expandedBannerSection, setExpandedBannerSection] =
     useState<ThreadPromptContextBannerExpandedSection | null>(null);
-  const pullRequestSection = useMemo<ThreadPromptPullRequestSection | null>(
-    () => {
+  const pullRequestSection =
+    useMemo<ThreadPromptPullRequestSection | null>(() => {
       if (!pullRequest) {
         return null;
       }
@@ -329,16 +332,14 @@ export function ThreadDetailPromptArea({
             }
           : undefined;
       return actions ? { pullRequest, actions } : { pullRequest };
-    },
-    [
+    }, [
       isEnvironmentActionPending,
       onPullRequestDraft,
       onPullRequestMerge,
       onPullRequestReady,
       pullRequest,
       pullRequestMergeMethod,
-    ],
-  );
+    ]);
   const [isGoalExpanded, setIsGoalExpanded] = useState(false);
   const [isTodoExpanded, setIsTodoExpanded] = useState(false);
   const [isPromptModeExpanded, setIsPromptModeExpanded] = useState(false);
@@ -420,6 +421,7 @@ export function ThreadDetailPromptArea({
     sendQueuedMessage.isPending ||
     deleteQueuedMessage.isPending ||
     reorderQueuedMessage.isPending ||
+    setQueuedMessageGroupBoundary.isPending ||
     isFollowUpShortcutSending;
   const isFollowUpSubmitting =
     sendMessage.isPending ||
@@ -792,6 +794,26 @@ export function ThreadDetailPromptArea({
     [reorderQueuedMessage, thread.id],
   );
 
+  const handleSetQueuedMessageGroupBoundary = useCallback(
+    (groupBoundaryQueuedMessageId: string) => {
+      void setQueuedMessageGroupBoundary
+        .mutateAsync({
+          id: thread.id,
+          groupBoundaryQueuedMessageId,
+        })
+        .catch((nextError) => {
+          appToast.error(
+            getMutationErrorMessage({
+              error: nextError,
+              fallbackMessage: "Failed to group queued messages",
+              lifecycleOperation: "set_queued_message_group_boundary",
+            }),
+          );
+        });
+    },
+    [setQueuedMessageGroupBoundary, thread.id],
+  );
+
   const handlePromptBannerFileClick = useCallback(
     (selection: WorkspaceChangedFileSelection) => {
       onChangedFileClick(selection);
@@ -1084,6 +1106,7 @@ export function ThreadDetailPromptArea({
             processingAction={displayedProcessingQueuedMessage?.action ?? null}
             onSendImmediately={handleSendQueuedImmediately}
             onReorder={handleReorderQueuedMessage}
+            onSetGroupBoundary={handleSetQueuedMessageGroupBoundary}
             onEdit={handleEditQueuedMessage}
             onDelete={handleDeleteQueuedMessage}
           />
@@ -1099,6 +1122,7 @@ export function ThreadDetailPromptArea({
       handlePromptBannerFileClick,
       handleReorderQueuedMessage,
       handleSendQueuedImmediately,
+      handleSetQueuedMessageGroupBoundary,
       handleToggleBannerSection,
       handleUnarchiveCurrentThread,
       environmentGoneStatus,

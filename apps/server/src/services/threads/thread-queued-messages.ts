@@ -11,6 +11,7 @@ interface StoredQueuedThreadMessageRow {
   content: string;
   createdAt: number;
   id: string;
+  groupWithNext: boolean;
   model: string;
   reasoningLevel: string;
   permissionMode: PermissionMode;
@@ -55,6 +56,7 @@ export function toThreadQueuedMessage(
     reasoningLevel: row.reasoningLevel,
     permissionMode: row.permissionMode,
     serviceTier: row.serviceTier,
+    groupWithNext: row.groupWithNext,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
