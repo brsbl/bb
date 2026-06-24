@@ -5,6 +5,10 @@ import {
   type QueuedMessageReorderRequest,
 } from "@/lib/queued-message-reorder";
 import { QueuedMessagesList } from "@/components/promptbox/banner/QueuedMessagesList";
+import {
+  QueuedMessageGroupingDemo,
+  type QueuedMessageItem,
+} from "@/components/prototypes/QueuedMessageGrouping";
 import { StoryCard, StoryRow } from "../../../../.ladle/story-card";
 
 export default {
@@ -419,6 +423,40 @@ export function Overview() {
             onEdit={noop}
             onDelete={noop}
           />
+        </ResponsivePromptStage>
+      </StoryRow>
+    </StoryCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PROTOTYPE — grouping queued messages into one turn
+// ---------------------------------------------------------------------------
+// The divider (revealed on hover, like the reorder grip) is a dnd-kit sortable
+// item, so dragging it — or dragging a row across it — uses the same smooth
+// reorder UX. Drop it to set how many leading messages send together.
+
+const groupingOneMessage: readonly QueuedMessageItem[] = [
+  { id: "g_one", text: "Refactor the queued-message reorder helper" },
+];
+
+export function Grouping() {
+  return (
+    <StoryCard>
+      <StoryRow
+        label="one message"
+        hint="no divider — grouping needs at least two queued messages"
+      >
+        <ResponsivePromptStage>
+          <QueuedMessageGroupingDemo initialMessages={groupingOneMessage} />
+        </ResponsivePromptStage>
+      </StoryRow>
+      <StoryRow
+        label="multiple messages"
+        hint="hover the divider and drag it down to group; drag a row's grip to reorder"
+      >
+        <ResponsivePromptStage>
+          <QueuedMessageGroupingDemo />
         </ResponsivePromptStage>
       </StoryRow>
     </StoryCard>
