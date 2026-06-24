@@ -305,8 +305,8 @@ export function ThreadTableOfContents({
               className={cn(
                 "h-[3px] rounded-full transition-all duration-150",
                 item.id === activeUserId
-                  ? "w-5 bg-foreground/30 group-hover/toc:bg-foreground/90"
-                  : "w-3 bg-foreground/5 group-hover/toc:bg-foreground/30",
+                  ? "w-5 bg-foreground/30 group-hover/toc:bg-foreground/70"
+                  : "w-3 bg-foreground/5 group-hover/toc:bg-foreground/20",
               )}
             />
           ))}
