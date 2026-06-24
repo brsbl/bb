@@ -318,7 +318,7 @@ export function ThreadTableOfContents({
                         className={cn(
                           "flex w-full rounded-md px-2 py-1.5 text-left transition-colors",
                           active
-                            ? "bg-surface-selected"
+                            ? "bg-state-hover"
                             : "hover:bg-state-hover",
                         )}
                       >
