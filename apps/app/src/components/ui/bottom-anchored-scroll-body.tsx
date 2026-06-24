@@ -34,6 +34,7 @@ import {
 // input and pointer-drag scrolling before a non-bottom scroll event.
 
 export interface BottomAnchorContextValue {
+  getScrollElement: () => HTMLElement | null;
   isAtBottom: boolean;
   scrollToBottom: () => void;
   scrollElementIntoView: (args: ScrollElementIntoViewArgs) => void;
@@ -163,7 +164,9 @@ interface TopMostVisibleRow {
 // edge — i.e. the first row still (at least partially) visible. `offsetWithinRow`
 // is how far the scroll area's top sits past that row's top, so restore can
 // reproduce a mid-row reading position.
-function getTopMostVisibleRow(scrollArea: HTMLElement): TopMostVisibleRow | null {
+function getTopMostVisibleRow(
+  scrollArea: HTMLElement,
+): TopMostVisibleRow | null {
   const scrollAreaTop = scrollArea.getBoundingClientRect().top;
   const rows = scrollArea.querySelectorAll<HTMLElement>(
     TIMELINE_ROW_ID_SELECTOR,
@@ -261,6 +264,8 @@ export function BottomAnchoredScrollBody({
   }>({ lastWriteAt: 0, trailingTimeout: null });
   const userDetachedFromBottomRef = useRef(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
+
+  const getScrollElement = useCallback(() => scrollAreaRef.current, []);
 
   const cancelPendingScrollRestore = useCallback(() => {
     pendingScrollRestoreRef.current = null;
@@ -423,14 +428,25 @@ export function BottomAnchoredScrollBody({
         threadTimelineScrollAnchorAtomFamily(scrollAnchorThreadId);
       if (atBottomByGeometry) {
         userDetachedFromBottomRef.current = false;
-        store.set(anchorAtom, { rowId: "", offsetWithinRow: 0, atBottom: true });
+        store.set(anchorAtom, {
+          rowId: "",
+          offsetWithinRow: 0,
+          atBottom: true,
+        });
         return;
       }
       if (recentUserIntent) {
         userDetachedFromBottomRef.current = true;
       }
-      if (shouldStickToBottomRef.current && !userDetachedFromBottomRef.current) {
-        store.set(anchorAtom, { rowId: "", offsetWithinRow: 0, atBottom: true });
+      if (
+        shouldStickToBottomRef.current &&
+        !userDetachedFromBottomRef.current
+      ) {
+        store.set(anchorAtom, {
+          rowId: "",
+          offsetWithinRow: 0,
+          atBottom: true,
+        });
         return;
       }
       const topMostRow = getTopMostVisibleRow(scrollArea);
@@ -626,6 +642,7 @@ export function BottomAnchoredScrollBody({
 
   const bottomAnchorContextValue = useMemo<BottomAnchorContextValue>(
     () => ({
+      getScrollElement,
       isAtBottom,
       scrollToBottom,
       scrollElementIntoView,
@@ -633,6 +650,7 @@ export function BottomAnchoredScrollBody({
       captureScrollAnchor,
     }),
     [
+      getScrollElement,
       isAtBottom,
       scrollToBottom,
       scrollElementIntoView,

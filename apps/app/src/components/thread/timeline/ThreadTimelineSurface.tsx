@@ -18,6 +18,7 @@ import { HeightTransition } from "@/components/ui/height-transition.js";
 import { Icon } from "@/components/ui/icon.js";
 import { Skeleton } from "@/components/ui/skeleton.js";
 import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body.js";
+import { ThreadTableOfContents } from "@/components/thread/toc/ThreadTableOfContents";
 import { usePreferredTheme } from "@/hooks/useTheme";
 import { toUserAttachmentImageSrc } from "@/lib/user-attachment-images";
 import { ThreadTimelineRows } from "./ThreadTimelineRows.js";
@@ -197,64 +198,67 @@ export function ThreadTimelineSurface({
     !timelineError;
 
   return (
-    <ConversationTimeline className="flex-1">
-      {leadingContent}
-      {showLoadOlderRows ? (
-        <LoadOlderMessagesButton
-          isLoadingOlderTimelineRows={isLoadingOlderTimelineRows}
-          onLoadOlderRows={onLoadOlderRows}
-        />
-      ) : null}
-      {isThreadTimelinePending ? (
-        loadingContent ?? <DelayedThreadLoadingIndicator />
-      ) : timelineError ? (
-        <TimelineStatusIndicator
-          label={timelineErrorLabel}
-          className={timelineErrorClassName}
-        />
-      ) : timelineRowsWithPendingStop.length > 0 ? (
-        <ThreadTimelineRows
-          canSpawnChild={canSpawnChild}
-          threadChildOrigin={threadChildOrigin}
-          onForkMessage={onForkMessage}
-          onSideChatMessage={onSideChatMessage}
-          onSendToMainMessage={onSendToMainMessage}
-          onSelectionAddToChat={onSelectionAddToChat}
-          onSelectionReplyInSideChat={onSelectionReplyInSideChat}
-          onOpenLink={onOpenLink}
-          onOpenLocalFileLink={onOpenLocalFileLink}
-          onTitleAction={onTitleAction}
-          projectId={projectId}
-          resolveMentionLink={resolveMentionLink}
-          resolveUserAttachmentImageSrc={toUserAttachmentImageSrc}
-          themeType={preferredTheme}
-          timelineRows={timelineRowsWithPendingStop}
-          threadId={threadId}
-          threadRuntimeDisplayStatus={threadRuntimeDisplayStatus}
-          unreadDividerAutoScroll={unreadDividerAutoScroll}
-          unreadDividerPlacement={unreadDividerPlacement}
-          workspaceRootPath={workspaceRootPath}
-        />
-      ) : null}
-      {hostConnectionNotice ? (
-        <TimelineStatusIndicator
-          label={hostConnectionNotice.label}
-          className={
-            hostConnectionNotice.tone === "error"
-              ? "mt-4 text-destructive"
-              : "mt-4"
-          }
-        />
-      ) : null}
-      <HeightTransition visible={showOngoingIndicator}>
-        <TimelineWorkingIndicator
-          key={ongoingIndicatorKey}
-          details={activeThinkingDetails}
-          isThinking={showActiveThinking}
-          label={ongoingIndicatorLabel}
-        />
-      </HeightTransition>
-    </ConversationTimeline>
+    <div className="relative flex min-h-0 flex-1">
+      <ThreadTableOfContents timelineRows={timelineRowsWithPendingStop} />
+      <ConversationTimeline className="flex-1">
+        {leadingContent}
+        {showLoadOlderRows ? (
+          <LoadOlderMessagesButton
+            isLoadingOlderTimelineRows={isLoadingOlderTimelineRows}
+            onLoadOlderRows={onLoadOlderRows}
+          />
+        ) : null}
+        {isThreadTimelinePending ? (
+          (loadingContent ?? <DelayedThreadLoadingIndicator />)
+        ) : timelineError ? (
+          <TimelineStatusIndicator
+            label={timelineErrorLabel}
+            className={timelineErrorClassName}
+          />
+        ) : timelineRowsWithPendingStop.length > 0 ? (
+          <ThreadTimelineRows
+            canSpawnChild={canSpawnChild}
+            threadChildOrigin={threadChildOrigin}
+            onForkMessage={onForkMessage}
+            onSideChatMessage={onSideChatMessage}
+            onSendToMainMessage={onSendToMainMessage}
+            onSelectionAddToChat={onSelectionAddToChat}
+            onSelectionReplyInSideChat={onSelectionReplyInSideChat}
+            onOpenLink={onOpenLink}
+            onOpenLocalFileLink={onOpenLocalFileLink}
+            onTitleAction={onTitleAction}
+            projectId={projectId}
+            resolveMentionLink={resolveMentionLink}
+            resolveUserAttachmentImageSrc={toUserAttachmentImageSrc}
+            themeType={preferredTheme}
+            timelineRows={timelineRowsWithPendingStop}
+            threadId={threadId}
+            threadRuntimeDisplayStatus={threadRuntimeDisplayStatus}
+            unreadDividerAutoScroll={unreadDividerAutoScroll}
+            unreadDividerPlacement={unreadDividerPlacement}
+            workspaceRootPath={workspaceRootPath}
+          />
+        ) : null}
+        {hostConnectionNotice ? (
+          <TimelineStatusIndicator
+            label={hostConnectionNotice.label}
+            className={
+              hostConnectionNotice.tone === "error"
+                ? "mt-4 text-destructive"
+                : "mt-4"
+            }
+          />
+        ) : null}
+        <HeightTransition visible={showOngoingIndicator}>
+          <TimelineWorkingIndicator
+            key={ongoingIndicatorKey}
+            details={activeThinkingDetails}
+            isThinking={showActiveThinking}
+            label={ongoingIndicatorLabel}
+          />
+        </HeightTransition>
+      </ConversationTimeline>
+    </div>
   );
 }
 
