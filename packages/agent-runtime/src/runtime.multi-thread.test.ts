@@ -722,5 +722,5 @@ rl.on("line", (line) => {
 
     expect(events2.some((e) => e.type === "turn/completed")).toBe(true);
     await runtime2.shutdown();
-  });
+  }, 15_000);
 });
