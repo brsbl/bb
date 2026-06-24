@@ -284,7 +284,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
-      className="relative h-0 w-0"
+      className="relative w-8"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocusCapture={() => setOpen(true)}
@@ -294,7 +294,7 @@ export function ThreadTableOfContents({
         }
       }}
     >
-      <div className="relative -translate-y-1/2">
+      <div className="relative">
         <div
           aria-hidden
           className="flex w-8 flex-col items-center gap-2 py-2"
@@ -314,10 +314,10 @@ export function ThreadTableOfContents({
 
         <div
           className={cn(
-            "absolute left-full top-1/2 ml-1 w-72 max-w-[calc(100vw-3rem)] -translate-y-1/2 rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
+            "absolute right-full top-0 mr-1 w-72 max-w-[calc(100vw-3rem)] rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
             open
               ? "pointer-events-auto translate-x-0 opacity-100"
-              : "pointer-events-none -translate-x-1 opacity-0",
+              : "pointer-events-none translate-x-1 opacity-0",
           )}
         >
           <div className="flex items-center gap-1 pb-1">
