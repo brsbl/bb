@@ -342,7 +342,7 @@ function SortableGroupDivider({ disabled }: { disabled: boolean }) {
         isDragging && "z-10",
       )}
     >
-      <div className="h-px w-full bg-border" />
+      <div className="mx-auto h-px w-3/4 bg-border/60" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <TooltipProvider delayDuration={300}>
           <Tooltip>
