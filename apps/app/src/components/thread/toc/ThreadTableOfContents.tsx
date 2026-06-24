@@ -387,13 +387,13 @@ export function ThreadTableOfContents({
             {aboveOverflow ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-popover via-popover/90 to-transparent"
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-popover/90 via-popover/60 to-transparent"
               />
             ) : null}
             {belowOverflow || listOverflows ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-popover via-popover/90 to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-popover/90 via-popover/60 to-transparent"
               />
             ) : null}
           </div>
