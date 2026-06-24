@@ -42,7 +42,7 @@ function TocPanelTab({
       className={cn(
         "flex h-7 flex-1 cursor-pointer items-center justify-center rounded-md text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         active
-          ? "bg-muted text-foreground"
+          ? "bg-state-hover text-foreground"
           : "text-muted-foreground hover:bg-state-hover",
       )}
     >
