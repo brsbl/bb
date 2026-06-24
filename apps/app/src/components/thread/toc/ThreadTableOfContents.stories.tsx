@@ -53,60 +53,24 @@ function conversationRow({
   };
 }
 
-const timelineRows: TimelineRow[] = [
+const timelineRows: TimelineRow[] = Array.from({ length: 18 }, (_, turnIndex) => [
   conversationRow({
-    id: "row_user_1",
+    id: `row_user_${turnIndex + 1}`,
     role: "user",
-    index: 0,
-    text: "Audit the queued-message drawer and identify the smallest production path for grouping queued messages.",
+    index: turnIndex * 2,
+    text: `User checkpoint ${turnIndex + 1}: audit the queued-message drawer, thread table of contents rail, scroll spy behavior, and click-to-jump target for this section. This preview should clamp inside the panel while the full message remains visible in the timeline.`,
   }),
   conversationRow({
-    id: "row_agent_1",
+    id: `row_agent_${turnIndex + 1}`,
     role: "assistant",
-    index: 1,
-    text: "The queue already has sortable rows, so the divider can be another sortable item in the same context.",
+    index: turnIndex * 2 + 1,
+    text: `Agent response ${turnIndex + 1}: keep the active item synced to the timeline viewport, preserve the locked segmented tabs, and leave enough repeated content in the story for the bottom-only fade to appear when the panel list overflows.`,
   }),
-  conversationRow({
-    id: "row_user_2",
-    role: "user",
-    index: 2,
-    text: "Keep the table of contents client-only and use the real timeline row markers for jump targets.",
-  }),
-  conversationRow({
-    id: "row_agent_2",
-    role: "assistant",
-    index: 3,
-    text: "The rail can derive user and assistant messages from the timeline rows and use the bottom-anchored scroll body for navigation.",
-  }),
-  conversationRow({
-    id: "row_user_3",
-    role: "user",
-    index: 4,
-    text: "Add enough long messages that the TOC panel overflows and shows the bottom fade.",
-  }),
-  conversationRow({
-    id: "row_agent_3",
-    role: "assistant",
-    index: 5,
-    text: "I will keep the active item synced even while the panel is closed, then reveal the current position on hover.",
-  }),
-  conversationRow({
-    id: "row_user_4",
-    role: "user",
-    index: 6,
-    text: "Verify tab switching keeps each role's active item in view and that clicking a preview jumps to the full row.",
-  }),
-  conversationRow({
-    id: "row_agent_4",
-    role: "assistant",
-    index: 7,
-    text: "The story uses the same ThreadTimelineSurface as the app, so the row markers, spacing, and scroll container match production.",
-  }),
-];
+]).flat();
 
 export function Default() {
   return (
-    <div className="h-[640px] overflow-hidden rounded-lg border border-border bg-background">
+    <div className="flex h-[640px] min-h-0 overflow-hidden rounded-lg border border-border bg-background">
       <BottomAnchoredScrollBody
         footer={null}
         maxWidthClassName="max-w-3xl"

@@ -14,7 +14,9 @@ import type { StartedOnBehalfOf } from "@bb/server-contract";
 import type { AppDeps } from "../../types.js";
 import {
   appendClientTurnEvent,
+  appendPreparedClientTurnRequestedEventWithNotificationInTransaction,
   buildCwdBranchEntries,
+  createClientTurnRequestId,
 } from "./thread-events.js";
 import { requestThreadStart } from "./thread-lifecycle.js";
 import { resolvePermissionEscalation } from "./thread-runtime-config.js";
@@ -60,10 +62,12 @@ interface RequestThreadProvisionArgs {
 }
 
 interface RequestThreadReprovisionArgs {
+  beforeRequestAppendInTransaction?: (args: { tx: DbTransaction }) => void;
   environment: Environment;
   provisionEventSequence: number;
   execution: ResolvedThreadExecutionOptions;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   initiator: ThreadTurnInitiator;
   provisioningId: string;
   senderThreadId: string | null;
@@ -291,27 +295,48 @@ export function requestThreadReprovision(
   deps: Pick<AppDeps, "db" | "hub">,
   args: RequestThreadReprovisionArgs,
 ): ThreadProvisionContext {
-  const request = appendClientTurnEvent(deps, {
-    threadId: args.thread.id,
-    environmentId: args.environment.id,
-    type: "client/turn/requested",
-    input: args.input,
-    execution: args.execution,
-    initiator: args.initiator,
-    senderThreadId: args.senderThreadId,
-    systemMessageKind: args.systemMessageKind,
-    systemMessageSubject: args.systemMessageSubject,
-    requestMethod: "turn/start",
-    source: "tell",
-    target: { kind: "new-turn" },
-  });
-  recordAcceptedPromptHistoryEntry(deps, {
-    thread: args.thread,
-    input: args.input,
-    initiator: args.initiator,
-    target: { kind: "new-turn" },
-    requestSequence: request.sequence,
-  });
+  const requestId = createClientTurnRequestId();
+  const request = deps.db.transaction(
+    (tx) => {
+      args.beforeRequestAppendInTransaction?.({ tx });
+      const request =
+        appendPreparedClientTurnRequestedEventWithNotificationInTransaction(tx, {
+          threadId: args.thread.id,
+          environmentId: args.environment.id,
+          type: "client/turn/requested",
+          input: args.input,
+          ...(args.inputGroups !== undefined
+            ? { inputGroups: args.inputGroups }
+            : {}),
+          execution: args.execution,
+          initiator: args.initiator,
+          senderThreadId: args.senderThreadId,
+          systemMessageKind: args.systemMessageKind,
+          systemMessageSubject: args.systemMessageSubject,
+          requestMethod: "turn/start",
+          source: "tell",
+          target: { kind: "new-turn" },
+          requestId,
+        });
+      recordAcceptedPromptHistoryEntry(
+        { db: tx },
+        {
+          thread: args.thread,
+          input: args.input,
+          initiator: args.initiator,
+          target: { kind: "new-turn" },
+          requestSequence: request.sequence,
+        },
+      );
+      return request;
+    },
+    { behavior: "immediate" },
+  );
+  deps.hub.notifyThread(
+    args.thread.id,
+    request.notificationChanges,
+    request.notificationMetadata,
+  );
 
   const context = createReprovisioningContext({
     clientRequestId: request.requestId,

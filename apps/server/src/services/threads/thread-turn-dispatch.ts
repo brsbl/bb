@@ -8,6 +8,7 @@ import type {
   ThreadTurnInitiator,
 } from "@bb/domain";
 import { createThreadProvisioningId } from "@bb/db";
+import type { DbTransaction } from "@bb/db";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
 import {
@@ -36,11 +37,13 @@ export interface ReadyThreadEnvironment extends Environment {
 }
 
 export interface DispatchTurnDuringReprovisionArgs {
+  beforeRequestAppendInTransaction?: (args: { tx: DbTransaction }) => void;
   deps: LoggedPendingInteractionWorkSessionDeps;
   environment: Environment;
   execution: ResolvedThreadExecutionOptions;
   initiator: ThreadTurnInitiator;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   onStarted?: () => void;
   senderThreadId: string | null;
   // Family-B taxonomy fields for `initiator: "system"` reprovision dispatches.
@@ -164,10 +167,12 @@ export async function dispatchTurnDuringReprovision(
   });
 
   requestThreadReprovision(args.deps, {
+    beforeRequestAppendInTransaction: args.beforeRequestAppendInTransaction,
     thread: args.thread,
     environment: args.environment,
     provisionEventSequence,
     input: args.input,
+    inputGroups: args.inputGroups,
     execution: args.execution,
     initiator: args.initiator,
     provisioningId,

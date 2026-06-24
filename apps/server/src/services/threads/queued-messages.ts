@@ -1,8 +1,7 @@
 import {
   claimQueuedThreadMessageGroup,
   claimNextQueuedThreadMessageGroup,
-  deleteClaimedQueuedThreadMessage,
-  deleteClaimedQueuedThreadMessageInTransaction,
+  deleteClaimedQueuedThreadMessageBatchInTransaction,
   getQueuedThreadMessage,
   getEnvironment,
   getThread,
@@ -298,14 +297,11 @@ async function sendClaimedQueuedMessageForIdleProviderThread(
 
   const command = deps.db.transaction(
     (tx) => {
-      for (const queuedMessage of args.queuedMessages) {
-        const consumed = deleteClaimedQueuedThreadMessageInTransaction(tx, {
-          id: queuedMessage.id,
-          claimToken: queuedMessage.claimToken,
-        });
-        if (!consumed) {
-          return null;
-        }
+      const consumed = deleteClaimedQueuedThreadMessageBatchInTransaction(tx, {
+        queuedMessages: args.queuedMessages,
+      });
+      if (!consumed) {
+        throw createQueuedMessageClaimLostError();
       }
       const request = appendClientTurnEventInTransaction(tx, {
         environmentId: thread.environmentId,
@@ -399,6 +395,14 @@ async function sendClaimedQueuedMessageForThread(
     thread: args.thread,
   });
   await sendThreadMessage(deps, {
+    beforeAppendInTransaction: ({ tx }) => {
+      const consumed = deleteClaimedQueuedThreadMessageBatchInTransaction(tx, {
+        queuedMessages: args.queuedMessages,
+      });
+      if (!consumed) {
+        throw createQueuedMessageClaimLostError();
+      }
+    },
     environment,
     payload: {
       ...sendQueuedMessagePayload(
@@ -411,15 +415,6 @@ async function sendClaimedQueuedMessageForThread(
     thread: args.thread,
     trigger: "auto-dispatch",
   });
-  for (const claimedQueuedMessage of args.queuedMessages) {
-    const deleted = deleteClaimedQueuedThreadMessage(deps.db, deps.hub, {
-      id: claimedQueuedMessage.id,
-      claimToken: claimedQueuedMessage.claimToken,
-    });
-    if (!deleted) {
-      throw createQueuedMessageClaimLostError();
-    }
-  }
   return queuedMessage;
 }
 

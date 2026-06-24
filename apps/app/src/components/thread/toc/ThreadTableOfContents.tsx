@@ -12,6 +12,11 @@ interface TocItem {
 
 type TocTab = "user" | "agent";
 
+interface ActiveItemIds {
+  agent: string | null;
+  user: string | null;
+}
+
 interface ThreadTableOfContentsProps {
   timelineRows: readonly TimelineRow[];
 }
@@ -69,39 +74,65 @@ function useConversationTocItems(timelineRows: readonly TimelineRow[]) {
   }, [timelineRows]);
 }
 
-function findTimelineRowElement(
-  scrollElement: HTMLElement,
-  rowId: string,
-): HTMLElement | null {
-  const rows = scrollElement.querySelectorAll<HTMLElement>(
-    "[data-timeline-row-id]",
-  );
-  for (const row of rows) {
-    if (row.dataset.timelineRowId === rowId) return row;
-  }
-  return null;
+function findTimelineRowElements(
+  scrollElement: HTMLElement | null,
+): HTMLElement[] {
+  return scrollElement
+    ? Array.from(
+        scrollElement.querySelectorAll<HTMLElement>("[data-timeline-row-id]"),
+      )
+    : [];
 }
 
-function findActiveItemId(
+function findTimelineRowElement(
   scrollElement: HTMLElement | null,
-  items: readonly TocItem[],
-): string | null {
-  if (!scrollElement || items.length === 0) return null;
-  const scrollTop = scrollElement.getBoundingClientRect().top;
-  let nearest: { id: string; distance: number } | null = null;
+  rowId: string,
+): HTMLElement | null {
+  return (
+    findTimelineRowElements(scrollElement).find(
+      (row) => row.dataset.timelineRowId === rowId,
+    ) ?? null
+  );
+}
 
-  for (const item of items) {
-    const row = findTimelineRowElement(scrollElement, item.id);
-    if (!row) continue;
+function findActiveItemIds({
+  agentItems,
+  scrollElement,
+  userItems,
+}: {
+  agentItems: readonly TocItem[];
+  scrollElement: HTMLElement | null;
+  userItems: readonly TocItem[];
+}): ActiveItemIds {
+  if (!scrollElement || (userItems.length === 0 && agentItems.length === 0)) {
+    return { agent: null, user: null };
+  }
+  const scrollTop = scrollElement.getBoundingClientRect().top;
+  const rolesById = new Map<string, TocTab>();
+  for (const item of userItems) rolesById.set(item.id, "user");
+  for (const item of agentItems) rolesById.set(item.id, "agent");
+  let nearestUser: { id: string; distance: number } | null = null;
+  let nearestAgent: { id: string; distance: number } | null = null;
+
+  for (const row of findTimelineRowElements(scrollElement)) {
+    const rowId = row.dataset.timelineRowId;
+    if (!rowId) continue;
+    const role = rolesById.get(rowId);
+    if (!role) continue;
     const rect = row.getBoundingClientRect();
     const distance =
       rect.top <= scrollTop ? scrollTop - rect.top : rect.top - scrollTop;
-    if (!nearest || distance < nearest.distance) {
-      nearest = { id: item.id, distance };
+    const nearest = { id: rowId, distance };
+    if (role === "user") {
+      if (!nearestUser || distance < nearestUser.distance) {
+        nearestUser = nearest;
+      }
+    } else if (!nearestAgent || distance < nearestAgent.distance) {
+      nearestAgent = nearest;
     }
   }
 
-  return nearest?.id ?? null;
+  return { agent: nearestAgent?.id ?? null, user: nearestUser?.id ?? null };
 }
 
 export function ThreadTableOfContents({
@@ -113,35 +144,65 @@ export function ThreadTableOfContents({
   const [tab, setTab] = useState<TocTab>("user");
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
-  const scrollOverflow = useScrollOverflowState<HTMLDivElement>({
+  const {
+    belowOverflow,
+    bottomSentinelRef,
+    scrollRef,
+    topSentinelRef,
+  } = useScrollOverflowState<HTMLDivElement>({
     measureOverflow: true,
   });
   const itemEls = useRef(new Map<string, HTMLElement>());
+  const activeIdsRef = useRef<ActiveItemIds>({ agent: null, user: null });
+  const activeUpdateFrameRef = useRef<number | null>(null);
 
   const updateActiveItems = useCallback(() => {
     const scrollElement = bottomAnchor?.getScrollElement() ?? null;
-    setActiveUserId(findActiveItemId(scrollElement, userItems));
-    setActiveAgentId(findActiveItemId(scrollElement, agentItems));
+    const nextActiveIds = findActiveItemIds({
+      agentItems,
+      scrollElement,
+      userItems,
+    });
+    const currentActiveIds = activeIdsRef.current;
+    if (nextActiveIds.user !== currentActiveIds.user) {
+      setActiveUserId(nextActiveIds.user);
+    }
+    if (nextActiveIds.agent !== currentActiveIds.agent) {
+      setActiveAgentId(nextActiveIds.agent);
+    }
+    activeIdsRef.current = nextActiveIds;
   }, [agentItems, bottomAnchor, userItems]);
 
+  const scheduleActiveItemsUpdate = useCallback(() => {
+    if (activeUpdateFrameRef.current !== null) return;
+    activeUpdateFrameRef.current = window.requestAnimationFrame(() => {
+      activeUpdateFrameRef.current = null;
+      updateActiveItems();
+    });
+  }, [updateActiveItems]);
+
   useEffect(() => {
-    updateActiveItems();
+    scheduleActiveItemsUpdate();
     const scrollElement = bottomAnchor?.getScrollElement();
     if (!scrollElement) return;
-    scrollElement.addEventListener("scroll", updateActiveItems, {
+    scrollElement.addEventListener("scroll", scheduleActiveItemsUpdate, {
       passive: true,
     });
-    const resizeObserver = new ResizeObserver(updateActiveItems);
+    const resizeObserver = new ResizeObserver(scheduleActiveItemsUpdate);
     resizeObserver.observe(scrollElement);
     return () => {
-      scrollElement.removeEventListener("scroll", updateActiveItems);
+      scrollElement.removeEventListener("scroll", scheduleActiveItemsUpdate);
       resizeObserver.disconnect();
+      if (activeUpdateFrameRef.current !== null) {
+        window.cancelAnimationFrame(activeUpdateFrameRef.current);
+        activeUpdateFrameRef.current = null;
+      }
     };
-  }, [bottomAnchor, updateActiveItems]);
+  }, [bottomAnchor, scheduleActiveItemsUpdate]);
 
   useEffect(() => {
     const activeId = tab === "user" ? activeUserId : activeAgentId;
-    const container = scrollOverflow.scrollRef.current;
+    const container = scrollRef.current;
     const el = activeId ? itemEls.current.get(activeId) : null;
     if (!container || !el) return;
     const containerRect = container.getBoundingClientRect();
@@ -157,7 +218,7 @@ export function ThreadTableOfContents({
           container.scrollTop + (elRect.bottom - (containerRect.bottom - pad)),
       });
     }
-  }, [tab, activeUserId, activeAgentId, open, scrollOverflow.scrollRef]);
+  }, [tab, activeUserId, activeAgentId, open, scrollRef]);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -181,7 +242,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
-      className="absolute left-0 top-1/2 z-20 -translate-y-1/2"
+      className="sticky left-0 top-1/2 z-20 h-0 w-0 -translate-y-1/2"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocusCapture={() => setOpen(true)}
@@ -234,11 +295,11 @@ export function ThreadTableOfContents({
           </div>
           <div className="relative isolate">
             <div
-              ref={scrollOverflow.scrollRef}
+              ref={scrollRef}
               className="max-h-64 overflow-y-auto overflow-x-hidden"
             >
               <div
-                ref={scrollOverflow.topSentinelRef}
+                ref={topSentinelRef}
                 aria-hidden
                 className="h-px w-full"
               />
@@ -277,12 +338,12 @@ export function ThreadTableOfContents({
                 })}
               </ul>
               <div
-                ref={scrollOverflow.bottomSentinelRef}
+                ref={bottomSentinelRef}
                 aria-hidden
                 className="h-px w-full"
               />
             </div>
-            {scrollOverflow.belowOverflow ? (
+            {belowOverflow ? (
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-popover to-transparent"

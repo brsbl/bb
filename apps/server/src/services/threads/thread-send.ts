@@ -67,6 +67,7 @@ type SendThreadMessagePayload = SendMessageRequest & {
 };
 
 export interface SendThreadMessageArgs {
+  beforeAppendInTransaction?: SendThreadMessageTransactionPreflight;
   environment: Environment;
   payload: SendThreadMessagePayload;
   thread: Thread;
@@ -88,7 +89,7 @@ interface BuildAgentThreadMessageTextArgs {
   senderThreadId: string;
 }
 
-interface SendThreadMessageTransactionPreflightArgs {
+export interface SendThreadMessageTransactionPreflightArgs {
   tx: DbTransaction;
 }
 
@@ -101,7 +102,7 @@ interface SendThreadMessageQueueRequestResult {
   threadBecameActive: boolean;
 }
 
-interface SendThreadMessageTransactionPreflight {
+export interface SendThreadMessageTransactionPreflight {
   (args: SendThreadMessageTransactionPreflightArgs): void;
 }
 
@@ -409,11 +410,13 @@ export async function sendThreadMessage(
 
   if (
     await dispatchTurnDuringReprovision({
+      beforeRequestAppendInTransaction: args.beforeAppendInTransaction,
       deps,
       environment,
       execution,
       initiator,
       input,
+      inputGroups,
       senderThreadId,
       thread,
     })
@@ -457,7 +460,8 @@ export async function sendThreadMessage(
       syncGeneratedTitle: false,
     });
     const queuedRequest = appendAndQueueSendThreadMessageInTransaction({
-      beforeAppendInTransaction: () => {
+      beforeAppendInTransaction: ({ tx }) => {
+        args.beforeAppendInTransaction?.({ tx });
         ensureThreadCanStartRequest(thread);
       },
       db: deps.db,
@@ -548,6 +552,7 @@ export async function sendThreadMessage(
     requestId,
   });
   const queuedRequest = appendAndQueueSendThreadMessageInTransaction({
+    beforeAppendInTransaction: args.beforeAppendInTransaction,
     db: deps.db,
     environmentId: thread.environmentId,
     execution,

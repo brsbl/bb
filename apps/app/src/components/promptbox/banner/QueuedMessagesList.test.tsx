@@ -127,6 +127,79 @@ describe("QueuedMessagesList", () => {
     ).toBeNull();
   });
 
+  it("makes the group divider handle visible on focus and non-hover devices", () => {
+    const { getByLabelText } = renderQueuedMessages(makeGroupedQueuedMessages());
+
+    expect(getByLabelText("Messages above send together").className).toContain(
+      "focus-visible:opacity-100",
+    );
+    expect(getByLabelText("Messages above send together").className).toContain(
+      "[@media(hover:none)]:opacity-100",
+    );
+  });
+
+  it("re-adopts queued-message order from props when the same rows are restored", () => {
+    const originalMessages = [
+      makeQueuedMessage("q_one", "First queued message"),
+      makeQueuedMessage("q_two", "Second queued message"),
+      makeQueuedMessage("q_three", "Third queued message"),
+    ];
+    const { container, rerender } = renderQueuedMessages(originalMessages);
+
+    rerender(
+      <QueuedMessagesList
+        queuedMessages={[
+          originalMessages[1]!,
+          originalMessages[0]!,
+          originalMessages[2]!,
+        ]}
+        sendDisabled={false}
+        actionDisabled={false}
+        processingMessageId={null}
+        processingAction={null}
+        onSendImmediately={noop}
+        onReorder={noop}
+        onSetGroupBoundary={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(
+      Array.from(container.querySelectorAll("[data-queued-message-row]")).map(
+        (row) => row.textContent,
+      ),
+    ).toEqual([
+      expect.stringContaining("Second queued message"),
+      expect.stringContaining("First queued message"),
+      expect.stringContaining("Third queued message"),
+    ]);
+
+    rerender(
+      <QueuedMessagesList
+        queuedMessages={originalMessages}
+        sendDisabled={false}
+        actionDisabled={false}
+        processingMessageId={null}
+        processingAction={null}
+        onSendImmediately={noop}
+        onReorder={noop}
+        onSetGroupBoundary={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+
+    expect(
+      Array.from(container.querySelectorAll("[data-queued-message-row]")).map(
+        (row) => row.textContent,
+      ),
+    ).toEqual([
+      expect.stringContaining("First queued message"),
+      expect.stringContaining("Second queued message"),
+      expect.stringContaining("Third queued message"),
+    ]);
+  });
+
   it("does not show a fade when stale observer entries report hidden sentinels without overflow", async () => {
     interface ObserverControl {
       targets: Element[];

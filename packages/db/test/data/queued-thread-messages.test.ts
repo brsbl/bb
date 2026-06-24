@@ -9,6 +9,7 @@ import {
   claimQueuedThreadMessageGroup,
   claimNextQueuedThreadMessage,
   createQueuedThreadMessage,
+  deleteClaimedQueuedThreadMessageBatchInTransaction,
   deleteClaimedQueuedThreadMessage,
   deleteClaimedQueuedThreadMessageInTransaction,
   deleteQueuedThreadMessage,
@@ -98,7 +99,7 @@ describe("queued thread messages", () => {
       threadId: thread.id,
       content: altInput,
       model: "gpt-5",
-      reasoningLevel: "high",
+      reasoningLevel: "medium",
       permissionMode: "full",
       serviceTier: "default",
     });
@@ -293,7 +294,7 @@ describe("queued thread messages", () => {
       threadId: thread.id,
       content: altInput,
       model: "gpt-5",
-      reasoningLevel: "high",
+      reasoningLevel: "medium",
       permissionMode: "full",
       serviceTier: "default",
     });
@@ -340,7 +341,7 @@ describe("queued thread messages", () => {
       threadId: thread.id,
       content: altInput,
       model: "gpt-5",
-      reasoningLevel: "high",
+      reasoningLevel: "medium",
       permissionMode: "full",
       serviceTier: "default",
     });
@@ -388,7 +389,7 @@ describe("queued thread messages", () => {
       threadId: thread.id,
       content: altInput,
       model: "gpt-5",
-      reasoningLevel: "high",
+      reasoningLevel: "medium",
       permissionMode: "full",
       serviceTier: "default",
     });
@@ -420,6 +421,239 @@ describe("queued thread messages", () => {
       firstQueuedMessage.id,
       secondQueuedMessage.id,
     ]);
+  });
+
+  it("clears the previous group edge when deleting a grouped follower", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(
+      deleteQueuedThreadMessage(db, noopNotifier, secondQueuedMessage.id),
+    ).toBe(true);
+
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+    expect(
+      claimNextQueuedThreadMessageGroup(db, noopNotifier, thread.id)?.map(
+        (queuedMessage) => queuedMessage.id,
+      ),
+    ).toEqual([firstQueuedMessage.id]);
+  });
+
+  it("clears the previous group edge when claiming a grouped follower", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "high",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(
+      claimQueuedThreadMessageGroup(db, noopNotifier, secondQueuedMessage.id)?.map(
+        (queuedMessage) => queuedMessage.id,
+      ),
+    ).toEqual([secondQueuedMessage.id]);
+
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("rejects grouped prefixes that mix sender attribution", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      senderThreadId: "thr_sender",
+      model: "gpt-5",
+      reasoningLevel: "high",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+
+    const result = setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(result.kind).toBe("invalid_sender");
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("rejects grouped prefixes that mix execution options", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5.5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+
+    const result = setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(result.kind).toBe("invalid_execution_options");
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("does not consume any grouped claim when batch deletion is stale", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+    const claimedQueuedMessages = claimNextQueuedThreadMessageGroup(
+      db,
+      noopNotifier,
+      thread.id,
+    );
+    if (!claimedQueuedMessages) {
+      throw new Error("Expected grouped claim");
+    }
+
+    const staleClaim = [
+      claimedQueuedMessages[0]!,
+      { ...claimedQueuedMessages[1]!, claimToken: "qclaim_stale" },
+    ];
+    expect(
+      db.transaction((tx) =>
+        deleteClaimedQueuedThreadMessageBatchInTransaction(tx, {
+          queuedMessages: staleClaim,
+        }),
+      ),
+    ).toBe(false);
+
+    expect(getQueuedThreadMessage(db, firstQueuedMessage.id)?.claimToken).toBe(
+      claimedQueuedMessages[0]!.claimToken,
+    );
+    expect(getQueuedThreadMessage(db, secondQueuedMessage.id)?.claimToken).toBe(
+      claimedQueuedMessages[1]!.claimToken,
+    );
   });
 
   it("reorders queued messages to the front, middle, and end", () => {

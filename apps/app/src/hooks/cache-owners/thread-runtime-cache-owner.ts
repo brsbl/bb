@@ -2,6 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import type {
   PromptHistoryEntry,
+  PromptInput,
   ResolvedThreadExecutionOptions,
   ThreadQueuedMessage,
   ThreadWithRuntime,
@@ -290,22 +291,45 @@ function applyQueuedMessageGroupBoundary({
   }));
 }
 
+function queuedMessageSendGroup(
+  queuedMessages: readonly ThreadQueuedMessage[] | undefined,
+  queuedMessageId: string,
+): ThreadQueuedMessage[] {
+  if (!queuedMessages) return [];
+  const queuedMessageIndex = queuedMessages.findIndex(
+    (queuedMessage) => queuedMessage.id === queuedMessageId,
+  );
+  if (queuedMessageIndex === -1) return [];
+  if (queuedMessageIndex !== 0) return [queuedMessages[queuedMessageIndex]!];
+
+  const group: ThreadQueuedMessage[] = [];
+  for (const queuedMessage of queuedMessages) {
+    group.push(queuedMessage);
+    if (!queuedMessage.groupWithNext) break;
+  }
+  return group;
+}
+
 function queuedMessageSendIds(
   queuedMessages: readonly ThreadQueuedMessage[] | undefined,
   queuedMessageId: string,
 ): Set<string> {
-  if (!queuedMessages) return new Set([queuedMessageId]);
-  const queuedMessageIndex = queuedMessages.findIndex(
-    (queuedMessage) => queuedMessage.id === queuedMessageId,
-  );
-  if (queuedMessageIndex !== 0) return new Set([queuedMessageId]);
+  const group = queuedMessageSendGroup(queuedMessages, queuedMessageId);
+  if (group.length === 0) return new Set([queuedMessageId]);
+  return new Set(group.map((queuedMessage) => queuedMessage.id));
+}
 
-  const ids = new Set<string>();
-  for (const queuedMessage of queuedMessages) {
-    ids.add(queuedMessage.id);
-    if (!queuedMessage.groupWithNext) break;
-  }
-  return ids;
+function groupedQueuedMessageInputForRuntime(
+  queuedMessages: readonly ThreadQueuedMessage[],
+): PromptInput[] {
+  return queuedMessages.flatMap((queuedMessage, index) =>
+    index === 0
+      ? queuedMessage.content
+      : [
+          { type: "text" as const, text: "\n\n", mentions: [] },
+          ...queuedMessage.content,
+        ],
+  );
 }
 
 function getCachedDefaultExecutionOptions(
@@ -834,10 +858,11 @@ export async function beginSendQueuedMessageTransaction({
     queryClient.getQueryData<ThreadQueuedMessageListResponse>(
       threadQueuedMessagesQueryKey(request.id),
     );
-  const queuedMessage = previousQueuedMessages?.find(
-    (currentQueuedMessage) =>
-      currentQueuedMessage.id === request.queuedMessageId,
+  const queuedMessageGroup = queuedMessageSendGroup(
+    previousQueuedMessages,
+    request.queuedMessageId,
   );
+  const queuedMessage = queuedMessageGroup[0] ?? null;
   const sendIds = queuedMessageSendIds(
     previousQueuedMessages,
     request.queuedMessageId,
@@ -870,7 +895,7 @@ export async function beginSendQueuedMessageTransaction({
   });
   const optimisticRow = buildOptimisticUserMessageRow({
     createdAt: optimisticCreatedAt,
-    input: queuedMessage.content,
+    input: groupedQueuedMessageInputForRuntime(queuedMessageGroup),
     mode: request.mode,
     threadId: request.id,
     threadStatus: previousThread?.status ?? null,

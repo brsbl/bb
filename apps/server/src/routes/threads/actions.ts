@@ -92,6 +92,18 @@ function toQueuedMessageOrderResponse(
         "invalid_request",
         "Queued message order is invalid",
       );
+    case "invalid_sender":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued messages from different senders cannot be grouped",
+      );
+    case "invalid_execution_options":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued messages with different execution options cannot be grouped",
+      );
   }
 }
 
@@ -109,6 +121,18 @@ function toQueuedMessageGroupBoundaryResponse(
         409,
         "invalid_request",
         "Queued message is already being sent",
+      );
+    case "invalid_sender":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued messages from different senders cannot be grouped",
+      );
+    case "invalid_execution_options":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued messages with different execution options cannot be grouped",
       );
   }
 }

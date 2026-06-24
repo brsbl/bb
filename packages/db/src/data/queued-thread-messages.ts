@@ -8,6 +8,7 @@ import {
   isNull,
   lt,
   min,
+  or,
 } from "drizzle-orm";
 import type { PermissionMode, PromptInput } from "@bb/domain";
 import type {
@@ -75,6 +76,10 @@ export interface ClaimedQueuedThreadMessageMutationArgs {
 
 export type DeleteClaimedQueuedThreadMessageInTransactionArgs = ClaimedQueuedThreadMessageMutationArgs;
 
+export interface DeleteClaimedQueuedThreadMessageBatchInTransactionArgs {
+  queuedMessages: readonly ClaimedQueuedThreadMessageMutationArgs[];
+}
+
 export type DeleteClaimedQueuedThreadMessageArgs = ClaimedQueuedThreadMessageMutationArgs;
 
 export interface ReleaseStaleQueuedMessageClaimsArgs {
@@ -121,18 +126,30 @@ export interface QueuedThreadMessageGroupBoundaryNotFound {
   kind: "not_found";
 }
 
+export interface QueuedThreadMessageGroupBoundaryInvalidSender {
+  kind: "invalid_sender";
+}
+
+export interface QueuedThreadMessageGroupBoundaryInvalidExecutionOptions {
+  kind: "invalid_execution_options";
+}
+
 export type ReorderQueuedThreadMessageResult =
   | ReorderQueuedThreadMessageSuccess
   | ReorderQueuedThreadMessageUnchanged
   | ReorderQueuedThreadMessageNotFound
   | ReorderQueuedThreadMessageClaimed
   | ReorderQueuedThreadMessageStaleNeighbor
-  | ReorderQueuedThreadMessageInvalidNeighborOrder;
+  | ReorderQueuedThreadMessageInvalidNeighborOrder
+  | QueuedThreadMessageGroupBoundaryInvalidSender
+  | QueuedThreadMessageGroupBoundaryInvalidExecutionOptions;
 
 export type SetQueuedThreadMessageGroupBoundaryResult =
   | QueuedThreadMessageGroupBoundarySuccess
   | QueuedThreadMessageGroupBoundaryUnchanged
   | QueuedThreadMessageGroupBoundaryNotFound
+  | QueuedThreadMessageGroupBoundaryInvalidSender
+  | QueuedThreadMessageGroupBoundaryInvalidExecutionOptions
   | ReorderQueuedThreadMessageClaimed;
 
 export type ReleaseQueuedMessageClaimArgs = ClaimedQueuedThreadMessageMutationArgs;
@@ -141,11 +158,33 @@ function collectLeadGroupIds(
   queuedMessages: readonly QueuedThreadMessageRow[],
 ): string[] {
   const ids: string[] = [];
-  for (const queuedMessage of queuedMessages) {
+  const firstQueuedMessage = queuedMessages[0] ?? null;
+  for (const [index, queuedMessage] of queuedMessages.entries()) {
     ids.push(queuedMessage.id);
     if (!queuedMessage.groupWithNext) break;
+    const nextQueuedMessage = queuedMessages[index + 1];
+    if (
+      !nextQueuedMessage ||
+      !queuedMessageGroupingEnvelopeMatches(firstQueuedMessage, nextQueuedMessage)
+    ) {
+      break;
+    }
   }
   return ids;
+}
+
+function queuedMessageGroupingEnvelopeMatches(
+  firstQueuedMessage: QueuedThreadMessageRow | null,
+  queuedMessage: QueuedThreadMessageRow,
+): boolean {
+  return (
+    firstQueuedMessage !== null &&
+    queuedMessage.senderThreadId === firstQueuedMessage.senderThreadId &&
+    queuedMessage.model === firstQueuedMessage.model &&
+    queuedMessage.reasoningLevel === firstQueuedMessage.reasoningLevel &&
+    queuedMessage.permissionMode === firstQueuedMessage.permissionMode &&
+    queuedMessage.serviceTier === firstQueuedMessage.serviceTier
+  );
 }
 
 function isQueuedThreadMessageClaimed(row: QueuedThreadMessageRow): boolean {
@@ -209,6 +248,50 @@ function getLastQueuedThreadMessage(
   );
 }
 
+function getPreviousUnclaimedQueuedThreadMessage(
+  db: DbQueryConnection,
+  queuedMessage: QueuedThreadMessageRow,
+): QueuedThreadMessageRow | null {
+  return (
+    db
+      .select()
+      .from(queuedThreadMessages)
+      .where(
+        and(
+          eq(queuedThreadMessages.threadId, queuedMessage.threadId),
+          isNull(queuedThreadMessages.claimedAt),
+          isNull(queuedThreadMessages.claimToken),
+          or(
+            lt(queuedThreadMessages.sortKey, queuedMessage.sortKey),
+            and(
+              eq(queuedThreadMessages.sortKey, queuedMessage.sortKey),
+              lt(queuedThreadMessages.id, queuedMessage.id),
+            ),
+          ),
+        ),
+      )
+      .orderBy(desc(queuedThreadMessages.sortKey), desc(queuedThreadMessages.id))
+      .limit(1)
+      .get() ?? null
+  );
+}
+
+function clearPreviousQueuedMessageGroupEdgeInTransaction(
+  db: DbTransaction,
+  queuedMessage: QueuedThreadMessageRow,
+  now = Date.now(),
+): void {
+  const previousQueuedMessage = getPreviousUnclaimedQueuedThreadMessage(
+    db,
+    queuedMessage,
+  );
+  if (!previousQueuedMessage?.groupWithNext) return;
+  db.update(queuedThreadMessages)
+    .set({ groupWithNext: false, updatedAt: now })
+    .where(eq(queuedThreadMessages.id, previousQueuedMessage.id))
+    .run();
+}
+
 function resolveQueuedThreadMessageNeighbor(
   db: DbQueryConnection,
   args: ResolveQueuedThreadMessageNeighborArgs,
@@ -252,6 +335,24 @@ function applyQueuedThreadMessageGroupBoundary(
       isQueuedThreadMessageClaimed(claimedBoundary)
       ? { kind: "claimed" }
       : { kind: "not_found" };
+  }
+  if (boundaryIndex > 0) {
+    const firstQueuedMessage = queuedMessages[0] ?? null;
+    const groupedMessages = queuedMessages.slice(0, boundaryIndex + 1);
+    const hasMixedSender = groupedMessages.some(
+      (queuedMessage) =>
+        queuedMessage.senderThreadId !== firstQueuedMessage?.senderThreadId,
+    );
+    if (hasMixedSender) {
+      return { kind: "invalid_sender" };
+    }
+    const hasMixedExecutionOptions = groupedMessages.some(
+      (queuedMessage) =>
+        !queuedMessageGroupingEnvelopeMatches(firstQueuedMessage, queuedMessage),
+    );
+    if (hasMixedExecutionOptions) {
+      return { kind: "invalid_execution_options" };
+    }
   }
 
   let changed = false;
@@ -371,6 +472,7 @@ export function claimQueuedThreadMessage(
       }
 
       const now = Date.now();
+      clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing, now);
       const claimToken = createQueuedThreadMessageClaimToken();
       const updated = tx
         .update(queuedThreadMessages)
@@ -458,6 +560,9 @@ export function claimQueuedThreadMessageGroup(
         existingIndex === 0
           ? collectLeadGroupIds(queuedMessages)
           : [existing.id];
+      if (existingIndex !== 0) {
+        clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
+      }
       return claimQueuedThreadMessageIdsInTransaction(tx, ids);
     },
     { behavior: "immediate" },
@@ -619,6 +724,12 @@ export function reorderQueuedThreadMessage({
           if (groupResult.kind === "claimed") {
             return { kind: "claimed" };
           }
+          if (groupResult.kind === "invalid_sender") {
+            return { kind: "invalid_sender" };
+          }
+          if (groupResult.kind === "invalid_execution_options") {
+            return { kind: "invalid_execution_options" };
+          }
           if (groupResult.kind === "updated") {
             return {
               kind: "reordered",
@@ -663,6 +774,12 @@ export function reorderQueuedThreadMessage({
         }
         if (groupResult.kind === "claimed") {
           return { kind: "claimed" };
+        }
+        if (groupResult.kind === "invalid_sender") {
+          return { kind: "invalid_sender" };
+        }
+        if (groupResult.kind === "invalid_execution_options") {
+          return { kind: "invalid_execution_options" };
         }
       }
 
@@ -785,6 +902,10 @@ export function deleteClaimedQueuedThreadMessageInTransaction(
   db: DbTransaction,
   args: DeleteClaimedQueuedThreadMessageInTransactionArgs,
 ): boolean {
+  const existing = getQueuedThreadMessageForMutation(db, args.id);
+  if (!existing || existing.claimToken !== args.claimToken) {
+    return false;
+  }
   const deleted =
     db
       .delete(queuedThreadMessages)
@@ -796,7 +917,74 @@ export function deleteClaimedQueuedThreadMessageInTransaction(
       )
       .returning({ id: queuedThreadMessages.id })
       .get() ?? null;
+  if (deleted) {
+    clearPreviousQueuedMessageGroupEdgeInTransaction(db, existing);
+  }
   return deleted !== null;
+}
+
+export function deleteClaimedQueuedThreadMessageBatchInTransaction(
+  db: DbTransaction,
+  args: DeleteClaimedQueuedThreadMessageBatchInTransactionArgs,
+): boolean {
+  if (args.queuedMessages.length === 0) return false;
+  const claimToken = args.queuedMessages[0]!.claimToken;
+  if (
+    args.queuedMessages.some(
+      (queuedMessage) => queuedMessage.claimToken !== claimToken,
+    )
+  ) {
+    return false;
+  }
+
+  const ids = args.queuedMessages.map((queuedMessage) => queuedMessage.id);
+  const existingRows = db
+    .select()
+    .from(queuedThreadMessages)
+    .where(
+      and(
+        inArray(queuedThreadMessages.id, ids),
+        eq(queuedThreadMessages.claimToken, claimToken),
+      ),
+    )
+    .all();
+  if (existingRows.length !== ids.length) {
+    return false;
+  }
+
+  const deletedRows = db
+    .delete(queuedThreadMessages)
+    .where(
+      and(
+        inArray(queuedThreadMessages.id, ids),
+        eq(queuedThreadMessages.claimToken, claimToken),
+      ),
+    )
+    .returning({ id: queuedThreadMessages.id })
+    .all();
+  if (deletedRows.length !== ids.length) {
+    return false;
+  }
+
+  const removingIds = new Set(ids);
+  const now = Date.now();
+  for (const existing of existingRows) {
+    const previousQueuedMessage = getPreviousUnclaimedQueuedThreadMessage(
+      db,
+      existing,
+    );
+    if (
+      previousQueuedMessage &&
+      !removingIds.has(previousQueuedMessage.id) &&
+      previousQueuedMessage.groupWithNext
+    ) {
+      db.update(queuedThreadMessages)
+        .set({ groupWithNext: false, updatedAt: now })
+        .where(eq(queuedThreadMessages.id, previousQueuedMessage.id))
+        .run();
+    }
+  }
+  return true;
 }
 
 export function deleteClaimedQueuedThreadMessage(
@@ -813,17 +1001,10 @@ export function deleteClaimedQueuedThreadMessage(
     return false;
   }
 
-  const deleted =
-    db
-      .delete(queuedThreadMessages)
-      .where(
-        and(
-          eq(queuedThreadMessages.id, args.id),
-          eq(queuedThreadMessages.claimToken, args.claimToken),
-        ),
-      )
-      .returning({ id: queuedThreadMessages.id })
-      .get() ?? null;
+  const deleted = db.transaction(
+    (tx) => deleteClaimedQueuedThreadMessageInTransaction(tx, args),
+    { behavior: "immediate" },
+  );
   if (!deleted) {
     return false;
   }
@@ -837,13 +1018,17 @@ export function deleteQueuedThreadMessage(
   notifier: DbNotifier,
   id: string,
 ) {
-  const existing = db
-    .select()
-    .from(queuedThreadMessages)
-    .where(eq(queuedThreadMessages.id, id))
-    .get();
+  const existing = db.transaction(
+    (tx) => {
+      const existing = getQueuedThreadMessageForMutation(tx, id);
+      if (!existing) return null;
+      clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
+      tx.delete(queuedThreadMessages).where(eq(queuedThreadMessages.id, id)).run();
+      return existing;
+    },
+    { behavior: "immediate" },
+  );
   if (!existing) return false;
-  db.delete(queuedThreadMessages).where(eq(queuedThreadMessages.id, id)).run();
   notifier.notifyThread(existing.threadId, ["queue-changed"]);
   return true;
 }

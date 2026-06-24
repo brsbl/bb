@@ -389,6 +389,20 @@ describe("thread runtime cache owner", () => {
         >(threadQueuedMessagesQueryKey("thread-1"))
         ?.map((queuedMessage) => queuedMessage.id),
     ).toEqual(["qmsg-3"]);
+    const timeline = queryClient.getQueryData<ThreadTimelineResponse>(
+      threadTimelineQueryKey("thread-1"),
+    );
+    expect(timeline?.rows).toHaveLength(1);
+    expect(timeline?.rows[0]).toMatchObject({
+      kind: "conversation",
+      role: "user",
+    });
+    const optimisticRow = timeline?.rows[0];
+    if (optimisticRow?.kind !== "conversation") {
+      throw new Error("Expected optimistic conversation row");
+    }
+    expect(optimisticRow.text).toContain("Queued message");
+    expect(optimisticRow.text).toContain("Second");
 
     rollbackRemoveQueuedMessageTransaction({
       queryClient,

@@ -351,7 +351,7 @@ function SortableGroupDivider({ disabled }: { disabled: boolean }) {
                 ref={setActivatorNodeRef}
                 type="button"
                 className={cn(
-                  "pointer-events-none flex h-4 shrink-0 touch-none select-none items-center rounded-full border border-border bg-surface-raised px-1.5 text-muted-foreground opacity-0 shadow-sm transition hover:border-foreground/40 group-hover/divider:pointer-events-auto group-hover/divider:opacity-100",
+                  "pointer-events-none flex h-4 shrink-0 touch-none select-none items-center rounded-full border border-border bg-surface-raised px-1.5 text-muted-foreground opacity-0 shadow-sm transition hover:border-foreground/40 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover/divider:pointer-events-auto group-hover/divider:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
                   !disabled && "cursor-grab active:cursor-grabbing",
                   isDragging &&
                     "pointer-events-auto cursor-grabbing border-foreground/50 text-foreground opacity-100",
@@ -403,29 +403,33 @@ export function QueuedMessagesList({
     }),
   );
   const [isExpanded, setIsExpanded] = useState(true);
-  const scrollOverflow = useScrollOverflowState<HTMLDivElement>({
+  const {
+    aboveOverflow,
+    belowOverflow,
+    bottomSentinelRef,
+    scrollRef,
+    topSentinelRef,
+  } = useScrollOverflowState<HTMLDivElement>({
     measureOverflow: true,
   });
 
   // Render from a local order so a drag can reorder synchronously in the drop
   // event (no snap-back). The prop is re-adopted only when the queue's
-  // membership changes (add / send / delete / edit) — not when a reorder's
-  // optimistic cache update merely catches up to an order we already applied.
+  // persisted order or grouping changes — not when an unrelated query
+  // notification merely replays the same order we already applied.
   // (React Query defers its notification past dnd-kit's drop, so re-adopting on
   // every prop change would momentarily re-render a dropped row in its old
   // slot.)
   const [orderedMessages, setOrderedMessages] = useState(queuedMessages);
-  const membershipKey = queuedMessages
+  const orderKey = queuedMessages
     .map(
       (queuedMessage) =>
         `${queuedMessage.id}:${queuedMessage.groupWithNext ? "1" : "0"}`,
     )
-    .slice()
-    .sort()
     .join("|");
-  const [syncedMembershipKey, setSyncedMembershipKey] = useState(membershipKey);
-  if (membershipKey !== syncedMembershipKey) {
-    setSyncedMembershipKey(membershipKey);
+  const [syncedOrderKey, setSyncedOrderKey] = useState(orderKey);
+  if (orderKey !== syncedOrderKey) {
+    setSyncedOrderKey(orderKey);
     setOrderedMessages(queuedMessages);
   }
 
@@ -518,7 +522,7 @@ export function QueuedMessagesList({
   const restrictToListBounds = useCallback<Modifier>(
     ({ draggingNodeRect, transform }) => {
       const listRect =
-        scrollOverflow.scrollRef.current?.getBoundingClientRect() ??
+        scrollRef.current?.getBoundingClientRect() ??
         listRef.current?.getBoundingClientRect();
       if (!listRect || !draggingNodeRect) {
         return { ...transform, x: 0 };
@@ -531,7 +535,7 @@ export function QueuedMessagesList({
         y: Math.min(Math.max(transform.y, minY), maxY),
       };
     },
-    [scrollOverflow.scrollRef],
+    [scrollRef],
   );
 
   if (queuedMessages.length === 0) return null;
@@ -568,13 +572,13 @@ export function QueuedMessagesList({
       {isExpanded ? (
         <div className="relative isolate">
           <div
-            ref={scrollOverflow.scrollRef}
+            ref={scrollRef}
             data-queued-messages-scroll=""
             className="max-h-32 min-w-0 overflow-y-auto overflow-x-hidden pb-1"
             tabIndex={0}
           >
             <div
-              ref={scrollOverflow.topSentinelRef}
+              ref={topSentinelRef}
               aria-hidden
               className="h-px w-full"
             />
@@ -623,19 +627,19 @@ export function QueuedMessagesList({
               </SortableContext>
             </DndContext>
             <div
-              ref={scrollOverflow.bottomSentinelRef}
+              ref={bottomSentinelRef}
               aria-hidden
               className="h-px w-full"
             />
           </div>
-          {scrollOverflow.aboveOverflow ? (
+          {aboveOverflow ? (
             <div
               aria-hidden
               data-queued-messages-fade="above"
               className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-surface-recessed to-transparent"
             />
           ) : null}
-          {scrollOverflow.belowOverflow ? (
+          {belowOverflow ? (
             <div
               aria-hidden
               data-queued-messages-fade="below"
