@@ -54,6 +54,7 @@ export interface BottomAnchorContextValue {
 export interface BottomAnchoredScrollBodyProps {
   children: ReactNode;
   footer: ReactNode;
+  scrollOverlay?: ReactNode;
   scrollAreaClassName?: string;
   contentClassName?: string;
   maxWidthClassName: string;
@@ -232,6 +233,7 @@ export function BottomAnchoredScrollBody({
   contentClassName,
   maxWidthClassName,
   footer,
+  scrollOverlay,
   children,
   scrollAnchorThreadId,
 }: BottomAnchoredScrollBodyProps) {
@@ -297,18 +299,6 @@ export function BottomAnchoredScrollBody({
     return true;
   }, []);
 
-  const runQueuedRestore = useCallback(() => {
-    restoreFrameRef.current = null;
-    if (!restoreBottomOnce()) {
-      restoreFramesRemainingRef.current = 0;
-      return;
-    }
-    restoreFramesRemainingRef.current -= 1;
-    if (restoreFramesRemainingRef.current > 0) {
-      restoreFrameRef.current = window.requestAnimationFrame(runQueuedRestore);
-    }
-  }, [restoreBottomOnce]);
-
   const queueBottomRestore = useCallback(() => {
     if (!shouldStickToBottomRef.current) return;
     // Restore synchronously in the frame the size change was observed.
@@ -325,8 +315,20 @@ export function BottomAnchoredScrollBody({
     restoreBottomOnce();
     restoreFramesRemainingRef.current = BOTTOM_RESTORE_SETTLE_FRAME_COUNT;
     if (restoreFrameRef.current !== null) return;
+    const runQueuedRestore = () => {
+      restoreFrameRef.current = null;
+      if (!restoreBottomOnce()) {
+        restoreFramesRemainingRef.current = 0;
+        return;
+      }
+      restoreFramesRemainingRef.current -= 1;
+      if (restoreFramesRemainingRef.current > 0) {
+        restoreFrameRef.current =
+          window.requestAnimationFrame(runQueuedRestore);
+      }
+    };
     restoreFrameRef.current = window.requestAnimationFrame(runQueuedRestore);
-  }, [restoreBottomOnce, runQueuedRestore]);
+  }, [restoreBottomOnce]);
 
   const scrollToBottom = useCallback(() => {
     const scrollArea = scrollAreaRef.current;
@@ -744,6 +746,11 @@ export function BottomAnchoredScrollBody({
   return (
     <BottomAnchorContext.Provider value={bottomAnchorContextValue}>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {scrollOverlay ? (
+          <div className="pointer-events-none absolute left-0 top-1/2 z-30 h-0 w-0 -translate-y-1/2">
+            <div className="pointer-events-auto">{scrollOverlay}</div>
+          </div>
+        ) : null}
         <div
           ref={scrollAreaRef}
           className={cn(

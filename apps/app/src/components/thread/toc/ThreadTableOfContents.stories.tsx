@@ -1,5 +1,6 @@
 import type { TimelineRow } from "@bb/server-contract";
 import { ThreadTimelineSurface } from "@/components/thread/timeline/ThreadTimelineSurface";
+import { ThreadTableOfContents } from "@/components/thread/toc/ThreadTableOfContents";
 import { BottomAnchoredScrollBody } from "@/components/ui/bottom-anchored-scroll-body";
 
 export default {
@@ -75,6 +76,7 @@ export function Default() {
         footer={null}
         maxWidthClassName="max-w-3xl"
         contentClassName="gap-2 pt-4"
+        scrollOverlay={<ThreadTableOfContents timelineRows={timelineRows} />}
       >
         <ThreadTimelineSurface
           activeThinking={null}

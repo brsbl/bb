@@ -18,7 +18,6 @@ import { HeightTransition } from "@/components/ui/height-transition.js";
 import { Icon } from "@/components/ui/icon.js";
 import { Skeleton } from "@/components/ui/skeleton.js";
 import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body.js";
-import { ThreadTableOfContents } from "@/components/thread/toc/ThreadTableOfContents";
 import { usePreferredTheme } from "@/hooks/useTheme";
 import { toUserAttachmentImageSrc } from "@/lib/user-attachment-images";
 import { ThreadTimelineRows } from "./ThreadTimelineRows.js";
@@ -199,7 +198,6 @@ export function ThreadTimelineSurface({
 
   return (
     <div className="relative flex min-h-0 flex-1">
-      <ThreadTableOfContents timelineRows={timelineRowsWithPendingStop} />
       <ConversationTimeline className="flex-1">
         {leadingContent}
         {showLoadOlderRows ? (

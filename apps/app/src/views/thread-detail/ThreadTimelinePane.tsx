@@ -7,6 +7,7 @@ import {
   type HostConnectionNotice,
   type ThreadTimelineSurfaceProps,
 } from "@/components/thread/timeline/ThreadTimelineSurface";
+import { ThreadTableOfContents } from "@/components/thread/toc/ThreadTableOfContents";
 
 interface ThreadTimelinePaneProps extends ThreadTimelineSurfaceProps {
   canSpawnChild: boolean;
@@ -71,6 +72,7 @@ export function ThreadTimelinePane({
         contentClassName="gap-2 pt-4"
         footerClassName="chat-prompt-box"
         footer={footer}
+        scrollOverlay={<ThreadTableOfContents timelineRows={timelineRows} />}
       >
         <ThreadTimelineSurface
           activeThinking={activeThinking}

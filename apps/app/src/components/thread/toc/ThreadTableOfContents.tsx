@@ -242,7 +242,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
-      className="sticky left-0 top-1/2 z-20 h-0 w-0 -translate-y-1/2"
+      className="relative h-0 w-0"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocusCapture={() => setOpen(true)}
