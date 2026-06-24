@@ -293,13 +293,10 @@ export function ThreadTableOfContents({
         }
       }}
     >
-      <div className="relative">
+      <div className="relative -translate-y-1/2">
         <div
-          aria-hidden={open}
-          className={cn(
-            "flex -translate-y-1/2 flex-col items-start gap-2 py-2 pl-3 pr-2 transition-opacity duration-150",
-            open ? "pointer-events-none opacity-0" : "opacity-100",
-          )}
+          aria-hidden
+          className="flex w-8 flex-col items-center gap-2 py-2"
         >
           {userItems.map((item) => (
             <span
@@ -316,7 +313,7 @@ export function ThreadTableOfContents({
 
         <div
           className={cn(
-            "absolute left-1 top-1/2 w-72 max-w-[calc(100vw-3rem)] -translate-y-1/2 rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
+            "absolute left-full top-1/2 ml-1 w-72 max-w-[calc(100vw-3rem)] -translate-y-1/2 rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
             open
               ? "pointer-events-auto translate-x-0 opacity-100"
               : "pointer-events-none -translate-x-1 opacity-0",
