@@ -144,6 +144,7 @@ export function ThreadTableOfContents({
   const [tab, setTab] = useState<TocTab>("user");
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [listOverflows, setListOverflows] = useState(false);
   const {
     belowOverflow,
     bottomSentinelRef,
@@ -155,6 +156,10 @@ export function ThreadTableOfContents({
   const itemEls = useRef(new Map<string, HTMLElement>());
   const activeIdsRef = useRef<ActiveItemIds>({ agent: null, user: null });
   const activeUpdateFrameRef = useRef<number | null>(null);
+  const hasAgentMessages = agentItems.length > 0;
+  const activeTab = tab === "agent" && hasAgentMessages ? "agent" : "user";
+  const items = activeTab === "user" ? userItems : agentItems;
+  const activeId = activeTab === "user" ? activeUserId : activeAgentId;
 
   const updateActiveItems = useCallback(() => {
     const scrollElement = bottomAnchor?.getScrollElement() ?? null;
@@ -201,7 +206,6 @@ export function ThreadTableOfContents({
   }, [bottomAnchor, scheduleActiveItemsUpdate]);
 
   useEffect(() => {
-    const activeId = tab === "user" ? activeUserId : activeAgentId;
     const container = scrollRef.current;
     const el = activeId ? itemEls.current.get(activeId) : null;
     if (!container || !el) return;
@@ -218,7 +222,47 @@ export function ThreadTableOfContents({
           container.scrollTop + (elRect.bottom - (containerRect.bottom - pad)),
       });
     }
-  }, [tab, activeUserId, activeAgentId, open, scrollRef]);
+  }, [activeId, open, scrollRef]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || typeof window === "undefined") return;
+
+    let frame: number | null = null;
+    const measure = () => {
+      frame = null;
+      const nextOverflows =
+        container.scrollHeight - container.clientHeight > 1;
+      setListOverflows((previous) =>
+        previous === nextOverflows ? previous : nextOverflows,
+      );
+    };
+    const scheduleMeasure = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleMeasure);
+    resizeObserver?.observe(container);
+    const mutationObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(scheduleMeasure);
+    mutationObserver?.observe(container, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    };
+  }, [activeTab, items.length, open, scrollRef]);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -236,9 +280,6 @@ export function ThreadTableOfContents({
   );
 
   if (userItems.length === 0 && agentItems.length === 0) return null;
-
-  const items = tab === "user" ? userItems : agentItems;
-  const activeId = tab === "user" ? activeUserId : activeAgentId;
 
   return (
     <div
@@ -282,14 +323,16 @@ export function ThreadTableOfContents({
           )}
         >
           <div className="flex items-center gap-1 pb-1">
-            <TocPanelTab
-              label="Agent messages"
-              active={tab === "agent"}
-              onSelect={() => setTab("agent")}
-            />
+            {hasAgentMessages ? (
+              <TocPanelTab
+                label="Agent messages"
+                active={activeTab === "agent"}
+                onSelect={() => setTab("agent")}
+              />
+            ) : null}
             <TocPanelTab
               label="Your messages"
-              active={tab === "user"}
+              active={activeTab === "user"}
               onSelect={() => setTab("user")}
             />
           </div>
@@ -343,7 +386,7 @@ export function ThreadTableOfContents({
                 className="h-px w-full"
               />
             </div>
-            {belowOverflow ? (
+            {belowOverflow || listOverflows ? (
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-popover to-transparent"
