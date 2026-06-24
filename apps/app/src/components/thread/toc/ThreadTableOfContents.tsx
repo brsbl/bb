@@ -284,7 +284,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
-      className="group/toc relative w-8"
+      className="group/toc relative w-8 -translate-y-1/2"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocusCapture={() => setOpen(true)}
