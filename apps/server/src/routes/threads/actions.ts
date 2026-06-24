@@ -122,6 +122,12 @@ function toQueuedMessageGroupBoundaryResponse(
         "invalid_request",
         "Queued message is already being sent",
       );
+    case "stale_neighbor":
+      throw new ApiError(
+        409,
+        "invalid_request",
+        "Queued message order changed",
+      );
     case "invalid_sender":
       throw new ApiError(
         409,
@@ -318,6 +324,8 @@ export function registerThreadActionRoutes(app: Hono, deps: AppDeps): void {
           db: deps.db,
           notifier: deps.hub,
           threadId: thread.id,
+          expectedGroupedPrefixQueuedMessageIds:
+            payload.expectedGroupedPrefixQueuedMessageIds,
           groupBoundaryQueuedMessageId: payload.groupBoundaryQueuedMessageId,
         }),
       ),

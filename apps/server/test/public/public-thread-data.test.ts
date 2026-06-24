@@ -12,6 +12,7 @@ import {
   listQueuedThreadMessages,
   getThread,
   queuedThreadMessages,
+  reorderQueuedThreadMessage,
   setQueuedThreadMessageGroupBoundary,
   setThreadExecutionOverride,
   upsertProjectExecutionDefaults,
@@ -1953,7 +1954,7 @@ describe("public thread data routes", () => {
       const thread = seedThread(harness.deps, {
         projectId: project.id,
       });
-      seedQueuedMessage(harness.deps, {
+      const firstQueuedMessage = seedQueuedMessage(harness.deps, {
         threadId: thread.id,
         content: textInput("First queued message"),
         model: "gpt-5",
@@ -1972,6 +1973,10 @@ describe("public thread data routes", () => {
             "content-type": "application/json",
           },
           body: JSON.stringify({
+            expectedGroupedPrefixQueuedMessageIds: [
+              firstQueuedMessage.id,
+              secondQueuedMessage.id,
+            ],
             groupBoundaryQueuedMessageId: secondQueuedMessage.id,
           }),
         },
@@ -1982,6 +1987,66 @@ describe("public thread data routes", () => {
         code: "invalid_request",
         message:
           "Queued messages with different execution options cannot be grouped",
+      });
+    });
+  });
+
+  it("rejects a stale queued-message group boundary prefix", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps, {
+        id: "host-thread-queued-message-group-stale-prefix",
+      });
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+        path: "/tmp/thread-queued-message-group-stale-prefix-source",
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+      });
+      const firstQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("First queued message"),
+      });
+      const secondQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Second queued message"),
+      });
+      const thirdQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Third queued message"),
+      });
+      expect(
+        reorderQueuedThreadMessage({
+          db: harness.db,
+          notifier: harness.hub,
+          threadId: thread.id,
+          queuedMessageId: thirdQueuedMessage.id,
+          previousQueuedMessageId: firstQueuedMessage.id,
+          nextQueuedMessageId: secondQueuedMessage.id,
+        }).kind,
+      ).toBe("reordered");
+
+      const response = await harness.app.request(
+        `/api/v1/threads/${thread.id}/queued-messages/group-boundary`,
+        {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            expectedGroupedPrefixQueuedMessageIds: [
+              firstQueuedMessage.id,
+              secondQueuedMessage.id,
+            ],
+            groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+          }),
+        },
+      );
+
+      expect(response.status).toBe(409);
+      await expect(readJson(response)).resolves.toMatchObject({
+        code: "invalid_request",
+        message: "Queued message order changed",
       });
     });
   });
@@ -2219,6 +2284,10 @@ describe("public thread data routes", () => {
           db: harness.db,
           notifier: harness.hub,
           threadId: thread.id,
+          expectedGroupedPrefixQueuedMessageIds: [
+            firstQueuedMessage.id,
+            secondQueuedMessage.id,
+          ],
           groupBoundaryQueuedMessageId: secondQueuedMessage.id,
         }).kind,
       ).toBe("updated");
@@ -2910,6 +2979,10 @@ describe("public thread data routes", () => {
           db: harness.db,
           notifier: harness.hub,
           threadId: thread.id,
+          expectedGroupedPrefixQueuedMessageIds: [
+            firstQueuedMessage.id,
+            secondQueuedMessage.id,
+          ],
           groupBoundaryQueuedMessageId: secondQueuedMessage.id,
         }).kind,
       ).toBe("updated");
@@ -2989,6 +3062,123 @@ describe("public thread data routes", () => {
         "First reprovision grouped message",
         "Second reprovision grouped message",
       ]);
+    });
+  });
+
+  it("sends grouped queued sender messages with matching input and inputGroups", async () => {
+    await withTestHarness(async (harness) => {
+      const { environment, project, thread } = seedThreadFixture(harness, {
+        thread: {
+          status: "active",
+        },
+      });
+      const senderThread = seedThread(harness.deps, {
+        projectId: project.id,
+      });
+      seedEvent(harness.deps, {
+        threadId: thread.id,
+        environmentId: environment.id,
+        providerThreadId: "provider-active-grouped-sender",
+        scope: turnScope("turn-active-grouped-sender"),
+        sequence: 1,
+        type: "turn/started",
+        data: {},
+      });
+      const firstQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        senderThreadId: senderThread.id,
+        content: textInput("First grouped sender message"),
+      });
+      const secondQueuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        senderThreadId: senderThread.id,
+        content: textInput("Second grouped sender message"),
+      });
+      expect(
+        setQueuedThreadMessageGroupBoundary({
+          db: harness.db,
+          notifier: harness.hub,
+          threadId: thread.id,
+          expectedGroupedPrefixQueuedMessageIds: [
+            firstQueuedMessage.id,
+            secondQueuedMessage.id,
+          ],
+          groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+        }).kind,
+      ).toBe("updated");
+
+      const sendResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/queued-messages/${firstQueuedMessage.id}/send`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ mode: "auto" }),
+        },
+      );
+      expect(sendResponse.status, await sendResponse.clone().text()).toBe(200);
+
+      const firstFormattedText = renderTemplate("agentThreadMessage", {
+        messageText: "First grouped sender message",
+        senderThreadId: senderThread.id,
+      });
+      const secondFormattedText = renderTemplate("agentThreadMessage", {
+        messageText: "Second grouped sender message",
+        senderThreadId: senderThread.id,
+      });
+      const expectedInput = [
+        { type: "text", text: firstFormattedText, mentions: [] },
+        { type: "text", text: "\n\n", mentions: [] },
+        { type: "text", text: secondFormattedText, mentions: [] },
+      ];
+      const expectedInputGroups = [
+        [{ type: "text", text: firstFormattedText, mentions: [] }],
+        [{ type: "text", text: secondFormattedText, mentions: [] }],
+      ];
+      const queued = await waitForQueuedCommand(
+        harness,
+        ({ command }) =>
+          command.type === "turn.submit" && command.threadId === thread.id,
+      );
+      expect(queued.command).toMatchObject({
+        input: expectedInput,
+        inputGroups: expectedInputGroups,
+        target: {
+          mode: "auto",
+          expectedTurnId: "turn-active-grouped-sender",
+        },
+      });
+      if (queued.command.type !== "turn.submit") {
+        throw new Error("Expected turn.submit command");
+      }
+      expect(queued.command.input).toEqual(
+        queued.command.inputGroups?.flatMap((input, index) =>
+          index === 0
+            ? input
+            : [{ type: "text" as const, text: "\n\n", mentions: [] }, ...input],
+        ),
+      );
+
+      const requestedEvent = harness.db
+        .select({ data: events.data })
+        .from(events)
+        .where(
+          and(
+            eq(events.threadId, thread.id),
+            eq(events.type, "client/turn/requested"),
+          ),
+        )
+        .orderBy(events.sequence)
+        .all()
+        .at(-1);
+      expect(requestedEvent).toBeTruthy();
+      const requestedData = JSON.parse(requestedEvent?.data ?? "{}") as {
+        input?: unknown;
+        inputGroups?: unknown;
+      };
+      expect(requestedData.input).toEqual(expectedInput);
+      expect(requestedData.inputGroups).toEqual(expectedInputGroups);
     });
   });
 

@@ -288,6 +288,16 @@ export function formatAgentThreadInput(
   });
 }
 
+function groupedInputForRuntime(
+  inputGroups: readonly PromptInput[][],
+): PromptInput[] {
+  return inputGroups.flatMap((input, index) =>
+    index === 0
+      ? input
+      : [{ type: "text" as const, text: "\n\n", mentions: [] }, ...input],
+  );
+}
+
 function appendAndQueueSendThreadMessageInTransaction({
   beforeAppendInTransaction,
   db,
@@ -367,12 +377,6 @@ export async function sendThreadMessage(
     senderThreadId: payload.senderThreadId,
     targetThread: thread,
   });
-  const input = senderThreadId
-    ? formatAgentThreadInput({
-        input: payload.input,
-        senderThreadId,
-      })
-    : payload.input;
   const inputGroups = payload.inputGroups
     ? payload.inputGroups.map((inputGroup) =>
         senderThreadId
@@ -383,6 +387,15 @@ export async function sendThreadMessage(
           : inputGroup,
       )
     : undefined;
+  const input =
+    inputGroups !== undefined
+      ? groupedInputForRuntime(inputGroups)
+      : senderThreadId
+        ? formatAgentThreadInput({
+            input: payload.input,
+            senderThreadId,
+          })
+        : payload.input;
   await validatePromptAttachmentReferences({
     dataDir: deps.config.dataDir,
     input,

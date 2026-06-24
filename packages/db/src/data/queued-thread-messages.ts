@@ -58,6 +58,7 @@ export interface ReorderQueuedThreadMessageArgs {
 
 export interface SetQueuedThreadMessageGroupBoundaryArgs {
   db: DbConnection;
+  expectedGroupedPrefixQueuedMessageIds: readonly string[];
   groupBoundaryQueuedMessageId: string;
   notifier: DbNotifier;
   threadId: string;
@@ -134,6 +135,10 @@ export interface QueuedThreadMessageGroupBoundaryInvalidExecutionOptions {
   kind: "invalid_execution_options";
 }
 
+export interface QueuedThreadMessageGroupBoundaryStaleOrder {
+  kind: "stale_neighbor";
+}
+
 export type ReorderQueuedThreadMessageResult =
   | ReorderQueuedThreadMessageSuccess
   | ReorderQueuedThreadMessageUnchanged
@@ -150,6 +155,7 @@ export type SetQueuedThreadMessageGroupBoundaryResult =
   | QueuedThreadMessageGroupBoundaryNotFound
   | QueuedThreadMessageGroupBoundaryInvalidSender
   | QueuedThreadMessageGroupBoundaryInvalidExecutionOptions
+  | QueuedThreadMessageGroupBoundaryStaleOrder
   | ReorderQueuedThreadMessageClaimed;
 
 export type ReleaseQueuedMessageClaimArgs = ClaimedQueuedThreadMessageMutationArgs;
@@ -177,6 +183,16 @@ function collectLeadGroupIds(
     }
   }
   return ids;
+}
+
+function stringArraysEqual(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function queuedMessageGroupingEnvelopeMatches(
@@ -337,6 +353,7 @@ function resolveQueuedThreadMessageNeighbor(
 
 function applyQueuedThreadMessageGroupBoundary(
   db: DbTransaction,
+  expectedGroupedPrefixQueuedMessageIds: readonly string[] | null,
   threadId: string,
   groupBoundaryQueuedMessageId: string,
 ): SetQueuedThreadMessageGroupBoundaryResult {
@@ -353,6 +370,19 @@ function applyQueuedThreadMessageGroupBoundary(
       isQueuedThreadMessageClaimed(claimedBoundary)
       ? { kind: "claimed" }
       : { kind: "not_found" };
+  }
+  if (expectedGroupedPrefixQueuedMessageIds !== null) {
+    const currentGroupedPrefixIds = queuedMessages
+      .slice(0, boundaryIndex + 1)
+      .map((queuedMessage) => queuedMessage.id);
+    if (
+      !stringArraysEqual(
+        currentGroupedPrefixIds,
+        expectedGroupedPrefixQueuedMessageIds,
+      )
+    ) {
+      return { kind: "stale_neighbor" };
+    }
   }
   if (boundaryIndex > 0) {
     const firstQueuedMessage = queuedMessages[0] ?? null;
@@ -767,6 +797,7 @@ export function reorderQueuedThreadMessage({
           if (groupBoundaryQueuedMessageId !== undefined) {
             const groupResult = applyQueuedThreadMessageGroupBoundary(
               tx,
+              null,
               threadId,
               groupBoundaryQueuedMessageId,
             );
@@ -775,6 +806,9 @@ export function reorderQueuedThreadMessage({
             }
             if (groupResult.kind === "claimed") {
               return { kind: "claimed" };
+            }
+            if (groupResult.kind === "stale_neighbor") {
+              return { kind: "stale_neighbor" };
             }
             if (groupResult.kind === "invalid_sender") {
               return { kind: "invalid_sender" };
@@ -818,6 +852,7 @@ export function reorderQueuedThreadMessage({
         if (groupBoundaryQueuedMessageId !== undefined) {
           const groupResult = applyQueuedThreadMessageGroupBoundary(
             tx,
+            null,
             threadId,
             groupBoundaryQueuedMessageId,
           );
@@ -828,6 +863,11 @@ export function reorderQueuedThreadMessage({
           }
           if (groupResult.kind === "claimed") {
             throw new ReorderQueuedThreadMessageRollback({ kind: "claimed" });
+          }
+          if (groupResult.kind === "stale_neighbor") {
+            throw new ReorderQueuedThreadMessageRollback({
+              kind: "stale_neighbor",
+            });
           }
           if (groupResult.kind === "invalid_sender") {
             throw new ReorderQueuedThreadMessageRollback({
@@ -879,6 +919,7 @@ export function reorderQueuedThreadMessage({
 
 export function setQueuedThreadMessageGroupBoundary({
   db,
+  expectedGroupedPrefixQueuedMessageIds,
   groupBoundaryQueuedMessageId,
   notifier,
   threadId,
@@ -887,6 +928,7 @@ export function setQueuedThreadMessageGroupBoundary({
     (tx) =>
       applyQueuedThreadMessageGroupBoundary(
         tx,
+        expectedGroupedPrefixQueuedMessageIds,
         threadId,
         groupBoundaryQueuedMessageId,
       ),

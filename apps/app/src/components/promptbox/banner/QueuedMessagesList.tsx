@@ -39,6 +39,11 @@ import type { QueuedMessageReorderRequest } from "@/lib/queued-message-reorder";
 /** Which in-flight action the processing message is running, for its label. */
 export type QueuedMessageProcessingAction = "send" | "edit" | "delete";
 
+export interface QueuedMessageGroupBoundaryRequest {
+  expectedGroupedPrefixQueuedMessageIds: string[];
+  groupBoundaryQueuedMessageId: string;
+}
+
 export interface QueuedMessagesListProps {
   queuedMessages: readonly ThreadQueuedMessage[];
   sendDisabled: boolean;
@@ -47,7 +52,7 @@ export interface QueuedMessagesListProps {
   processingAction: QueuedMessageProcessingAction | null;
   onSendImmediately: (id: string) => void;
   onReorder: (request: QueuedMessageReorderRequest) => void;
-  onSetGroupBoundary: (groupBoundaryQueuedMessageId: string) => void;
+  onSetGroupBoundary: (request: QueuedMessageGroupBoundaryRequest) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -122,8 +127,8 @@ export function resolveQueuedMessageDrag({
 }):
   | {
       kind: "divider";
-      groupBoundaryQueuedMessageId: string;
       orderedMessages: ThreadQueuedMessage[];
+      request: QueuedMessageGroupBoundaryRequest;
     }
   | {
       kind: "row";
@@ -161,11 +166,16 @@ export function resolveQueuedMessageDrag({
     }
     return {
       kind: "divider",
-      groupBoundaryQueuedMessageId,
       orderedMessages: nextMessages.map((queuedMessage, index) => ({
         ...queuedMessage,
         groupWithNext: index < boundaryIndex,
       })),
+      request: {
+        expectedGroupedPrefixQueuedMessageIds: nextMessages
+          .slice(0, boundaryIndex + 1)
+          .map((queuedMessage) => queuedMessage.id),
+        groupBoundaryQueuedMessageId,
+      },
     };
   }
 
@@ -597,7 +607,7 @@ export function QueuedMessagesList({
       setOrderedMessages(dragResult.orderedMessages);
 
       if (dragResult.kind === "divider") {
-        onSetGroupBoundary(dragResult.groupBoundaryQueuedMessageId);
+        onSetGroupBoundary(dragResult.request);
         return;
       }
 

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   TimelineConversationAttachments,
   TimelineRow,
@@ -23,6 +30,8 @@ interface ActiveItemIds {
 interface ThreadTableOfContentsProps {
   timelineRows: readonly TimelineRow[];
 }
+
+const TOC_MIN_VISIBLE_WIDTH_PX = 56 * 16;
 
 function toPreviewLabel(text: string): string {
   return text.replace(/\s+/g, " ").trim();
@@ -101,6 +110,42 @@ function useConversationTocItems(timelineRows: readonly TimelineRow[]) {
   }, [timelineRows]);
 }
 
+function useThreadTocVisible(
+  rootRef: RefObject<HTMLDivElement | null>,
+): boolean {
+  const [visible, setVisible] = useState(
+    () => typeof ResizeObserver === "undefined",
+  );
+
+  useEffect(() => {
+    const host =
+      rootRef.current?.closest<HTMLElement>("[data-scroll-overlay]") ?? null;
+    if (!host || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    let frame: number | null = null;
+    const measure = () => {
+      frame = null;
+      setVisible(host.clientWidth >= TOC_MIN_VISIBLE_WIDTH_PX);
+    };
+    const scheduleMeasure = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+
+    scheduleMeasure();
+    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    resizeObserver.observe(host);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
+  }, [rootRef]);
+
+  return visible;
+}
+
 function findTimelineRowElements(
   scrollElement: HTMLElement | null,
 ): HTMLElement[] {
@@ -172,11 +217,12 @@ export function ThreadTableOfContents({
 }: ThreadTableOfContentsProps) {
   const bottomAnchor = useBottomAnchoredScroll();
   const { agentItems, userItems } = useConversationTocItems(timelineRows);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const tocVisible = useThreadTocVisible(rootRef);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TocTab>("user");
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
-  const [listOverflows, setListOverflows] = useState(false);
   const {
     aboveOverflow,
     belowOverflow,
@@ -220,25 +266,30 @@ export function ThreadTableOfContents({
   }, [updateActiveItems]);
 
   useEffect(() => {
+    if (!tocVisible) return;
     scheduleActiveItemsUpdate();
     const scrollElement = bottomAnchor?.getScrollElement();
     if (!scrollElement) return;
     scrollElement.addEventListener("scroll", scheduleActiveItemsUpdate, {
       passive: true,
     });
-    const resizeObserver = new ResizeObserver(scheduleActiveItemsUpdate);
-    resizeObserver.observe(scrollElement);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleActiveItemsUpdate);
+    resizeObserver?.observe(scrollElement);
     return () => {
       scrollElement.removeEventListener("scroll", scheduleActiveItemsUpdate);
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
       if (activeUpdateFrameRef.current !== null) {
         window.cancelAnimationFrame(activeUpdateFrameRef.current);
         activeUpdateFrameRef.current = null;
       }
     };
-  }, [bottomAnchor, scheduleActiveItemsUpdate]);
+  }, [bottomAnchor, scheduleActiveItemsUpdate, tocVisible]);
 
   useEffect(() => {
+    if (!tocVisible) return;
     const container = scrollRef.current;
     const el = activeId ? itemEls.current.get(activeId) : null;
     if (!container || !el) return;
@@ -255,46 +306,7 @@ export function ThreadTableOfContents({
           container.scrollTop + (elRect.bottom - (containerRect.bottom - pad)),
       });
     }
-  }, [activeId, open, scrollRef]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container || typeof window === "undefined") return;
-
-    let frame: number | null = null;
-    const measure = () => {
-      frame = null;
-      const nextOverflows = container.scrollHeight - container.clientHeight > 1;
-      setListOverflows((previous) =>
-        previous === nextOverflows ? previous : nextOverflows,
-      );
-    };
-    const scheduleMeasure = () => {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(measure);
-    };
-
-    scheduleMeasure();
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(scheduleMeasure);
-    resizeObserver?.observe(container);
-    const mutationObserver =
-      typeof MutationObserver === "undefined"
-        ? null
-        : new MutationObserver(scheduleMeasure);
-    mutationObserver?.observe(container, {
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      resizeObserver?.disconnect();
-      mutationObserver?.disconnect();
-    };
-  }, [activeTab, items.length, open, scrollRef]);
+  }, [activeId, open, scrollRef, tocVisible]);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -315,6 +327,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
+      ref={rootRef}
       data-thread-toc=""
       className="group/toc relative w-8"
       onMouseEnter={() => setOpen(true)}
@@ -326,107 +339,115 @@ export function ThreadTableOfContents({
         }
       }}
     >
-      <div className="relative">
-        <div
-          aria-hidden
-          className="flex w-8 cursor-pointer flex-col items-center gap-2 py-2"
-        >
-          {userItems.map((item) => (
-            <span
-              key={item.id}
-              className={cn(
-                "h-[3px] rounded-full transition-all duration-150",
-                item.id === activeUserId
-                  ? "w-5 bg-foreground/30 group-hover/toc:bg-foreground/70"
-                  : "w-3 bg-foreground/5 group-hover/toc:bg-foreground/20",
-              )}
-            />
-          ))}
-        </div>
-
-        <div
-          className={cn(
-            "absolute left-full top-0 w-[18.25rem] max-w-[calc(100vw-3rem)] pl-1 transition-all duration-150",
-            open
-              ? "pointer-events-auto translate-x-0 opacity-100"
-              : "pointer-events-none -translate-x-1 opacity-0",
-          )}
-        >
-          <div className="rounded-lg border border-border bg-popover p-1 shadow-lg">
-            <div className="flex items-center gap-1 pb-1">
-              {hasAgentMessages ? (
-                <TocPanelTab
-                  label="Agent messages"
-                  active={activeTab === "agent"}
-                  onSelect={() => setTab("agent")}
-                />
-              ) : null}
-              <TocPanelTab
-                label="Your messages"
-                active={activeTab === "user"}
-                onSelect={() => setTab("user")}
+      {tocVisible ? (
+        <div className="relative">
+          <div
+            aria-hidden
+            className="flex w-8 cursor-pointer flex-col items-center gap-2 py-2"
+          >
+            {userItems.map((item) => (
+              <span
+                key={item.id}
+                className={cn(
+                  "h-[3px] rounded-full transition-all duration-150",
+                  item.id === activeUserId
+                    ? "w-5 bg-foreground/30 group-hover/toc:bg-foreground/70"
+                    : "w-3 bg-foreground/5 group-hover/toc:bg-foreground/20",
+                )}
               />
-            </div>
-            <div className="relative isolate">
-              <div
-                ref={scrollRef}
-                className="max-h-64 overflow-y-auto overflow-x-hidden"
-              >
-                <div ref={topSentinelRef} aria-hidden className="h-px w-full" />
-                <ul className="flex flex-col">
-                  {items.map((item) => {
-                    const active = item.id === activeId;
-                    return (
-                      <li key={item.id}>
-                        <button
-                          ref={(node) => {
-                            if (node) itemEls.current.set(item.id, node);
-                            else itemEls.current.delete(item.id);
-                          }}
-                          type="button"
-                          onClick={() => handleSelect(item.id)}
-                          className={cn(
-                            "flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors",
-                            active ? "bg-state-hover" : "hover:bg-state-hover",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "line-clamp-2 text-xs leading-snug",
-                              active
-                                ? "text-foreground"
-                                : "text-muted-foreground",
-                            )}
-                          >
-                            {item.label}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div
-                  ref={bottomSentinelRef}
-                  aria-hidden
-                  className="h-px w-full"
+            ))}
+          </div>
+
+          <div
+            className={cn(
+              "absolute left-full top-0 w-[18.25rem] max-w-[calc(100vw-3rem)] pl-1 transition-all duration-150",
+              open
+                ? "pointer-events-auto translate-x-0 opacity-100"
+                : "pointer-events-none -translate-x-1 opacity-0",
+            )}
+          >
+            <div className="rounded-lg border border-border bg-popover p-1 shadow-lg">
+              <div className="flex items-center gap-1 pb-1">
+                {hasAgentMessages ? (
+                  <TocPanelTab
+                    label="Agent messages"
+                    active={activeTab === "agent"}
+                    onSelect={() => setTab("agent")}
+                  />
+                ) : null}
+                <TocPanelTab
+                  label="Your messages"
+                  active={activeTab === "user"}
+                  onSelect={() => setTab("user")}
                 />
               </div>
-              {aboveOverflow ? (
+              <div className="relative isolate">
                 <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-popover/90 via-popover/60 to-transparent"
-                />
-              ) : null}
-              {belowOverflow || listOverflows ? (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-popover/90 via-popover/60 to-transparent"
-                />
-              ) : null}
+                  ref={scrollRef}
+                  className="max-h-64 overflow-y-auto overflow-x-hidden"
+                >
+                  <div
+                    ref={topSentinelRef}
+                    aria-hidden
+                    className="h-px w-full"
+                  />
+                  <ul className="flex flex-col">
+                    {items.map((item) => {
+                      const active = item.id === activeId;
+                      return (
+                        <li key={item.id}>
+                          <button
+                            ref={(node) => {
+                              if (node) itemEls.current.set(item.id, node);
+                              else itemEls.current.delete(item.id);
+                            }}
+                            type="button"
+                            onClick={() => handleSelect(item.id)}
+                            className={cn(
+                              "flex w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors",
+                              active
+                                ? "bg-state-hover"
+                                : "hover:bg-state-hover",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "line-clamp-2 text-xs leading-snug",
+                                active
+                                  ? "text-foreground"
+                                  : "text-muted-foreground",
+                              )}
+                            >
+                              {item.label}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div
+                    ref={bottomSentinelRef}
+                    aria-hidden
+                    className="h-px w-full"
+                  />
+                </div>
+                {aboveOverflow ? (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-popover/90 via-popover/60 to-transparent"
+                  />
+                ) : null}
+                {belowOverflow ? (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-popover/90 via-popover/60 to-transparent"
+                  />
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

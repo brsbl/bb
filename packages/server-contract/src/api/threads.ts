@@ -197,6 +197,7 @@ export type ReorderQueuedMessageRequest = z.infer<
 >;
 
 export const setQueuedMessageGroupBoundaryRequestSchema = z.object({
+  expectedGroupedPrefixQueuedMessageIds: z.array(z.string().min(1)).min(1),
   groupBoundaryQueuedMessageId: z.string().min(1),
 });
 export type SetQueuedMessageGroupBoundaryRequest = z.infer<

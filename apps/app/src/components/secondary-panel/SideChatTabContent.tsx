@@ -37,6 +37,7 @@ import {
 import { withLoopPromptAction } from "@/components/promptbox/PromptBoxActionsMenu";
 import {
   QueuedMessagesList,
+  type QueuedMessageGroupBoundaryRequest,
   type QueuedMessageProcessingAction,
 } from "@/components/promptbox/banner/QueuedMessagesList";
 import type {
@@ -988,14 +989,14 @@ export function SideChatTabContent({
   );
 
   const handleSetQueuedMessageGroupBoundary = useCallback(
-    (groupBoundaryQueuedMessageId: string) => {
+    (request: QueuedMessageGroupBoundaryRequest) => {
       if (childThreadId === null) {
         return;
       }
       void setQueuedMessageGroupBoundary
         .mutateAsync({
           id: childThreadId,
-          groupBoundaryQueuedMessageId,
+          ...request,
         })
         .catch((error) => {
           appToast.error(

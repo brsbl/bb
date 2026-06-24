@@ -39,6 +39,7 @@ import type {
 } from "@/components/workspace/workspace-change-summary";
 import {
   QueuedMessagesList,
+  type QueuedMessageGroupBoundaryRequest,
   type QueuedMessageProcessingAction,
 } from "@/components/promptbox/banner/QueuedMessagesList";
 import type { QueuedMessageReorderRequest } from "@/lib/queued-message-reorder";
@@ -229,12 +230,9 @@ export function ThreadDetailPromptArea({
   });
   const isDefaultExecutionOptionsLoading =
     defaultExecutionOptionsState === "loading";
-  const { data: queuedMessages = [] } = useThreadQueuedMessages(
-    thread.id,
-    {
-      enabled: true,
-    },
-  );
+  const { data: queuedMessages = [] } = useThreadQueuedMessages(thread.id, {
+    enabled: true,
+  });
   // Ref-backed lookup keeps queued-message action handlers stable across
   // queue refetches so memoized rows do not rerender on unrelated queue updates.
   const queuedMessagesByIdRef = useRef<
@@ -795,11 +793,11 @@ export function ThreadDetailPromptArea({
   );
 
   const handleSetQueuedMessageGroupBoundary = useCallback(
-    (groupBoundaryQueuedMessageId: string) => {
+    (request: QueuedMessageGroupBoundaryRequest) => {
       void setQueuedMessageGroupBoundary
         .mutateAsync({
           id: thread.id,
-          groupBoundaryQueuedMessageId,
+          ...request,
         })
         .catch((nextError) => {
           appToast.error(

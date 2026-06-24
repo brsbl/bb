@@ -60,6 +60,7 @@ interface ReorderThreadQueuedMessageMutationRequest extends QueuedMessageReorder
 }
 
 interface SetThreadQueuedMessageGroupBoundaryMutationRequest {
+  expectedGroupedPrefixQueuedMessageIds: string[];
   groupBoundaryQueuedMessageId: string;
   id: string;
 }
@@ -315,10 +316,12 @@ export function useSetThreadQueuedMessageGroupBoundary() {
       showErrorToast: false,
     },
     mutationFn: ({
+      expectedGroupedPrefixQueuedMessageIds,
       groupBoundaryQueuedMessageId,
       id,
     }: SetThreadQueuedMessageGroupBoundaryMutationRequest): Promise<ThreadQueuedMessageListResponse> =>
       api.setThreadQueuedMessageGroupBoundary(id, {
+        expectedGroupedPrefixQueuedMessageIds,
         groupBoundaryQueuedMessageId,
       }),
     onMutate: async (variables): Promise<ReorderQueuedMessageTransaction> =>

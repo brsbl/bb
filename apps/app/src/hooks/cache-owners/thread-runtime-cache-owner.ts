@@ -140,6 +140,7 @@ interface ReorderQueuedMessageRequest extends QueuedMessageReorderRequest {
 }
 
 interface SetQueuedMessageGroupBoundaryRequest {
+  expectedGroupedPrefixQueuedMessageIds: string[];
   groupBoundaryQueuedMessageId: string;
   id: string;
 }

@@ -311,6 +311,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -324,6 +328,67 @@ describe("queued thread messages", () => {
       { id: firstQueuedMessage.id, groupWithNext: true },
       { id: secondQueuedMessage.id, groupWithNext: false },
       { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("rejects a group boundary when the expected prefix is stale", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    expect(
+      reorderQueuedThreadMessage({
+        db,
+        notifier: noopNotifier,
+        threadId: thread.id,
+        queuedMessageId: thirdQueuedMessage.id,
+        previousQueuedMessageId: firstQueuedMessage.id,
+        nextQueuedMessageId: secondQueuedMessage.id,
+      }).kind,
+    ).toBe("reordered");
+
+    const result = setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(result.kind).toBe("stale_neighbor");
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
     ]);
   });
 
@@ -357,6 +422,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -405,6 +474,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -453,6 +526,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -506,6 +583,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -556,6 +637,11 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+        thirdQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: thirdQueuedMessage.id,
     });
 
@@ -611,6 +697,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -649,6 +739,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 
@@ -686,6 +780,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
     const claimedQueuedMessages = claimNextQueuedThreadMessageGroup(
@@ -913,6 +1011,10 @@ describe("queued thread messages", () => {
       db,
       notifier: noopNotifier,
       threadId: thread.id,
+      expectedGroupedPrefixQueuedMessageIds: [
+        firstQueuedMessage.id,
+        secondQueuedMessage.id,
+      ],
       groupBoundaryQueuedMessageId: secondQueuedMessage.id,
     });
 

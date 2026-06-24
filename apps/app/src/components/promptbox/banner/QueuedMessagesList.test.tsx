@@ -202,7 +202,10 @@ describe("QueuedMessagesList", () => {
       }),
     ).toMatchObject({
       kind: "divider",
-      groupBoundaryQueuedMessageId: "q_three",
+      request: {
+        expectedGroupedPrefixQueuedMessageIds: ["q_one", "q_two", "q_three"],
+        groupBoundaryQueuedMessageId: "q_three",
+      },
       orderedMessages: [
         { id: "q_one", groupWithNext: true },
         { id: "q_two", groupWithNext: true },

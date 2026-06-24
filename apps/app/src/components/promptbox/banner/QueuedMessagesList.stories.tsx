@@ -4,7 +4,10 @@ import {
   applyQueuedMessageReorder,
   type QueuedMessageReorderRequest,
 } from "@/lib/queued-message-reorder";
-import { QueuedMessagesList } from "@/components/promptbox/banner/QueuedMessagesList";
+import {
+  QueuedMessagesList,
+  type QueuedMessageGroupBoundaryRequest,
+} from "@/components/promptbox/banner/QueuedMessagesList";
 import { StoryCard, StoryRow } from "../../../../.ladle/story-card";
 
 export default {
@@ -289,11 +292,17 @@ function ReorderableQueuedMessagesList() {
       applyStoryReorder(currentQueuedMessages, request),
     );
   }, []);
-  const handleSetGroupBoundary = useCallback((boundaryId: string) => {
-    setQueuedMessages((currentQueuedMessages) =>
-      applyStoryGroupBoundary(currentQueuedMessages, boundaryId),
-    );
-  }, []);
+  const handleSetGroupBoundary = useCallback(
+    (request: QueuedMessageGroupBoundaryRequest) => {
+      setQueuedMessages((currentQueuedMessages) =>
+        applyStoryGroupBoundary(
+          currentQueuedMessages,
+          request.groupBoundaryQueuedMessageId,
+        ),
+      );
+    },
+    [],
+  );
 
   return (
     <QueuedMessagesList

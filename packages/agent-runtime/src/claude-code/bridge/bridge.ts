@@ -402,6 +402,15 @@ function ignoreInputConsumption(promise: Promise<void>): void {
   void promise.catch(() => {});
 }
 
+function queuePromptInputs(
+  threadSession: ThreadSession,
+  inputs: readonly string[],
+): void {
+  for (const input of inputs) {
+    ignoreInputConsumption(threadSession.session.pushInput(input));
+  }
+}
+
 function sendSdkMessage(threadId: string, message: SDKMessage): void {
   send({
     jsonrpc: "2.0",
@@ -1357,21 +1366,8 @@ async function handleTurnStart(
     return;
   }
 
-  if (inputs.length === 1) {
-    ignoreInputConsumption(threadSession.session.pushInput(inputs[0] ?? ""));
-    sendResult(id, { threadId: params.threadId });
-    return;
-  }
-
-  try {
-    await Promise.all(
-      inputs.map((input) => threadSession.session.pushInput(input)),
-    );
-    sendResult(id, { threadId: params.threadId });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    sendError(id, -32000, message);
-  }
+  queuePromptInputs(threadSession, inputs);
+  sendResult(id, { threadId: params.threadId });
 }
 
 async function handleTurnSteer(
@@ -1390,10 +1386,14 @@ async function handleTurnSteer(
     return;
   }
 
+  if (inputs.length > 1) {
+    queuePromptInputs(threadSession, inputs);
+    sendResult(id, { threadId: params.threadId });
+    return;
+  }
+
   try {
-    await Promise.all(
-      inputs.map((input) => threadSession.session.pushInput(input)),
-    );
+    await threadSession.session.pushInput(inputs[0] ?? "");
     sendResult(id, { threadId: params.threadId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -164,13 +164,17 @@ describe("thread runtime mutations", () => {
     await act(async () => {
       await result.current.mutateAsync({
         id: "thread-1",
+        expectedGroupedPrefixQueuedMessageIds: ["qmsg-1", "qmsg-2"],
         groupBoundaryQueuedMessageId: "qmsg-2",
       });
     });
 
     expect(api.setThreadQueuedMessageGroupBoundary).toHaveBeenCalledWith(
       "thread-1",
-      { groupBoundaryQueuedMessageId: "qmsg-2" },
+      {
+        expectedGroupedPrefixQueuedMessageIds: ["qmsg-1", "qmsg-2"],
+        groupBoundaryQueuedMessageId: "qmsg-2",
+      },
     );
   });
 });

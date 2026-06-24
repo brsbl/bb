@@ -227,6 +227,7 @@ export function seedQueuedMessage(
     model?: string;
     reasoningLevel?: string;
     permissionMode?: PermissionMode;
+    senderThreadId?: string | null;
     serviceTier?: string;
   },
 ) {
@@ -236,6 +237,7 @@ export function seedQueuedMessage(
     model: args.model ?? "gpt-5",
     reasoningLevel: args.reasoningLevel ?? "medium",
     permissionMode: args.permissionMode ?? "full",
+    senderThreadId: args.senderThreadId ?? null,
     serviceTier: args.serviceTier ?? "default",
   });
 }
