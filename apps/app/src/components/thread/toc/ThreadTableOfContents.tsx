@@ -297,7 +297,7 @@ export function ThreadTableOfContents({
         <div
           aria-hidden={open}
           className={cn(
-            "flex flex-col items-start gap-2 py-2 pl-3 pr-2 transition-opacity duration-150",
+            "flex -translate-y-1/2 flex-col items-start gap-2 py-2 pl-3 pr-2 transition-opacity duration-150",
             open ? "pointer-events-none opacity-0" : "opacity-100",
           )}
         >
