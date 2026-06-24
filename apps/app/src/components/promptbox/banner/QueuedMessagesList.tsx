@@ -351,10 +351,10 @@ function SortableGroupDivider({ disabled }: { disabled: boolean }) {
                 ref={setActivatorNodeRef}
                 type="button"
                 className={cn(
-                  "pointer-events-none flex h-4 shrink-0 touch-none select-none items-center rounded-full border border-border bg-surface-raised px-1.5 text-muted-foreground opacity-0 shadow-sm transition hover:border-foreground/40 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover/divider:pointer-events-auto group-hover/divider:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
+                  "pointer-events-none flex h-4 shrink-0 touch-none select-none items-center rounded-full bg-border px-1.5 text-muted-foreground opacity-0 shadow-sm transition focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover/divider:pointer-events-auto group-hover/divider:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
                   !disabled && "cursor-grab active:cursor-grabbing",
                   isDragging &&
-                    "pointer-events-auto cursor-grabbing border-foreground/50 text-foreground opacity-100",
+                    "pointer-events-auto cursor-grabbing text-foreground opacity-100",
                 )}
                 disabled={disabled}
                 aria-label="Messages above send together"
