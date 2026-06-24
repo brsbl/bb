@@ -526,6 +526,67 @@ describe("queued thread messages", () => {
     ]);
   });
 
+  it("clears the claimed follower group edge when releasing a failed direct send", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: thirdQueuedMessage.id,
+    });
+
+    const claimed = claimQueuedThreadMessageGroup(
+      db,
+      noopNotifier,
+      secondQueuedMessage.id,
+    );
+    expect(claimed?.map((queuedMessage) => queuedMessage.id)).toEqual([
+      secondQueuedMessage.id,
+    ]);
+    expect(claimed?.[0]).toBeDefined();
+    if (!claimed?.[0]) return;
+
+    releaseQueuedMessageClaim(db, noopNotifier, {
+      id: claimed[0].id,
+      claimToken: claimed[0].claimToken,
+    });
+
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
   it("rejects grouped prefixes that mix sender attribution", () => {
     const { db, thread } = setup();
     const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {

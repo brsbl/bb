@@ -1152,7 +1152,7 @@ async function handleRequest(request: ClaudeCodeJsonRpcRequest): Promise<void> {
       await handleThreadFork(request.id, request.params);
       break;
     case "turn/start":
-      handleTurnStart(request.id, request.params);
+      await handleTurnStart(request.id, request.params);
       break;
     case "turn/steer":
       await handleTurnSteer(request.id, request.params);
@@ -1341,7 +1341,10 @@ function buildPromptTexts(
   return texts;
 }
 
-function handleTurnStart(id: string | number, params: TurnStartParams): void {
+async function handleTurnStart(
+  id: string | number,
+  params: TurnStartParams,
+): Promise<void> {
   const inputs = buildPromptTexts(params.input, params.inputGroups);
   if (!inputs) {
     sendError(id, -32602, "Missing input text");
@@ -1354,10 +1357,21 @@ function handleTurnStart(id: string | number, params: TurnStartParams): void {
     return;
   }
 
-  for (const input of inputs) {
-    ignoreInputConsumption(threadSession.session.pushInput(input));
+  if (inputs.length === 1) {
+    ignoreInputConsumption(threadSession.session.pushInput(inputs[0] ?? ""));
+    sendResult(id, { threadId: params.threadId });
+    return;
   }
-  sendResult(id, { threadId: params.threadId });
+
+  try {
+    await Promise.all(
+      inputs.map((input) => threadSession.session.pushInput(input)),
+    );
+    sendResult(id, { threadId: params.threadId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    sendError(id, -32000, message);
+  }
 }
 
 async function handleTurnSteer(

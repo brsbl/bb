@@ -1008,6 +1008,7 @@ interface ActiveManagedEnvironmentProvisionArgs {
 }
 
 interface DispatchManagedEnvironmentReprovisionArgs {
+  beforeProvisionCommandStart?: () => void;
   environment: Environment;
   projectId: string;
   provisionEventSequence: number;
@@ -1103,6 +1104,7 @@ export async function dispatchManagedEnvironmentReprovision(
           });
         })();
 
+  args.beforeProvisionCommandStart?.();
   applyLoggedEnvironmentLifecycleEvent(deps, {
     environmentId: args.environment.id,
     event: { type: "provision.requested" },

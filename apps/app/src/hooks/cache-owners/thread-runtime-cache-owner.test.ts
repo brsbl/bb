@@ -13,6 +13,7 @@ import {
   applyQueuedMessageCreateResult,
   beginCreateQueuedMessageTransaction,
   beginRemoveQueuedMessageTransaction,
+  beginReorderQueuedMessageTransaction,
   beginSendQueuedMessageTransaction,
   beginSendThreadMessageTransaction,
   rollbackCreateQueuedMessageTransaction,
@@ -336,6 +337,42 @@ describe("thread runtime cache owner", () => {
     expect(
       queryClient.getQueryData(threadQueuedMessagesQueryKey("thread-1")),
     ).toEqual(previousQueue);
+  });
+
+  it("preserves grouping when optimistically reordering without a boundary", async () => {
+    const queryClient = createAppQueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      showMutationErrorToasts: false,
+    });
+    const previousQueue = [
+      makeQueuedMessage({ id: "qmsg-1", groupWithNext: true }),
+      makeQueuedMessage({ id: "qmsg-2" }),
+      makeQueuedMessage({ id: "qmsg-3" }),
+    ];
+    queryClient.setQueryData(
+      threadQueuedMessagesQueryKey("thread-1"),
+      previousQueue,
+    );
+
+    await beginReorderQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        queuedMessageId: "qmsg-3",
+        previousQueuedMessageId: null,
+        nextQueuedMessageId: "qmsg-1",
+      },
+    });
+
+    expect(
+      queryClient.getQueryData<ThreadQueuedMessage[]>(
+        threadQueuedMessagesQueryKey("thread-1"),
+      ),
+    ).toMatchObject([
+      { id: "qmsg-3", groupWithNext: false },
+      { id: "qmsg-1", groupWithNext: false },
+      { id: "qmsg-2", groupWithNext: false },
+    ]);
   });
 
   it("optimistically projects sent queued messages into the timeline", async () => {

@@ -169,6 +169,42 @@ const hostDaemonThreadWorkspaceTargetSchema =
     workspaceContext: workspaceContextSchema,
   });
 
+type HostDaemonPromptInput = z.infer<typeof promptInputSchema>;
+
+interface GroupedPromptInputCommand {
+  input: HostDaemonPromptInput[];
+  inputGroups?: HostDaemonPromptInput[][];
+}
+
+function flattenPromptInputGroups(
+  inputGroups: readonly HostDaemonPromptInput[][],
+): HostDaemonPromptInput[] {
+  return inputGroups.flatMap((inputGroup, index) =>
+    index === 0
+      ? inputGroup
+      : [{ type: "text" as const, text: "\n\n", mentions: [] }, ...inputGroup],
+  );
+}
+
+function refineGroupedInputMatchesFlatInput(
+  value: GroupedPromptInputCommand,
+  ctx: z.RefinementCtx,
+): void {
+  if (value.inputGroups === undefined) return;
+  if (
+    JSON.stringify(value.input) ===
+    JSON.stringify(flattenPromptInputGroups(value.inputGroups))
+  ) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: "custom",
+    message: "input must match the flattened inputGroups",
+    path: ["inputGroups"],
+  });
+}
+
 export const threadStartCommandSchema = hostDaemonThreadTargetSchema
   .merge(hostDaemonThreadRuntimeContextSchema)
   .extend({
@@ -194,6 +230,7 @@ export const threadStartCommandSchema = hostDaemonThreadTargetSchema
         path: ["input"],
       });
     }
+    refineGroupedInputMatchesFlatInput(value, ctx);
   });
 
 export const turnSubmitTargetSchema = z.discriminatedUnion("mode", [
@@ -226,7 +263,8 @@ const turnSubmitCommandSchema = hostDaemonThreadTargetSchema
     resumeContext: turnResumeContextSchema,
     target: turnSubmitTargetSchema,
   })
-  .strict();
+  .strict()
+  .superRefine(refineGroupedInputMatchesFlatInput);
 
 export const threadStopCommandSchema = hostDaemonThreadTargetSchema
   .extend({

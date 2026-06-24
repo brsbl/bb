@@ -8,7 +8,7 @@ export interface QueuedMessageReorderItem {
 }
 
 export interface QueuedMessageReorderRequest {
-  groupBoundaryQueuedMessageId: string;
+  groupBoundaryQueuedMessageId?: string;
   nextQueuedMessageId: string | null;
   previousQueuedMessageId: string | null;
   queuedMessageId: string;
@@ -18,7 +18,7 @@ export interface BuildQueuedMessageReorderRequestArgs<
   Item extends QueuedMessageReorderItem,
 > {
   activeId: string;
-  groupBoundaryQueuedMessageId: string;
+  groupBoundaryQueuedMessageId?: string;
   overId: string;
   queuedMessages: readonly Item[];
 }
@@ -48,7 +48,9 @@ export function buildQueuedMessageReorderRequest<
   }
 
   return {
-    groupBoundaryQueuedMessageId,
+    ...(groupBoundaryQueuedMessageId !== undefined
+      ? { groupBoundaryQueuedMessageId }
+      : {}),
     queuedMessageId: request.itemId,
     previousQueuedMessageId: request.previousItemId,
     nextQueuedMessageId: request.nextItemId,

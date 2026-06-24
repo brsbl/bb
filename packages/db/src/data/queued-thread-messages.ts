@@ -298,6 +298,18 @@ function clearPreviousQueuedMessageGroupEdgeInTransaction(
     .run();
 }
 
+function clearQueuedMessageGroupEdgeInTransaction(
+  db: DbTransaction,
+  queuedMessage: QueuedThreadMessageRow,
+  now = Date.now(),
+): void {
+  if (!queuedMessage.groupWithNext) return;
+  db.update(queuedThreadMessages)
+    .set({ groupWithNext: false, updatedAt: now })
+    .where(eq(queuedThreadMessages.id, queuedMessage.id))
+    .run();
+}
+
 function resolveQueuedThreadMessageNeighbor(
   db: DbQueryConnection,
   args: ResolveQueuedThreadMessageNeighborArgs,
@@ -599,7 +611,9 @@ export function claimQueuedThreadMessageGroup(
           ? collectLeadGroupIds(queuedMessages)
           : [existing.id];
       if (existingIndex !== 0) {
-        clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing);
+        const now = Date.now();
+        clearPreviousQueuedMessageGroupEdgeInTransaction(tx, existing, now);
+        clearQueuedMessageGroupEdgeInTransaction(tx, existing, now);
       }
       return claimQueuedThreadMessageIdsInTransaction(tx, ids);
     },

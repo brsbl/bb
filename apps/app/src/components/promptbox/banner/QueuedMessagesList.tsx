@@ -72,6 +72,124 @@ interface QueuedMessageRowProps {
 
 const GROUP_DIVIDER_ID = "__queued_message_group_divider__";
 
+function collectLeadQueuedMessageGroupIds(
+  queuedMessages: readonly ThreadQueuedMessage[],
+): string[] {
+  const ids: string[] = [];
+  for (const queuedMessage of queuedMessages) {
+    ids.push(queuedMessage.id);
+    if (!queuedMessage.groupWithNext) break;
+  }
+  return ids;
+}
+
+function preserveLeadQueuedMessageGroupAfterReorder({
+  originalLeadGroupIds,
+  queuedMessages,
+}: {
+  originalLeadGroupIds: readonly string[];
+  queuedMessages: readonly ThreadQueuedMessage[];
+}): ThreadQueuedMessage[] {
+  if (originalLeadGroupIds.length <= 1) {
+    return queuedMessages.map((queuedMessage) => ({
+      ...queuedMessage,
+      groupWithNext: false,
+    }));
+  }
+
+  const originalLeadGroupIdSet = new Set(originalLeadGroupIds);
+  const preservesLeadGroup = queuedMessages
+    .slice(0, originalLeadGroupIds.length)
+    .every((queuedMessage) => originalLeadGroupIdSet.has(queuedMessage.id));
+
+  return queuedMessages.map((queuedMessage, index) => ({
+    ...queuedMessage,
+    groupWithNext:
+      preservesLeadGroup && index < originalLeadGroupIds.length - 1,
+  }));
+}
+
+export function resolveQueuedMessageDrag({
+  activeId,
+  combinedIds,
+  orderedMessages,
+  overId,
+}: {
+  activeId: string;
+  combinedIds: readonly string[];
+  orderedMessages: readonly ThreadQueuedMessage[];
+  overId: string;
+}):
+  | {
+      kind: "divider";
+      groupBoundaryQueuedMessageId: string;
+      orderedMessages: ThreadQueuedMessage[];
+    }
+  | {
+      kind: "row";
+      request: QueuedMessageReorderRequest;
+      orderedMessages: ThreadQueuedMessage[];
+    }
+  | null {
+  if (activeId === overId) {
+    return null;
+  }
+  const oldIndex = combinedIds.indexOf(activeId);
+  const newIndex = combinedIds.indexOf(overId);
+  if (oldIndex === -1 || newIndex === -1) {
+    return null;
+  }
+
+  const movedIds = arrayMove([...combinedIds], oldIndex, newIndex);
+  const byId = new Map(
+    orderedMessages.map((queuedMessage) => [queuedMessage.id, queuedMessage]),
+  );
+  const dividerIndex = movedIds.indexOf(GROUP_DIVIDER_ID);
+  const nextMessages = movedIds
+    .filter((id) => id !== GROUP_DIVIDER_ID)
+    .map((id) => byId.get(id))
+    .filter(
+      (queuedMessage): queuedMessage is ThreadQueuedMessage =>
+        queuedMessage !== undefined,
+    );
+
+  if (activeId === GROUP_DIVIDER_ID) {
+    const boundaryIndex = Math.max(dividerIndex - 1, 0);
+    const groupBoundaryQueuedMessageId = nextMessages[boundaryIndex]?.id;
+    if (!groupBoundaryQueuedMessageId) {
+      return null;
+    }
+    return {
+      kind: "divider",
+      groupBoundaryQueuedMessageId,
+      orderedMessages: nextMessages.map((queuedMessage, index) => ({
+        ...queuedMessage,
+        groupWithNext: index < boundaryIndex,
+      })),
+    };
+  }
+
+  const messageIndex = nextMessages.findIndex(
+    (queuedMessage) => queuedMessage.id === activeId,
+  );
+  if (messageIndex === -1) {
+    return null;
+  }
+
+  return {
+    kind: "row",
+    orderedMessages: preserveLeadQueuedMessageGroupAfterReorder({
+      queuedMessages: nextMessages,
+      originalLeadGroupIds: collectLeadQueuedMessageGroupIds(orderedMessages),
+    }),
+    request: {
+      queuedMessageId: activeId,
+      previousQueuedMessageId: nextMessages[messageIndex - 1]?.id ?? null,
+      nextQueuedMessageId: nextMessages[messageIndex + 1]?.id ?? null,
+    },
+  };
+}
+
 function isQuoteLine(line: string): boolean {
   return line === ">" || line.startsWith("> ");
 }
@@ -465,53 +583,25 @@ export function QueuedMessagesList({
         return;
       }
 
-      const movedIds = arrayMove(combinedIds, oldIndex, newIndex);
-      const byId = new Map(
-        orderedMessages.map((queuedMessage) => [
-          queuedMessage.id,
-          queuedMessage,
-        ]),
-      );
-      const dividerIndex = movedIds.indexOf(GROUP_DIVIDER_ID);
-      const nextMessages = movedIds
-        .filter((id) => id !== GROUP_DIVIDER_ID)
-        .map((id) => byId.get(id))
-        .filter(
-          (queuedMessage): queuedMessage is ThreadQueuedMessage =>
-            queuedMessage !== undefined,
-        );
-      const boundaryIndex = Math.max(dividerIndex - 1, 0);
-      const groupBoundaryQueuedMessageId = nextMessages[boundaryIndex]?.id;
-      if (!groupBoundaryQueuedMessageId) {
-        return;
-      }
-      const nextOrderedMessages = nextMessages.map((queuedMessage, index) => ({
-        ...queuedMessage,
-        groupWithNext: index < boundaryIndex,
-      }));
+      const dragResult = resolveQueuedMessageDrag({
+        activeId,
+        combinedIds,
+        orderedMessages,
+        overId,
+      });
+      if (!dragResult) return;
 
       // Apply the new order locally and synchronously so the dropped row
       // settles into place in the same render flush as the drop; the mutation
       // syncs the server in the background.
-      setOrderedMessages(nextOrderedMessages);
+      setOrderedMessages(dragResult.orderedMessages);
 
-      if (activeId === GROUP_DIVIDER_ID) {
-        onSetGroupBoundary(groupBoundaryQueuedMessageId);
+      if (dragResult.kind === "divider") {
+        onSetGroupBoundary(dragResult.groupBoundaryQueuedMessageId);
         return;
       }
 
-      const messageIndex = nextMessages.findIndex(
-        (queuedMessage) => queuedMessage.id === activeId,
-      );
-      if (messageIndex === -1) {
-        return;
-      }
-      onReorder({
-        queuedMessageId: activeId,
-        groupBoundaryQueuedMessageId,
-        previousQueuedMessageId: nextMessages[messageIndex - 1]?.id ?? null,
-        nextQueuedMessageId: nextMessages[messageIndex + 1]?.id ?? null,
-      });
+      onReorder(dragResult.request);
     },
     [combinedIds, onReorder, onSetGroupBoundary, orderedMessages],
   );
@@ -577,11 +667,7 @@ export function QueuedMessagesList({
             className="max-h-32 min-w-0 overflow-y-auto overflow-x-hidden pb-1"
             tabIndex={0}
           >
-            <div
-              ref={topSentinelRef}
-              aria-hidden
-              className="h-px w-full"
-            />
+            <div ref={topSentinelRef} aria-hidden className="h-px w-full" />
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -626,11 +712,7 @@ export function QueuedMessagesList({
                 </ul>
               </SortableContext>
             </DndContext>
-            <div
-              ref={bottomSentinelRef}
-              aria-hidden
-              className="h-px w-full"
-            />
+            <div ref={bottomSentinelRef} aria-hidden className="h-px w-full" />
           </div>
           {aboveOverflow ? (
             <div

@@ -199,6 +199,48 @@ describe("user message parsing", () => {
     ]);
   });
 
+  it("uses the base id for the first visible grouped turn request", () => {
+    const factory = createTimelineEventFactory({ threadId: "thread-1" });
+    const row = factory.clientTurnRequested({
+      initiator: "user",
+      target: { kind: "new-turn" },
+      text: "Visible",
+      input: [
+        {
+          type: "text",
+          text: "Hidden agent context",
+          mentions: [],
+          visibility: "agent-only",
+        },
+        { type: "text", text: "Visible", mentions: [] },
+      ],
+      inputGroups: [
+        [
+          {
+            type: "text",
+            text: "Hidden agent context",
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        [{ type: "text", text: "Visible", mentions: [] }],
+      ],
+    });
+    const { event, meta } = decodeThreadEventRow(row);
+
+    const messages = parseUsersFromClientRequest({
+      decoded: event,
+      meta,
+      options: standardProjectionOptions,
+    });
+
+    expect(
+      messages.map((message) => ({ id: message.id, text: message.text })),
+    ).toEqual([
+      { id: `${event.threadId}:user-seed:${meta.seq}`, text: "Visible" },
+    ]);
+  });
+
   it("populates initiator, senderThreadId, and turnRequest for agent-initiated messages", () => {
     const factory = createTimelineEventFactory({ threadId: "thread-1" });
     const agentText = "[bb message from thread:thr_sender]\n\nHi";
@@ -411,6 +453,66 @@ describe("user message parsing", () => {
         text: "Second grouped steer",
         turnRequest: { kind: "steer", status: "accepted" },
       },
+    ]);
+  });
+
+  it("uses visible grouped steer order when assigning ids", () => {
+    const eventFactory = createTimelineEventFactory({ threadId: "thread-1" });
+    const row = eventFactory.clientTurnRequested({
+      initiator: "user",
+      target: { kind: "auto", expectedTurnId: "turn-1" },
+      text: "Visible steer\n\nSecond visible steer",
+      input: [
+        {
+          type: "text",
+          text: "Hidden steer context",
+          mentions: [],
+          visibility: "agent-only",
+        },
+        { type: "text", text: "Visible steer", mentions: [] },
+        { type: "text", text: "\n\n", mentions: [] },
+        { type: "text", text: "Second visible steer", mentions: [] },
+      ],
+      inputGroups: [
+        [
+          {
+            type: "text",
+            text: "Hidden steer context",
+            mentions: [],
+            visibility: "agent-only",
+          },
+        ],
+        [{ type: "text", text: "Visible steer", mentions: [] }],
+        [{ type: "text", text: "Second visible steer", mentions: [] }],
+      ],
+    });
+    const { event, meta } = decodeThreadEventRow(row);
+    if (event.type !== "client/turn/requested") {
+      throw new Error("Expected client/turn/requested event");
+    }
+    const accepted = acceptedClientRequest();
+
+    expect(
+      parsePendingSteersFromClientRequest({
+        acceptedClientRequest: undefined,
+        decoded: event,
+        meta,
+        options: standardProjectionOptions,
+      }).map((message) => ({ id: message.id, text: message.text })),
+    ).toEqual([
+      { id: "thread-1:user-seed:1", text: "Visible steer" },
+      { id: "thread-1:user-seed:1-1", text: "Second visible steer" },
+    ]);
+    expect(
+      parseAcceptedSteersFromClientRequest({
+        acceptedClientRequest: accepted,
+        decoded: event,
+        meta,
+        options: standardProjectionOptions,
+      }).map((message) => ({ id: message.id, text: message.text })),
+    ).toEqual([
+      { id: "thread-1:user-seed:1", text: "Visible steer" },
+      { id: "thread-1:user-seed:1-1", text: "Second visible steer" },
     ]);
   });
 

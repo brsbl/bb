@@ -2211,15 +2211,20 @@ describe("bridge", () => {
         providerThreadId,
         threadId,
       });
-      await bridge.waitForResponse(2);
+      await bridge.flushWork();
+      expect(bridge.hasResponse(2)).toBe(false);
 
       const call = getLatestQueryCall();
       await expect(readNextPromptText(call)).resolves.toBe(
         "First grouped input",
       );
+      expect(bridge.hasResponse(2)).toBe(false);
       await expect(readNextPromptText(call)).resolves.toBe(
         "Second grouped input",
       );
+      await expect(bridge.waitForResponse(2)).resolves.toMatchObject({
+        result: { threadId },
+      });
 
       bridge.sendRequest(3, "thread/stop", {
         threadId,
@@ -2227,6 +2232,52 @@ describe("bridge", () => {
       await bridge.flushWork();
       queries[0]?.finish();
       await bridge.waitForResponse(3);
+    } finally {
+      bridge.restore();
+    }
+  });
+
+  it("does not acknowledge grouped turn input when a later SDK prompt is never consumed", async () => {
+    const bridge = createBridgeJsonRpcTestHarness(handleLine);
+    const queries: ControlledClaudeQuery[] = [];
+    queryMock.mockImplementation(() => {
+      const query = createControlledClaudeQuery();
+      queries.push(query);
+      return query;
+    });
+
+    try {
+      const threadId = "thread-grouped-turn-input-rejects-later-prompt";
+      await startBridgeThread({ bridge, threadId });
+
+      bridge.sendRequest(2, "turn/start", {
+        input: [
+          { type: "text", text: "First grouped input" },
+          { type: "text", text: "\n\n" },
+          { type: "text", text: "Second grouped input" },
+        ],
+        inputGroups: [
+          [{ type: "text", text: "First grouped input" }],
+          [{ type: "text", text: "Second grouped input" }],
+        ],
+        providerThreadId: null,
+        threadId,
+      });
+      await bridge.flushWork();
+
+      expect(bridge.hasResponse(2)).toBe(false);
+      await expect(readNextPromptText(getLatestQueryCall())).resolves.toBe(
+        "First grouped input",
+      );
+      expect(bridge.hasResponse(2)).toBe(false);
+
+      queries[0]?.finish();
+      await expect(bridge.waitForResponse(2)).resolves.toMatchObject({
+        error: {
+          code: -32000,
+          message: "Claude SDK stream ended before input consumed",
+        },
+      });
     } finally {
       bridge.restore();
     }

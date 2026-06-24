@@ -34,14 +34,18 @@ import {
 } from "@bb/server-contract";
 import { renderTemplate } from "@bb/templates";
 import { z } from "zod";
-import { describe, expect, it } from "vitest";
-import { registerProviderHostRpcResponder } from "../helpers/host-rpc.js";
+import { describe, expect, it, vi } from "vitest";
+import { loadActiveThreadProvisionContext } from "../../src/services/threads/thread-provisioning-environment.js";
 import {
   reportQueuedCommandError,
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
   waitForQueuedCommandAfter,
 } from "../helpers/commands.js";
+import {
+  registerHostRpcResponder,
+  registerProviderHostRpcResponder,
+} from "../helpers/host-rpc.js";
 import { readJson } from "../helpers/json.js";
 import { textInput } from "../helpers/prompt-input.js";
 import {
@@ -2712,6 +2716,166 @@ describe("public thread data routes", () => {
           )
           .all(),
       ).toHaveLength(1);
+    });
+  });
+
+  it("keeps queued messages when reprovision dispatch is rejected", async () => {
+    await withTestHarness(async (harness) => {
+      const { host } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/queued-message-reprovision-rejected",
+        status: "error",
+        managed: false,
+        workspaceProvisionType: "managed-worktree",
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: environment.id,
+      });
+      const queuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Queued message survives rejected reprovision"),
+      });
+
+      const sendResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/queued-messages/${queuedMessage.id}/send`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ mode: "auto" }),
+        },
+      );
+
+      expect(sendResponse.status).toBe(409);
+      expect(
+        getQueuedThreadMessage(harness.db, queuedMessage.id),
+      ).toMatchObject({
+        id: queuedMessage.id,
+        claimedAt: null,
+        claimToken: null,
+      });
+      expect(
+        harness.db
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.threadId, thread.id),
+              eq(events.type, "client/turn/requested"),
+            ),
+          )
+          .all(),
+      ).toHaveLength(0);
+    });
+  });
+
+  it("persists queued reprovision request before starting the provision command", async () => {
+    await withTestHarness(async (harness) => {
+      const { host, session } = seedHostSession(harness.deps);
+      const { project } = seedProjectWithSource(harness.deps, {
+        hostId: host.id,
+      });
+      const environment = seedEnvironment(harness.deps, {
+        hostId: host.id,
+        projectId: project.id,
+        path: "/tmp/queued-message-immediate-reprovision",
+        status: "error",
+        managed: true,
+        workspaceProvisionType: "managed-worktree",
+      });
+      const thread = seedThread(harness.deps, {
+        projectId: project.id,
+        environmentId: environment.id,
+      });
+      const queuedMessage = seedQueuedMessage(harness.deps, {
+        threadId: thread.id,
+        content: textInput("Queued message before immediate reprovision"),
+      });
+      let stateAtProvisionStart: {
+        activeContextStage: string | null;
+        queuedMessageExists: boolean;
+        requestEventCount: number;
+      } | null = null;
+
+      const responder = registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => {
+          if (request.command.type === "environment.provision") {
+            stateAtProvisionStart = {
+              activeContextStage:
+                loadActiveThreadProvisionContext(harness.deps, thread.id)?.state
+                  .stage ?? null,
+              queuedMessageExists:
+                getQueuedThreadMessage(harness.db, queuedMessage.id) !== null,
+              requestEventCount: harness.db
+                .select({ id: events.id })
+                .from(events)
+                .where(
+                  and(
+                    eq(events.threadId, thread.id),
+                    eq(events.type, "client/turn/requested"),
+                  ),
+                )
+                .all().length,
+            };
+            return {
+              ok: true,
+              result: {
+                path:
+                  environment.path ??
+                  "/tmp/queued-message-immediate-reprovision",
+                branchName: `bb/${thread.id}`,
+                defaultBranch: "main",
+                isGitRepo: true,
+                isWorktree: true,
+                transcript: [],
+              },
+            };
+          }
+          if (request.command.type === "thread.start") {
+            return {
+              ok: true,
+              result: { providerThreadId: "provider-immediate-reprovision" },
+            };
+          }
+          throw new Error(`Unexpected RPC command ${request.command.type}`);
+        },
+      });
+
+      const sendResponse = await harness.app.request(
+        `/api/v1/threads/${thread.id}/queued-messages/${queuedMessage.id}/send`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ mode: "auto" }),
+        },
+      );
+
+      expect(sendResponse.status, await sendResponse.clone().text()).toBe(200);
+      expect(stateAtProvisionStart).toEqual({
+        activeContextStage: "environment-provisioning",
+        queuedMessageExists: false,
+        requestEventCount: 1,
+      });
+      await vi.waitFor(() => {
+        expect(
+          responder.requests.some(
+            (request) =>
+              request.command.type === "thread.start" &&
+              request.command.threadId === thread.id,
+          ),
+        ).toBe(true);
+      });
     });
   });
 

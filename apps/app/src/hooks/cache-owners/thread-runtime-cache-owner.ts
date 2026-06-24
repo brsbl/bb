@@ -290,6 +290,43 @@ function applyQueuedMessageGroupBoundary({
   }));
 }
 
+function collectLeadQueuedMessageGroupIds(
+  queuedMessages: readonly ThreadQueuedMessage[],
+): string[] {
+  const ids: string[] = [];
+  for (const queuedMessage of queuedMessages) {
+    ids.push(queuedMessage.id);
+    if (!queuedMessage.groupWithNext) break;
+  }
+  return ids;
+}
+
+function preserveLeadQueuedMessageGroupAfterReorder({
+  originalLeadGroupIds,
+  queuedMessages,
+}: {
+  originalLeadGroupIds: readonly string[];
+  queuedMessages: readonly ThreadQueuedMessage[];
+}): ThreadQueuedMessage[] {
+  if (originalLeadGroupIds.length <= 1) {
+    return queuedMessages.map((queuedMessage) => ({
+      ...queuedMessage,
+      groupWithNext: false,
+    }));
+  }
+
+  const originalLeadGroupIdSet = new Set(originalLeadGroupIds);
+  const preservesLeadGroup = queuedMessages
+    .slice(0, originalLeadGroupIds.length)
+    .every((queuedMessage) => originalLeadGroupIdSet.has(queuedMessage.id));
+
+  return queuedMessages.map((queuedMessage, index) => ({
+    ...queuedMessage,
+    groupWithNext:
+      preservesLeadGroup && index < originalLeadGroupIds.length - 1,
+  }));
+}
+
 function queuedMessageSendGroup(
   queuedMessages: readonly ThreadQueuedMessage[] | undefined,
   queuedMessageId: string,
@@ -972,14 +1009,22 @@ export async function beginReorderQueuedMessageTransaction({
     queryKey,
     (currentQueuedMessages) => {
       if (!currentQueuedMessages) return currentQueuedMessages;
+      const originalLeadGroupIds = collectLeadQueuedMessageGroupIds(
+        currentQueuedMessages,
+      );
       const reordered = applyQueuedMessageReorder({
         queuedMessages: currentQueuedMessages,
         request,
       });
-      return applyQueuedMessageGroupBoundary({
-        queuedMessages: reordered,
-        groupBoundaryQueuedMessageId: request.groupBoundaryQueuedMessageId,
-      });
+      return request.groupBoundaryQueuedMessageId !== undefined
+        ? applyQueuedMessageGroupBoundary({
+            queuedMessages: reordered,
+            groupBoundaryQueuedMessageId: request.groupBoundaryQueuedMessageId,
+          })
+        : preserveLeadQueuedMessageGroupAfterReorder({
+            queuedMessages: reordered,
+            originalLeadGroupIds,
+          });
     },
   );
 

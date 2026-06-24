@@ -308,6 +308,10 @@ function buildClientUserMessage({
   };
 }
 
+function clientUserMessageIdSuffix(messageIndex: number): string | undefined {
+  return messageIndex > 0 ? String(messageIndex) : undefined;
+}
+
 export function parseUserFromClientRequest(
   args: ParseUserFromClientRequestArgs,
 ): EventProjectionUserMessage | null {
@@ -364,14 +368,15 @@ export function parseUsersFromClientRequest(
 
   const groups = decoded.inputGroups ?? [decoded.input];
   const messages: EventProjectionUserMessage[] = [];
-  for (const [index, input] of groups.entries()) {
+  for (const input of groups) {
     const parsedInput = parsePromptInput(input);
     if (!parsedInput) continue;
+    const visibleMessageIndex = messages.length;
     messages.push(
       buildClientUserMessage({
         acceptedClientRequest,
         decoded,
-        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
+        idSuffix: clientUserMessageIdSuffix(visibleMessageIndex),
         input,
         meta,
         requestStatus: acceptedClientRequest ? "accepted" : "pending",
@@ -403,12 +408,13 @@ export function parsePendingSteersFromClientRequest(
 
   const groups = decoded.inputGroups ?? [decoded.input];
   const messages: EventProjectionUserMessage[] = [];
-  for (const [index, input] of groups.entries()) {
+  for (const input of groups) {
     if (!parsePromptInput(input)) continue;
+    const visibleMessageIndex = messages.length;
     messages.push(
       buildClientUserMessage({
         decoded,
-        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
+        idSuffix: clientUserMessageIdSuffix(visibleMessageIndex),
         input,
         meta,
         requestStatus: "pending",
@@ -445,13 +451,14 @@ export function parseAcceptedSteersFromClientRequest(
 
   const groups = decoded.inputGroups ?? [decoded.input];
   const messages: EventProjectionUserMessage[] = [];
-  for (const [index, input] of groups.entries()) {
+  for (const input of groups) {
     if (!parsePromptInput(input)) continue;
+    const visibleMessageIndex = messages.length;
     messages.push(
       buildClientUserMessage({
         acceptedClientRequest,
         decoded,
-        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
+        idSuffix: clientUserMessageIdSuffix(visibleMessageIndex),
         input,
         meta,
         requestStatus: "accepted",

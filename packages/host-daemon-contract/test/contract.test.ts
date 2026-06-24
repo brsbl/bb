@@ -1349,6 +1349,80 @@ describe("host-daemon command schemas", () => {
     });
   });
 
+  it("rejects grouped commands whose flat input disagrees with inputGroups", () => {
+    const threadStartCommand = {
+      type: "thread.start",
+      environmentId: "env_123",
+      threadId: "thr_123",
+      workspaceContext: {
+        workspacePath: "/tmp/workspace",
+        workspaceProvisionType: "unmanaged",
+      },
+      projectId: "proj_123",
+      providerId: "codex",
+      requestId: CLIENT_REQUEST_ID,
+      input: [{ type: "text", text: "different", mentions: [] }],
+      inputGroups: [[{ type: "text", text: "grouped", mentions: [] }]],
+      options: {
+        model: "gpt-5",
+        serviceTier: "default",
+        reasoningLevel: "medium",
+        workflowsEnabled: false,
+        permissionMode: "full",
+        permissionEscalation: null,
+      },
+      instructions: "Be a helpful thread.",
+      dynamicTools: [],
+      injectedSkillSources: [],
+      instructionMode: "replace",
+    };
+
+    expect(() => hostDaemonCommandSchema.parse(threadStartCommand)).toThrow(
+      /flattened inputGroups/u,
+    );
+    expect(() =>
+      hostDaemonCommandSchema.parse({
+        ...threadStartCommand,
+        fork: { sourceProviderThreadId: "provider-source" },
+        input: [],
+      }),
+    ).toThrow(/flattened inputGroups/u);
+
+    const turnSubmitCommand = {
+      type: "turn.submit",
+      environmentId: "env_123",
+      threadId: "thr_123",
+      requestId: CLIENT_REQUEST_ID,
+      input: [{ type: "text", text: "different", mentions: [] }],
+      inputGroups: [[{ type: "text", text: "grouped", mentions: [] }]],
+      options: {
+        model: "gpt-5",
+        serviceTier: "default",
+        reasoningLevel: "medium",
+        workflowsEnabled: false,
+        permissionMode: "full",
+        permissionEscalation: null,
+      },
+      resumeContext: {
+        workspaceContext: {
+          workspacePath: "/tmp/workspace",
+          workspaceProvisionType: "unmanaged",
+        },
+        projectId: "proj_123",
+        providerId: "codex",
+        providerThreadId: "provider_123",
+        instructions: "Be a helpful coding agent.",
+        dynamicTools: [],
+        injectedSkillSources: [],
+        instructionMode: "append",
+      },
+      target: { mode: "start" },
+    };
+    expect(() => hostDaemonCommandSchema.parse(turnSubmitCommand)).toThrow(
+      /flattened inputGroups/u,
+    );
+  });
+
   it("round-trips dynamic ACP launch specs on provider.list_models, thread.start, and turn.submit", () => {
     const providerListModelsCommand = {
       type: "provider.list_models",

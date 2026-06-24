@@ -166,24 +166,26 @@ export async function dispatchTurnDuringReprovision(
     ],
   });
 
-  requestThreadReprovision(args.deps, {
-    beforeRequestAppendInTransaction: args.beforeRequestAppendInTransaction,
-    thread: args.thread,
-    environment: args.environment,
-    provisionEventSequence,
-    input: args.input,
-    inputGroups: args.inputGroups,
-    execution: args.execution,
-    initiator: args.initiator,
-    provisioningId,
-    senderThreadId: args.senderThreadId,
-    systemMessageKind: args.systemMessageKind,
-    systemMessageSubject: args.systemMessageSubject,
-  });
-
   const reprovisionResult = await dispatchManagedEnvironmentReprovision(
     args.deps,
     {
+      beforeProvisionCommandStart: () => {
+        requestThreadReprovision(args.deps, {
+          beforeRequestAppendInTransaction:
+            args.beforeRequestAppendInTransaction,
+          thread: args.thread,
+          environment: args.environment,
+          provisionEventSequence,
+          input: args.input,
+          inputGroups: args.inputGroups,
+          execution: args.execution,
+          initiator: args.initiator,
+          provisioningId,
+          senderThreadId: args.senderThreadId,
+          systemMessageKind: args.systemMessageKind,
+          systemMessageSubject: args.systemMessageSubject,
+        });
+      },
       environment: args.environment,
       projectId: args.thread.projectId,
       provisionEventSequence,

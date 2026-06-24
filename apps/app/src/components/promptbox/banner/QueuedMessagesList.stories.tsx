@@ -286,13 +286,7 @@ function ReorderableQueuedMessagesList() {
     useState<readonly ThreadQueuedMessage[]>(multipleMessages);
   const handleReorder = useCallback((request: QueuedMessageReorderRequest) => {
     setQueuedMessages((currentQueuedMessages) =>
-      applyStoryGroupBoundary(
-        applyQueuedMessageReorder({
-          queuedMessages: currentQueuedMessages,
-          request,
-        }),
-        request.groupBoundaryQueuedMessageId,
-      ),
+      applyStoryReorder(currentQueuedMessages, request),
     );
   }, []);
   const handleSetGroupBoundary = useCallback((boundaryId: string) => {
@@ -315,6 +309,65 @@ function ReorderableQueuedMessagesList() {
       onDelete={noop}
     />
   );
+}
+
+function collectStoryLeadGroupIds(
+  queuedMessages: readonly ThreadQueuedMessage[],
+): string[] {
+  const ids: string[] = [];
+  for (const queuedMessage of queuedMessages) {
+    ids.push(queuedMessage.id);
+    if (!queuedMessage.groupWithNext) break;
+  }
+  return ids;
+}
+
+function preserveStoryLeadGroupAfterReorder({
+  originalLeadGroupIds,
+  queuedMessages,
+}: {
+  originalLeadGroupIds: readonly string[];
+  queuedMessages: readonly ThreadQueuedMessage[];
+}): ThreadQueuedMessage[] {
+  if (originalLeadGroupIds.length <= 1) {
+    return queuedMessages.map((queuedMessage) => ({
+      ...queuedMessage,
+      groupWithNext: false,
+    }));
+  }
+
+  const originalLeadGroupIdSet = new Set(originalLeadGroupIds);
+  const preservesLeadGroup = queuedMessages
+    .slice(0, originalLeadGroupIds.length)
+    .every((queuedMessage) => originalLeadGroupIdSet.has(queuedMessage.id));
+
+  return queuedMessages.map((queuedMessage, index) => ({
+    ...queuedMessage,
+    groupWithNext:
+      preservesLeadGroup && index < originalLeadGroupIds.length - 1,
+  }));
+}
+
+function applyStoryReorder(
+  queuedMessages: readonly ThreadQueuedMessage[],
+  request: QueuedMessageReorderRequest,
+): ThreadQueuedMessage[] {
+  const reorderedMessages = applyQueuedMessageReorder({
+    queuedMessages,
+    request,
+  });
+
+  if (request.groupBoundaryQueuedMessageId !== undefined) {
+    return applyStoryGroupBoundary(
+      reorderedMessages,
+      request.groupBoundaryQueuedMessageId,
+    );
+  }
+
+  return preserveStoryLeadGroupAfterReorder({
+    originalLeadGroupIds: collectStoryLeadGroupIds(queuedMessages),
+    queuedMessages: reorderedMessages,
+  });
 }
 
 function applyStoryGroupBoundary(

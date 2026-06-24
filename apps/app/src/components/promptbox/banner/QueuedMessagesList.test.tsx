@@ -9,7 +9,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ThreadQueuedMessage } from "@bb/domain";
-import { QueuedMessagesList } from "./QueuedMessagesList";
+import {
+  QueuedMessagesList,
+  resolveQueuedMessageDrag,
+} from "./QueuedMessagesList";
 
 const noop = () => {};
 
@@ -128,7 +131,9 @@ describe("QueuedMessagesList", () => {
   });
 
   it("makes the group divider handle visible on focus and non-hover devices", () => {
-    const { getByLabelText } = renderQueuedMessages(makeGroupedQueuedMessages());
+    const { getByLabelText } = renderQueuedMessages(
+      makeGroupedQueuedMessages(),
+    );
 
     expect(getByLabelText("Messages above send together").className).toContain(
       "focus-visible:opacity-100",
@@ -136,6 +141,74 @@ describe("QueuedMessagesList", () => {
     expect(getByLabelText("Messages above send together").className).toContain(
       "[@media(hover:none)]:opacity-100",
     );
+  });
+
+  it("preserves grouping when reordering a row across the divider", () => {
+    const queuedMessages = [
+      makeQueuedMessage("q_one", "First queued message"),
+      makeQueuedMessage("q_two", "Second queued message"),
+      makeQueuedMessage("q_three", "Third queued message"),
+    ];
+
+    const result = resolveQueuedMessageDrag({
+      activeId: "q_three",
+      overId: "q_one",
+      combinedIds: [
+        "q_one",
+        "__queued_message_group_divider__",
+        "q_two",
+        "q_three",
+      ],
+      orderedMessages: queuedMessages,
+    });
+
+    expect(result).toMatchObject({
+      kind: "row",
+      request: {
+        queuedMessageId: "q_three",
+        previousQueuedMessageId: null,
+        nextQueuedMessageId: "q_one",
+      },
+      orderedMessages: [
+        { id: "q_three", groupWithNext: false },
+        { id: "q_one", groupWithNext: false },
+        { id: "q_two", groupWithNext: false },
+      ],
+    });
+    if (result?.kind !== "row") {
+      throw new Error("Expected row drag result");
+    }
+    expect(result.request.groupBoundaryQueuedMessageId).toBeUndefined();
+  });
+
+  it("updates grouping when dragging the divider", () => {
+    const queuedMessages = [
+      makeQueuedMessage("q_one", "First queued message"),
+      makeQueuedMessage("q_two", "Second queued message"),
+      makeQueuedMessage("q_three", "Third queued message"),
+    ];
+
+    expect(
+      resolveQueuedMessageDrag({
+        activeId: "__queued_message_group_divider__",
+        overId: "q_three",
+        combinedIds: [
+          "q_one",
+          "__queued_message_group_divider__",
+          "q_two",
+          "q_three",
+        ],
+        orderedMessages: queuedMessages,
+      }),
+    ).toMatchObject({
+      kind: "divider",
+      groupBoundaryQueuedMessageId: "q_three",
+      orderedMessages: [
+        { id: "q_one", groupWithNext: true },
+        { id: "q_two", groupWithNext: true },
+        { id: "q_three", groupWithNext: false },
+      ],
+    });
   });
 
   it("re-adopts queued-message order from props when the same rows are restored", () => {
