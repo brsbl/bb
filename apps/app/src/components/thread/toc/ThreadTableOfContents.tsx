@@ -315,6 +315,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
+      data-thread-toc=""
       className="group/toc relative w-8"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
