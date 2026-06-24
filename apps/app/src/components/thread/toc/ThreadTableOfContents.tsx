@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TimelineRow } from "@bb/server-contract";
+import type {
+  TimelineConversationAttachments,
+  TimelineRow,
+} from "@bb/server-contract";
 import { useScrollOverflowState } from "@/components/thread/timeline/useScrollOverflowState";
 import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body.js";
 import { cn } from "@/lib/utils";
@@ -23,6 +26,30 @@ interface ThreadTableOfContentsProps {
 
 function toPreviewLabel(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function toAttachmentPreviewLabel(
+  attachments: TimelineConversationAttachments | null,
+): string {
+  if (!attachments) return "Message";
+  const imageCount = attachments.webImages + attachments.localImages;
+  const totalCount = imageCount + attachments.localFiles;
+  if (totalCount === 0) return "Message";
+  if (totalCount === 1) {
+    return imageCount === 1 ? "Image attachment" : "File attachment";
+  }
+  return `${totalCount} attachments`;
+}
+
+function toTocLabel({
+  attachments,
+  text,
+}: {
+  attachments: TimelineConversationAttachments | null;
+  text: string;
+}): string {
+  const textLabel = toPreviewLabel(text);
+  return textLabel || toAttachmentPreviewLabel(attachments);
 }
 
 function TocPanelTab({
@@ -60,7 +87,7 @@ function useConversationTocItems(timelineRows: readonly TimelineRow[]) {
       if (row.kind !== "conversation") continue;
       const item: TocItem = {
         id: row.id,
-        label: toPreviewLabel(row.text),
+        label: toTocLabel({ attachments: row.attachments, text: row.text }),
         role: row.role,
       };
       if (row.role === "user") {
@@ -107,7 +134,9 @@ function findActiveItemIds({
   if (!scrollElement || (userItems.length === 0 && agentItems.length === 0)) {
     return { agent: null, user: null };
   }
-  const scrollTop = scrollElement.getBoundingClientRect().top;
+  const scrollRect = scrollElement.getBoundingClientRect();
+  const scrollTop = scrollRect.top;
+  const scrollBottom = scrollRect.bottom;
   const rolesById = new Map<string, TocTab>();
   for (const item of userItems) rolesById.set(item.id, "user");
   for (const item of agentItems) rolesById.set(item.id, "agent");
@@ -120,8 +149,11 @@ function findActiveItemIds({
     const role = rolesById.get(rowId);
     if (!role) continue;
     const rect = row.getBoundingClientRect();
+    if (rect.top >= scrollBottom) continue;
     const distance =
-      rect.top <= scrollTop ? scrollTop - rect.top : rect.top - scrollTop;
+      rect.top <= scrollTop
+        ? Math.max(0, scrollTop - rect.bottom)
+        : rect.top - scrollTop;
     const nearest = { id: rowId, distance };
     if (role === "user") {
       if (!nearestUser || distance < nearestUser.distance) {
@@ -232,8 +264,7 @@ export function ThreadTableOfContents({
     let frame: number | null = null;
     const measure = () => {
       frame = null;
-      const nextOverflows =
-        container.scrollHeight - container.clientHeight > 1;
+      const nextOverflows = container.scrollHeight - container.clientHeight > 1;
       setListOverflows((previous) =>
         previous === nextOverflows ? previous : nextOverflows,
       );
@@ -340,11 +371,7 @@ export function ThreadTableOfContents({
                 ref={scrollRef}
                 className="max-h-64 overflow-y-auto overflow-x-hidden"
               >
-                <div
-                  ref={topSentinelRef}
-                  aria-hidden
-                  className="h-px w-full"
-                />
+                <div ref={topSentinelRef} aria-hidden className="h-px w-full" />
                 <ul className="flex flex-col">
                   {items.map((item) => {
                     const active = item.id === activeId;

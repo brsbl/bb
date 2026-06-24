@@ -47,7 +47,7 @@ import {
   buildAcceptedClientRequestById,
   type AcceptedClientRequestContext,
 } from "./accepted-client-request-context.js";
-import { parsePendingSteerFromClientRequest } from "./user-message-parsing.js";
+import { parsePendingSteersFromClientRequest } from "./user-message-parsing.js";
 import { getOrderedThreadEvents } from "./group-event-projection-turns.js";
 import {
   groupCompletedTurnMessages,
@@ -811,7 +811,7 @@ function buildPendingSteerRowsFromEvents(
   const pendingSteerRows: TimelineUserConversationRow[] = [];
 
   for (const { event, meta } of orderedEvents) {
-    const pendingSteer = parsePendingSteerFromClientRequest({
+    const pendingSteers = parsePendingSteersFromClientRequest({
       acceptedClientRequest:
         event.type === "client/turn/requested"
           ? acceptedClientRequestById.get(event.requestId)
@@ -820,11 +820,13 @@ function buildPendingSteerRowsFromEvents(
       meta,
       options,
     });
-    if (!pendingSteer) {
+    if (pendingSteers.length === 0) {
       continue;
     }
     pendingSteerRows.push(
-      convertPendingSteerMessage(pendingSteer, ROOT_TIMELINE_ROW_ID_PREFIX),
+      ...pendingSteers.map((pendingSteer) =>
+        convertPendingSteerMessage(pendingSteer, ROOT_TIMELINE_ROW_ID_PREFIX),
+      ),
     );
   }
 

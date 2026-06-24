@@ -231,6 +231,9 @@ async function startThreadIfEnvironmentReady(
     },
     fork: args.context.request.fork,
     input: args.context.request.input,
+    ...(args.context.request.inputGroups !== undefined
+      ? { inputGroups: args.context.request.inputGroups }
+      : {}),
     requestId: args.context.request.clientRequestId,
     execution: args.context.request.execution,
     permissionEscalation: resolvePermissionEscalation({
@@ -300,24 +303,27 @@ export function requestThreadReprovision(
     (tx) => {
       args.beforeRequestAppendInTransaction?.({ tx });
       const request =
-        appendPreparedClientTurnRequestedEventWithNotificationInTransaction(tx, {
-          threadId: args.thread.id,
-          environmentId: args.environment.id,
-          type: "client/turn/requested",
-          input: args.input,
-          ...(args.inputGroups !== undefined
-            ? { inputGroups: args.inputGroups }
-            : {}),
-          execution: args.execution,
-          initiator: args.initiator,
-          senderThreadId: args.senderThreadId,
-          systemMessageKind: args.systemMessageKind,
-          systemMessageSubject: args.systemMessageSubject,
-          requestMethod: "turn/start",
-          source: "tell",
-          target: { kind: "new-turn" },
-          requestId,
-        });
+        appendPreparedClientTurnRequestedEventWithNotificationInTransaction(
+          tx,
+          {
+            threadId: args.thread.id,
+            environmentId: args.environment.id,
+            type: "client/turn/requested",
+            input: args.input,
+            ...(args.inputGroups !== undefined
+              ? { inputGroups: args.inputGroups }
+              : {}),
+            execution: args.execution,
+            initiator: args.initiator,
+            senderThreadId: args.senderThreadId,
+            systemMessageKind: args.systemMessageKind,
+            systemMessageSubject: args.systemMessageSubject,
+            requestMethod: "turn/start",
+            source: "tell",
+            target: { kind: "new-turn" },
+            requestId,
+          },
+        );
       recordAcceptedPromptHistoryEntry(
         { db: tx },
         {
@@ -344,6 +350,9 @@ export function requestThreadReprovision(
     execution: args.execution,
     environmentId: args.environment.id,
     input: args.input,
+    ...(args.inputGroups !== undefined
+      ? { inputGroups: args.inputGroups }
+      : {}),
     provisioningId: args.provisioningId,
   });
   saveThreadProvisionContext({

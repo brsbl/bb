@@ -40,6 +40,7 @@ import {
   reportQueuedCommandError,
   reportQueuedCommandSuccess,
   waitForQueuedCommand,
+  waitForQueuedCommandAfter,
 } from "../helpers/commands.js";
 import { readJson } from "../helpers/json.js";
 import { textInput } from "../helpers/prompt-input.js";
@@ -2796,6 +2797,34 @@ describe("public thread data routes", () => {
           "Second reprovision grouped message",
         ],
       );
+
+      await reportQueuedCommandSuccess(harness, provisionCommand, {
+        path: "/tmp/grouped-queued-message-reprovision",
+        branchName: `bb/${thread.id}`,
+        defaultBranch: "main",
+        isGitRepo: true,
+        isWorktree: true,
+        transcript: [],
+      });
+      const startCommand = await waitForQueuedCommandAfter(
+        harness,
+        provisionCommand.row.cursor,
+        ({ command }) =>
+          command.type === "thread.start" && command.threadId === thread.id,
+      );
+      expect(startCommand.command.type).toBe("thread.start");
+      if (startCommand.command.type !== "thread.start") {
+        throw new Error("Expected thread.start command");
+      }
+      expect(
+        startCommand.command.inputGroups?.map((group) => {
+          const firstInput = group[0];
+          return firstInput?.type === "text" ? firstInput.text : undefined;
+        }),
+      ).toEqual([
+        "First reprovision grouped message",
+        "Second reprovision grouped message",
+      ]);
     });
   });
 

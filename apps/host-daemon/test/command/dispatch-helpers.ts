@@ -81,6 +81,7 @@ interface FakeRuntimeState {
   listedModelsAcpLaunchSpec: HostDaemonAcpLaunchSpec | undefined;
   ranTurnClientRequestId: ClientTurnRequestId | undefined;
   ranTurnInput: PromptInput[] | undefined;
+  ranTurnInputGroups: PromptInput[][] | undefined;
   ranTurnInstructions: string | undefined;
   ranTurnOptions: AgentRuntimeExecutionOptions | undefined;
   ranTurnText: string | undefined;
@@ -98,10 +99,13 @@ interface FakeRuntimeState {
   startedAcpLaunchSpec: HostDaemonAcpLaunchSpec | undefined;
   startedEnvironmentId: string | undefined;
   startedInput: PromptInput[] | undefined;
+  startedInputGroups: PromptInput[][] | undefined;
   startedInstructions: string | undefined;
   startedOptions: AgentRuntimeExecutionOptions | undefined;
   startedThreadId: string | undefined;
   steeredClientRequestId: ClientTurnRequestId | undefined;
+  steeredInput: PromptInput[] | undefined;
+  steeredInputGroups: PromptInput[][] | undefined;
   steeredTurnId: string | undefined;
   steeredTurnInstructions: string | undefined;
   steeredTurnOptions: AgentRuntimeExecutionOptions | undefined;
@@ -254,6 +258,7 @@ export function createFakeRuntime() {
     listedModelsAcpLaunchSpec: undefined,
     ranTurnClientRequestId: undefined,
     ranTurnInput: undefined,
+    ranTurnInputGroups: undefined,
     ranTurnInstructions: undefined,
     ranTurnOptions: undefined,
     ranTurnText: undefined,
@@ -271,10 +276,13 @@ export function createFakeRuntime() {
     startedAcpLaunchSpec: undefined,
     startedEnvironmentId: undefined,
     startedInput: undefined,
+    startedInputGroups: undefined,
     startedInstructions: undefined,
     startedOptions: undefined,
     startedThreadId: undefined,
     steeredClientRequestId: undefined,
+    steeredInput: undefined,
+    steeredInputGroups: undefined,
     steeredTurnId: undefined,
     steeredTurnInstructions: undefined,
     steeredTurnOptions: undefined,
@@ -319,6 +327,7 @@ export function createFakeRuntime() {
       state.startedThreadId = args.threadId;
       state.startedDynamicTools = args.dynamicTools;
       state.startedInput = args.input;
+      state.startedInputGroups = args.inputGroups;
       state.startedOptions = args.options;
       state.startedInstructions = args.instructions;
       providerSessionsByThreadId.set(args.threadId, {
@@ -352,6 +361,7 @@ export function createFakeRuntime() {
         firstInput?.type === "text" ? firstInput.text : undefined;
       state.ranTurnClientRequestId = args.clientRequestId;
       state.ranTurnInput = args.input;
+      state.ranTurnInputGroups = args.inputGroups;
       state.ranTurnOptions = args.options;
       state.ranTurnInstructions = args.instructions;
       activeTurnsByThreadId.set(args.threadId, `turn-${nextTurnNumber++}`);
@@ -359,6 +369,8 @@ export function createFakeRuntime() {
     async steerTurn(args) {
       state.steeredTurnId = args.expectedTurnId;
       state.steeredClientRequestId = args.clientRequestId;
+      state.steeredInput = args.input;
+      state.steeredInputGroups = args.inputGroups;
       state.steeredTurnOptions = args.options;
       state.steeredTurnInstructions = args.instructions;
       return { status: "steered" };
@@ -438,11 +450,7 @@ export function createHarness(
   );
   workspace.getCurrentBranch = async () => args.currentBranch ?? "main";
   workspace.isWorktree = args.isWorktree ?? false;
-  const {
-    runtime,
-    state: runtimeState,
-    threadControls,
-  } = createFakeRuntime();
+  const { runtime, state: runtimeState, threadControls } = createFakeRuntime();
   const provisions: ProvisionWorkspaceArgs[] = [];
   const manager = new RuntimeManager({
     provisionWorkspace: async (options) => {

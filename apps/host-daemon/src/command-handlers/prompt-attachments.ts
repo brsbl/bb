@@ -25,6 +25,13 @@ interface StagePromptAttachmentsArgs {
   threadId: string;
 }
 
+interface StagePromptAttachmentGroupsArgs extends Omit<
+  StagePromptAttachmentsArgs,
+  "input"
+> {
+  inputGroups: PromptInput[][];
+}
+
 interface StageAttachmentArgs extends StagePromptAttachmentsArgs {
   attachment: AttachmentPromptInput;
   stagedPath: string;
@@ -33,6 +40,16 @@ interface StageAttachmentArgs extends StagePromptAttachmentsArgs {
 interface StagedPromptAttachments {
   cleanup: () => Promise<void>;
   input: PromptInput[];
+}
+
+interface StagedPromptAttachmentGroups {
+  cleanup: () => Promise<void>;
+  inputGroups: PromptInput[][];
+}
+
+interface StagePromptInputListArgs extends StagePromptAttachmentsArgs {
+  stagedPaths: string[];
+  stagingDir: string;
 }
 
 function pathLooksRuntimeReadable(rawPath: string): boolean {
@@ -201,6 +218,33 @@ async function stageAttachment(args: StageAttachmentArgs): Promise<string> {
   return args.stagedPath;
 }
 
+async function stagePromptInputList(
+  args: StagePromptInputListArgs,
+): Promise<PromptInput[]> {
+  const stagedInput: PromptInput[] = [];
+  for (const input of args.input) {
+    if (!shouldStageAttachment(input)) {
+      stagedInput.push(input);
+      continue;
+    }
+    const stagedPath = uniqueStagedPath(
+      args.stagingDir,
+      attachmentFilename(input),
+      args.stagedPaths,
+    );
+    stagedInput.push({
+      ...input,
+      path: await stageAttachment({
+        ...args,
+        attachment: input,
+        stagedPath,
+      }),
+    });
+    args.stagedPaths.push(stagedPath);
+  }
+  return stagedInput;
+}
+
 export async function stagePromptAttachments(
   args: StagePromptAttachmentsArgs,
 ): Promise<StagedPromptAttachments> {
@@ -214,36 +258,59 @@ export async function stagePromptAttachments(
   const stagingDir = resolveStagingDir(args);
   await mkdir(stagingDir, { recursive: true });
 
-  const stagedInput: PromptInput[] = [];
   const stagedPaths: string[] = [];
   try {
-    for (const input of args.input) {
-      if (!shouldStageAttachment(input)) {
-        stagedInput.push(input);
-        continue;
-      }
-      const stagedPath = uniqueStagedPath(
-        stagingDir,
-        attachmentFilename(input),
-        stagedPaths,
-      );
-      stagedInput.push({
-        ...input,
-        path: await stageAttachment({
-          ...args,
-          attachment: input,
-          stagedPath,
-        }),
-      });
-      stagedPaths.push(stagedPath);
-    }
+    const input = await stagePromptInputList({
+      ...args,
+      stagedPaths,
+      stagingDir,
+    });
+    return {
+      cleanup: () => cleanupStagedAttachments(stagingDir, stagedPaths),
+      input,
+    };
   } catch (error) {
     await cleanupStagedAttachments(stagingDir, stagedPaths);
     throw error;
   }
+}
 
-  return {
-    cleanup: () => cleanupStagedAttachments(stagingDir, stagedPaths),
-    input: stagedInput,
-  };
+export async function stagePromptAttachmentGroups(
+  args: StagePromptAttachmentGroupsArgs,
+): Promise<StagedPromptAttachmentGroups> {
+  if (
+    !args.inputGroups.some((inputGroup) =>
+      inputGroup.some(shouldStageAttachment),
+    )
+  ) {
+    return {
+      cleanup: async () => undefined,
+      inputGroups: args.inputGroups,
+    };
+  }
+
+  const stagingDir = resolveStagingDir({ ...args, input: [] });
+  await mkdir(stagingDir, { recursive: true });
+
+  const stagedPaths: string[] = [];
+  try {
+    const inputGroups: PromptInput[][] = [];
+    for (const input of args.inputGroups) {
+      inputGroups.push(
+        await stagePromptInputList({
+          ...args,
+          input,
+          stagedPaths,
+          stagingDir,
+        }),
+      );
+    }
+    return {
+      cleanup: () => cleanupStagedAttachments(stagingDir, stagedPaths),
+      inputGroups,
+    };
+  } catch (error) {
+    await cleanupStagedAttachments(stagingDir, stagedPaths);
+    throw error;
+  }
 }

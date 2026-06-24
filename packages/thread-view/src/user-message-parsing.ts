@@ -384,35 +384,52 @@ export function parseUsersFromClientRequest(
 export function parsePendingSteerFromClientRequest(
   args: ParsePendingSteerFromClientRequestArgs,
 ): EventProjectionUserMessage | null {
+  return parsePendingSteersFromClientRequest(args)[0] ?? null;
+}
+
+export function parsePendingSteersFromClientRequest(
+  args: ParsePendingSteerFromClientRequestArgs,
+): EventProjectionUserMessage[] {
   const { acceptedClientRequest, decoded, meta, options } = args;
   if (acceptedClientRequest || decoded.type !== "client/turn/requested") {
-    return null;
+    return [];
   }
   if (!isSteerRequest(decoded)) {
-    return null;
+    return [];
   }
   if (!shouldPreservePendingMessages(options?.threadStatus)) {
-    return null;
-  }
-  const parsedInput = parsePromptInput(decoded.input);
-  if (!parsedInput) {
-    return null;
+    return [];
   }
 
-  return buildClientUserMessage({
-    decoded,
-    input: decoded.input,
-    meta,
-    requestStatus: "pending",
-  });
+  const groups = decoded.inputGroups ?? [decoded.input];
+  const messages: EventProjectionUserMessage[] = [];
+  for (const [index, input] of groups.entries()) {
+    if (!parsePromptInput(input)) continue;
+    messages.push(
+      buildClientUserMessage({
+        decoded,
+        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
+        input,
+        meta,
+        requestStatus: "pending",
+      }),
+    );
+  }
+  return messages;
 }
 
 export function parseAcceptedSteerFromClientRequest(
   args: ParseAcceptedSteerFromClientRequestArgs,
 ): EventProjectionUserMessage | null {
+  return parseAcceptedSteersFromClientRequest(args)[0] ?? null;
+}
+
+export function parseAcceptedSteersFromClientRequest(
+  args: ParseAcceptedSteerFromClientRequestArgs,
+): EventProjectionUserMessage[] {
   const { acceptedClientRequest, decoded, meta, options } = args;
   if (decoded.type !== "client/turn/requested") {
-    return null;
+    return [];
   }
   if (
     resolveTurnRequestKind({
@@ -420,23 +437,28 @@ export function parseAcceptedSteerFromClientRequest(
       decoded,
     }) !== "steer"
   ) {
-    return null;
-  }
-  const parsedInput = parsePromptInput(decoded.input);
-  if (!parsedInput) {
-    return null;
+    return [];
   }
   if (!shouldRenderClientRequestedInput(options?.threadStatus)) {
-    return null;
+    return [];
   }
 
-  return buildClientUserMessage({
-    acceptedClientRequest,
-    decoded,
-    input: decoded.input,
-    meta,
-    requestStatus: "accepted",
-  });
+  const groups = decoded.inputGroups ?? [decoded.input];
+  const messages: EventProjectionUserMessage[] = [];
+  for (const [index, input] of groups.entries()) {
+    if (!parsePromptInput(input)) continue;
+    messages.push(
+      buildClientUserMessage({
+        acceptedClientRequest,
+        decoded,
+        idSuffix: groups.length > 1 && index > 0 ? String(index) : undefined,
+        input,
+        meta,
+        requestStatus: "accepted",
+      }),
+    );
+  }
+  return messages;
 }
 
 export function parseLegacyUserMessage(

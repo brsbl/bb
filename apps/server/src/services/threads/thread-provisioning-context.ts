@@ -74,6 +74,7 @@ export const threadProvisionCommonPayloadSchema = z.object({
   // originKind/provider capability/source session/host at create time.
   fork: threadForkDescriptorSchema.nullable().default(null),
   input: z.array(promptInputSchema),
+  inputGroups: z.array(z.array(promptInputSchema).min(1)).min(1).optional(),
   titleProvided: z.boolean(),
   // When true the thread-start turn is persisted/displayed but no provider run
   // is dispatched — the started agent waits for the user's first message (fork
@@ -222,6 +223,7 @@ export interface CreateReprovisioningContextArgs {
   provisionEventSequence: number;
   execution: ResolvedThreadExecutionOptions;
   input: PromptInput[];
+  inputGroups?: PromptInput[][];
   provisioningId: string;
 }
 
@@ -444,6 +446,9 @@ export function createReprovisioningContext(
       // Reprovision is a new turn on an existing thread, never a fork.
       fork: null,
       input: args.input,
+      ...(args.inputGroups !== undefined
+        ? { inputGroups: args.inputGroups }
+        : {}),
       titleProvided: true,
       seedWithoutRun: false,
     },

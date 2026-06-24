@@ -770,6 +770,119 @@ describe("queued thread messages", () => {
     ]);
   });
 
+  it("rolls back a reorder when the requested group boundary is invalid", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      senderThreadId: "thr_sender",
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+
+    expect(
+      reorderQueuedThreadMessage({
+        db,
+        notifier: noopNotifier,
+        threadId: thread.id,
+        queuedMessageId: thirdQueuedMessage.id,
+        previousQueuedMessageId: null,
+        nextQueuedMessageId: firstQueuedMessage.id,
+        groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+      }).kind,
+    ).toBe("invalid_sender");
+
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+    ]);
+  });
+
+  it("clears grouping when reorder-only would regroup different messages", () => {
+    const { db, thread } = setup();
+    const firstQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: defaultInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const secondQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: altInput,
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    const thirdQueuedMessage = createQueuedThreadMessage(db, noopNotifier, {
+      threadId: thread.id,
+      content: textInput("third"),
+      model: "gpt-5",
+      reasoningLevel: "medium",
+      permissionMode: "full",
+      serviceTier: "default",
+    });
+    setQueuedThreadMessageGroupBoundary({
+      db,
+      notifier: noopNotifier,
+      threadId: thread.id,
+      groupBoundaryQueuedMessageId: secondQueuedMessage.id,
+    });
+
+    expect(
+      reorderQueuedThreadMessage({
+        db,
+        notifier: noopNotifier,
+        threadId: thread.id,
+        queuedMessageId: thirdQueuedMessage.id,
+        previousQueuedMessageId: firstQueuedMessage.id,
+        nextQueuedMessageId: secondQueuedMessage.id,
+      }).kind,
+    ).toBe("reordered");
+
+    expect(
+      listQueuedThreadMessages(db, thread.id).map((queuedMessage) => ({
+        id: queuedMessage.id,
+        groupWithNext: queuedMessage.groupWithNext,
+      })),
+    ).toEqual([
+      { id: firstQueuedMessage.id, groupWithNext: false },
+      { id: thirdQueuedMessage.id, groupWithNext: false },
+      { id: secondQueuedMessage.id, groupWithNext: false },
+    ]);
+    expect(
+      claimNextQueuedThreadMessageGroup(db, noopNotifier, thread.id)?.map(
+        (queuedMessage) => queuedMessage.id,
+      ),
+    ).toEqual([firstQueuedMessage.id]);
+  });
+
   it("rejects reordering claimed, missing, cross-thread, and inverted neighbors", () => {
     const { db, thread } = setup();
     const otherThread = createThread(db, noopNotifier, {

@@ -292,6 +292,52 @@ describe("thread runtime cache owner", () => {
     ).toEqual(previousQueue);
   });
 
+  it("clears optimistic group edges when deleting a grouped successor", async () => {
+    const queryClient = createAppQueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      showMutationErrorToasts: false,
+    });
+    const previousQueue = [
+      makeQueuedMessage({ id: "qmsg-1", groupWithNext: true }),
+      makeQueuedMessage({ id: "qmsg-2" }),
+      makeQueuedMessage({ id: "qmsg-3" }),
+    ];
+    queryClient.setQueryData(
+      threadQueuedMessagesQueryKey("thread-1"),
+      previousQueue,
+    );
+
+    const transaction = await beginRemoveQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        queuedMessageId: "qmsg-2",
+      },
+    });
+
+    expect(
+      queryClient.getQueryData<ThreadQueuedMessage[]>(
+        threadQueuedMessagesQueryKey("thread-1"),
+      ),
+    ).toMatchObject([
+      { id: "qmsg-1", groupWithNext: false },
+      { id: "qmsg-3", groupWithNext: false },
+    ]);
+
+    rollbackRemoveQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        queuedMessageId: "qmsg-2",
+      },
+      transaction,
+    });
+
+    expect(
+      queryClient.getQueryData(threadQueuedMessagesQueryKey("thread-1")),
+    ).toEqual(previousQueue);
+  });
+
   it("optimistically projects sent queued messages into the timeline", async () => {
     const queryClient = createAppQueryClient({
       defaultOptions: { queries: { gcTime: Infinity, retry: false } },
@@ -346,6 +392,57 @@ describe("thread runtime cache owner", () => {
         threadTimelineQueryKey("thread-1"),
       )?.rows,
     ).toEqual([]);
+  });
+
+  it("clears optimistic group edges when sending a grouped successor", async () => {
+    const queryClient = createAppQueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      showMutationErrorToasts: false,
+    });
+    const previousQueue = [
+      makeQueuedMessage({ id: "qmsg-1", groupWithNext: true }),
+      makeQueuedMessage({ id: "qmsg-2" }),
+      makeQueuedMessage({ id: "qmsg-3" }),
+    ];
+    queryClient.setQueryData(
+      threadQueuedMessagesQueryKey("thread-1"),
+      previousQueue,
+    );
+    queryClient.setQueryData(
+      threadTimelineQueryKey("thread-1"),
+      makeTimelineResponse(),
+    );
+
+    const transaction = await beginSendQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        mode: "auto",
+        queuedMessageId: "qmsg-2",
+      },
+    });
+
+    expect(
+      queryClient.getQueryData<ThreadQueuedMessage[]>(
+        threadQueuedMessagesQueryKey("thread-1"),
+      ),
+    ).toMatchObject([
+      { id: "qmsg-1", groupWithNext: false },
+      { id: "qmsg-3", groupWithNext: false },
+    ]);
+
+    rollbackRemoveQueuedMessageTransaction({
+      queryClient,
+      request: {
+        id: "thread-1",
+        queuedMessageId: "qmsg-2",
+      },
+      transaction,
+    });
+
+    expect(
+      queryClient.getQueryData(threadQueuedMessagesQueryKey("thread-1")),
+    ).toEqual(previousQueue);
   });
 
   it("optimistically removes the lead queued-message group without merging timeline text", async () => {

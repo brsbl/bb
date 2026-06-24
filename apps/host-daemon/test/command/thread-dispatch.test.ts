@@ -531,6 +531,79 @@ describe("thread command dispatch", () => {
     ]);
   });
 
+  it("stages grouped prompt attachments with shared filename uniqueness", async () => {
+    const threadStorageRootPath = await makeTempDir(
+      "bb-grouped-stage-attachments-",
+    );
+    const harness = createHarness();
+    const requestId = nextClientRequestId();
+    const fetchProjectAttachment = vi.fn<FetchProjectAttachment>(
+      async (args) => ({
+        bytes: Buffer.from(`content:${args.path}`),
+      }),
+    );
+
+    await dispatchCommand(
+      {
+        type: "thread.start",
+        environmentId: "env-grouped-stage-attachments",
+        threadId: "thread-grouped-stage-attachments",
+        workspaceContext: {
+          workspacePath: "/tmp/env-grouped-stage-attachments",
+          workspaceProvisionType: "unmanaged",
+        },
+        projectId: "project-grouped-stage-attachments",
+        providerId: "fake",
+        requestId,
+        input: [
+          { type: "localFile", path: "first/uploaded.txt" },
+          textPromptInput("\n\n"),
+          { type: "localFile", path: "second/uploaded.txt" },
+        ],
+        inputGroups: [
+          [{ type: "localFile", path: "first/uploaded.txt" }],
+          [{ type: "localFile", path: "second/uploaded.txt" }],
+        ],
+        options: {
+          model: "gpt-5",
+          serviceTier: "default",
+          reasoningLevel: "medium",
+          workflowsEnabled: false,
+          permissionMode: "full",
+          permissionEscalation: null,
+        },
+        instructions: "Be a helpful coding agent.",
+        dynamicTools: [],
+        injectedSkillSources: [],
+        instructionMode: "append",
+      },
+      {
+        ...harness.dispatchOptions({ threadStorageRootPath }),
+        fetchProjectAttachment,
+      },
+    );
+
+    const firstInput = harness.runtimeState.startedInputGroups?.[0]?.[0];
+    const secondInput = harness.runtimeState.startedInputGroups?.[1]?.[0];
+    if (firstInput?.type !== "localFile" || secondInput?.type !== "localFile") {
+      throw new Error("Expected staged local file input groups");
+    }
+    const firstPath = firstInput.path;
+    const secondPath = secondInput.path;
+    expect(firstPath).toMatch(/uploaded\.txt$/u);
+    expect(secondPath).toMatch(/uploaded-2\.txt$/u);
+    expect(firstPath).not.toBe(secondPath);
+    await expect(fs.readFile(firstPath, "utf8")).resolves.toBe(
+      "content:first/uploaded.txt",
+    );
+    await expect(fs.readFile(secondPath, "utf8")).resolves.toBe(
+      "content:second/uploaded.txt",
+    );
+    expect(
+      harness.runtimeState.startedInput?.map((input) => input.type),
+    ).toEqual(["localFile", "text", "localFile"]);
+  });
+
   it("cleans up staged attachments when fetching a later attachment fails", async () => {
     const threadStorageRootPath = await makeTempDir(
       "bb-failed-stage-attachments-",

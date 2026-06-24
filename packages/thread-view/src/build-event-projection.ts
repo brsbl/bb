@@ -47,7 +47,7 @@ import {
   type AcceptedClientRequestContext,
 } from "./accepted-client-request-context.js";
 import {
-  parseAcceptedSteerFromClientRequest,
+  parseAcceptedSteersFromClientRequest,
   parseUsersFromClientRequest,
   parseLegacyUserMessage,
 } from "./user-message-parsing.js";
@@ -524,16 +524,16 @@ function buildFlatProjectionData(
       const acceptedClientRequest = acceptedClientRequestById.get(
         decoded.clientRequestId,
       );
-      const acceptedSteer =
+      const acceptedSteers =
         clientRequest && acceptedClientRequest
-          ? parseAcceptedSteerFromClientRequest({
+          ? parseAcceptedSteersFromClientRequest({
               acceptedClientRequest,
               decoded: clientRequest.event,
               meta: clientRequest.meta,
               options: args.options,
             })
-          : null;
-      if (acceptedSteer) {
+          : [];
+      for (const acceptedSteer of acceptedSteers) {
         appendProjectedUserMessage(state, acceptedSteer);
       }
       continue;

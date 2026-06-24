@@ -10,7 +10,9 @@ import type { AcceptedClientRequest } from "../src/accepted-client-request-conte
 import {
   parsePromptInput,
   parseAcceptedSteerFromClientRequest,
+  parseAcceptedSteersFromClientRequest,
   parsePendingSteerFromClientRequest,
+  parsePendingSteersFromClientRequest,
   parseUserFromClientRequest,
   parseUsersFromClientRequest,
 } from "../src/user-message-parsing.js";
@@ -337,6 +339,79 @@ describe("user message parsing", () => {
         }),
       ).toBeNull();
     }
+  });
+
+  it("splits grouped steers into separate pending and accepted user messages", () => {
+    const eventFactory = createTimelineEventFactory({ threadId: "thread-1" });
+    const row = eventFactory.clientTurnRequested({
+      initiator: "user",
+      target: { kind: "auto", expectedTurnId: "turn-1" },
+      text: "flattened",
+      input: [
+        { type: "text", text: "First grouped steer", mentions: [] },
+        { type: "text", text: "\n\n", mentions: [] },
+        { type: "text", text: "Second grouped steer", mentions: [] },
+      ],
+      inputGroups: [
+        [{ type: "text", text: "First grouped steer", mentions: [] }],
+        [{ type: "text", text: "Second grouped steer", mentions: [] }],
+      ],
+    });
+    const { event, meta } = decodeThreadEventRow(row);
+    if (event.type !== "client/turn/requested") {
+      throw new Error("Expected client/turn/requested event");
+    }
+    const accepted = acceptedClientRequest();
+
+    expect(
+      parsePendingSteersFromClientRequest({
+        acceptedClientRequest: undefined,
+        decoded: event,
+        meta,
+        options: standardProjectionOptions,
+      }).map((message) => ({
+        id: message.id,
+        text: message.text,
+        turnRequest: message.turnRequest,
+      })),
+    ).toEqual([
+      {
+        id: "thread-1:user-seed:1",
+        text: "First grouped steer",
+        turnRequest: { kind: "steer", status: "pending" },
+      },
+      {
+        id: "thread-1:user-seed:1-1",
+        text: "Second grouped steer",
+        turnRequest: { kind: "steer", status: "pending" },
+      },
+    ]);
+    expect(
+      parseAcceptedSteersFromClientRequest({
+        acceptedClientRequest: accepted,
+        decoded: event,
+        meta,
+        options: standardProjectionOptions,
+      }).map((message) => ({
+        id: message.id,
+        sourceSeqStart: message.sourceSeqStart,
+        text: message.text,
+        turnRequest: message.turnRequest,
+      })),
+    ).toEqual([
+      {
+        id: "thread-1:user-seed:1",
+        sourceSeqStart: accepted.meta.seq,
+        text: "First grouped steer",
+        turnRequest: { kind: "steer", status: "accepted" },
+      },
+      {
+        id: "thread-1:user-seed:1-1",
+        sourceSeqStart: accepted.meta.seq,
+        text: "Second grouped steer",
+        turnRequest: { kind: "steer", status: "accepted" },
+      },
+    ]);
   });
 
   it("renders a steer accepted by a different turn as a message", () => {

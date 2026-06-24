@@ -318,6 +318,25 @@ function queuedMessageSendIds(
   return new Set(group.map((queuedMessage) => queuedMessage.id));
 }
 
+function removeQueuedMessagesAndRepairGroupEdges(
+  queuedMessages: ThreadQueuedMessageListResponse | undefined,
+  removeIds: ReadonlySet<string>,
+): ThreadQueuedMessageListResponse | undefined {
+  if (!queuedMessages) return queuedMessages;
+  return queuedMessages.flatMap((queuedMessage, index) => {
+    if (removeIds.has(queuedMessage.id)) return [];
+    const nextQueuedMessage = queuedMessages[index + 1];
+    if (
+      nextQueuedMessage &&
+      removeIds.has(nextQueuedMessage.id) &&
+      queuedMessage.groupWithNext
+    ) {
+      return [{ ...queuedMessage, groupWithNext: false }];
+    }
+    return [queuedMessage];
+  });
+}
+
 function getCachedDefaultExecutionOptions(
   queryClient: QueryClient,
   threadId: string,
@@ -410,9 +429,10 @@ function removeCachedQueuedMessage({
   queryClient.setQueryData<ThreadQueuedMessageListResponse>(
     queryKey,
     (currentQueuedMessages) =>
-      currentQueuedMessages?.filter(
-        (queuedMessage) => queuedMessage.id !== request.queuedMessageId,
-      ) ?? currentQueuedMessages,
+      removeQueuedMessagesAndRepairGroupEdges(
+        currentQueuedMessages,
+        new Set([request.queuedMessageId]),
+      ),
   );
 
   return {
@@ -860,9 +880,7 @@ export async function beginSendQueuedMessageTransaction({
   queryClient.setQueryData<ThreadQueuedMessageListResponse>(
     threadQueuedMessagesQueryKey(request.id),
     (currentQueuedMessages) =>
-      currentQueuedMessages?.filter(
-        (currentQueuedMessage) => !sendIds.has(currentQueuedMessage.id),
-      ) ?? currentQueuedMessages,
+      removeQueuedMessagesAndRepairGroupEdges(currentQueuedMessages, sendIds),
   );
 
   if (!queuedMessage) {

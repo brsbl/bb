@@ -154,6 +154,12 @@ export type SetQueuedThreadMessageGroupBoundaryResult =
 
 export type ReleaseQueuedMessageClaimArgs = ClaimedQueuedThreadMessageMutationArgs;
 
+class ReorderQueuedThreadMessageRollback extends Error {
+  constructor(readonly result: ReorderQueuedThreadMessageResult) {
+    super("Queued message reorder rolled back");
+  }
+}
+
 function collectLeadGroupIds(
   queuedMessages: readonly QueuedThreadMessageRow[],
 ): string[] {
@@ -374,6 +380,38 @@ function applyQueuedThreadMessageGroupBoundary(
     kind: "updated",
     queuedMessages: listUnclaimedQueuedThreadMessages(db, threadId),
   };
+}
+
+function applyPreservedLeadGroupAfterReorder(
+  db: DbTransaction,
+  threadId: string,
+  originalLeadGroupIds: readonly string[],
+): QueuedThreadMessageRow[] {
+  const queuedMessages = listUnclaimedQueuedThreadMessages(db, threadId);
+  if (originalLeadGroupIds.length <= 1) {
+    return queuedMessages;
+  }
+
+  const originalLeadGroupIdSet = new Set(originalLeadGroupIds);
+  const preservesLeadGroup = queuedMessages
+    .slice(0, originalLeadGroupIds.length)
+    .every((queuedMessage) => originalLeadGroupIdSet.has(queuedMessage.id));
+  let changed = false;
+  const now = Date.now();
+  for (const [index, queuedMessage] of queuedMessages.entries()) {
+    const groupWithNext =
+      preservesLeadGroup && index < originalLeadGroupIds.length - 1;
+    if (queuedMessage.groupWithNext === groupWithNext) continue;
+    changed = true;
+    db.update(queuedThreadMessages)
+      .set({ groupWithNext, updatedAt: now })
+      .where(eq(queuedThreadMessages.id, queuedMessage.id))
+      .run();
+  }
+
+  return changed
+    ? listUnclaimedQueuedThreadMessages(db, threadId)
+    : queuedMessages;
 }
 
 export function createQueuedThreadMessage(
@@ -660,58 +698,109 @@ export function reorderQueuedThreadMessage({
   queuedMessageId,
   threadId,
 }: ReorderQueuedThreadMessageArgs): ReorderQueuedThreadMessageResult {
-  const result = db.transaction(
-    (tx): ReorderQueuedThreadMessageResult => {
-      const movedQueuedMessage = getQueuedThreadMessageForMutation(
-        tx,
-        queuedMessageId,
-      );
-      if (!movedQueuedMessage || movedQueuedMessage.threadId !== threadId) {
-        return { kind: "not_found" };
-      }
-      if (isQueuedThreadMessageClaimed(movedQueuedMessage)) {
-        return { kind: "claimed" };
-      }
+  let result: ReorderQueuedThreadMessageResult;
+  try {
+    result = db.transaction(
+      (tx): ReorderQueuedThreadMessageResult => {
+        const movedQueuedMessage = getQueuedThreadMessageForMutation(
+          tx,
+          queuedMessageId,
+        );
+        if (!movedQueuedMessage || movedQueuedMessage.threadId !== threadId) {
+          return { kind: "not_found" };
+        }
+        if (isQueuedThreadMessageClaimed(movedQueuedMessage)) {
+          return { kind: "claimed" };
+        }
 
-      const previousQueuedMessage = resolveQueuedThreadMessageNeighbor(tx, {
-        movedQueuedMessageId: queuedMessageId,
-        neighborQueuedMessageId: previousQueuedMessageId,
-        threadId,
-      });
-      const nextQueuedMessage = resolveQueuedThreadMessageNeighbor(tx, {
-        movedQueuedMessageId: queuedMessageId,
-        neighborQueuedMessageId: nextQueuedMessageId,
-        threadId,
-      });
-      if (
-        previousQueuedMessage === false ||
-        nextQueuedMessage === false
-      ) {
-        return { kind: "stale_neighbor" };
-      }
-      if (
-        previousQueuedMessage !== null &&
-        nextQueuedMessage !== null &&
-        previousQueuedMessage.sortKey >= nextQueuedMessage.sortKey
-      ) {
-        return { kind: "invalid_neighbor_order" };
-      }
+        const previousQueuedMessage = resolveQueuedThreadMessageNeighbor(tx, {
+          movedQueuedMessageId: queuedMessageId,
+          neighborQueuedMessageId: previousQueuedMessageId,
+          threadId,
+        });
+        const nextQueuedMessage = resolveQueuedThreadMessageNeighbor(tx, {
+          movedQueuedMessageId: queuedMessageId,
+          neighborQueuedMessageId: nextQueuedMessageId,
+          threadId,
+        });
+        if (previousQueuedMessage === false || nextQueuedMessage === false) {
+          return { kind: "stale_neighbor" };
+        }
+        if (
+          previousQueuedMessage !== null &&
+          nextQueuedMessage !== null &&
+          previousQueuedMessage.sortKey >= nextQueuedMessage.sortKey
+        ) {
+          return { kind: "invalid_neighbor_order" };
+        }
 
-      const currentQueuedMessages = listUnclaimedQueuedThreadMessages(
-        tx,
-        threadId,
-      );
-      const currentIndex = currentQueuedMessages.findIndex(
-        (queuedMessage) => queuedMessage.id === queuedMessageId,
-      );
-      const currentPreviousQueuedMessageId =
-        currentQueuedMessages[currentIndex - 1]?.id ?? null;
-      const currentNextQueuedMessageId =
-        currentQueuedMessages[currentIndex + 1]?.id ?? null;
-      if (
-        currentPreviousQueuedMessageId === previousQueuedMessageId &&
-        currentNextQueuedMessageId === nextQueuedMessageId
-      ) {
+        const currentQueuedMessages = listUnclaimedQueuedThreadMessages(
+          tx,
+          threadId,
+        );
+        const originalLeadGroupIds = collectLeadGroupIds(currentQueuedMessages);
+        const currentIndex = currentQueuedMessages.findIndex(
+          (queuedMessage) => queuedMessage.id === queuedMessageId,
+        );
+        const currentPreviousQueuedMessageId =
+          currentQueuedMessages[currentIndex - 1]?.id ?? null;
+        const currentNextQueuedMessageId =
+          currentQueuedMessages[currentIndex + 1]?.id ?? null;
+        if (
+          currentPreviousQueuedMessageId === previousQueuedMessageId &&
+          currentNextQueuedMessageId === nextQueuedMessageId
+        ) {
+          if (groupBoundaryQueuedMessageId !== undefined) {
+            const groupResult = applyQueuedThreadMessageGroupBoundary(
+              tx,
+              threadId,
+              groupBoundaryQueuedMessageId,
+            );
+            if (groupResult.kind === "not_found") {
+              return { kind: "stale_neighbor" };
+            }
+            if (groupResult.kind === "claimed") {
+              return { kind: "claimed" };
+            }
+            if (groupResult.kind === "invalid_sender") {
+              return { kind: "invalid_sender" };
+            }
+            if (groupResult.kind === "invalid_execution_options") {
+              return { kind: "invalid_execution_options" };
+            }
+            if (groupResult.kind === "updated") {
+              return {
+                kind: "reordered",
+                queuedMessages: groupResult.queuedMessages,
+              };
+            }
+          }
+          return {
+            kind: "unchanged",
+            queuedMessages: currentQueuedMessages,
+          };
+        }
+
+        const sortKey = createOrderKeyBetween({
+          previousKey: previousQueuedMessage?.sortKey ?? null,
+          nextKey: nextQueuedMessage?.sortKey ?? null,
+        });
+        const updated = tx
+          .update(queuedThreadMessages)
+          .set({ sortKey, updatedAt: Date.now() })
+          .where(
+            and(
+              eq(queuedThreadMessages.id, queuedMessageId),
+              isNull(queuedThreadMessages.claimedAt),
+              isNull(queuedThreadMessages.claimToken),
+            ),
+          )
+          .returning({ id: queuedThreadMessages.id })
+          .get();
+        if (!updated) {
+          return { kind: "stale_neighbor" };
+        }
+
         if (groupBoundaryQueuedMessageId !== undefined) {
           const groupResult = applyQueuedThreadMessageGroupBoundary(
             tx,
@@ -719,16 +808,22 @@ export function reorderQueuedThreadMessage({
             groupBoundaryQueuedMessageId,
           );
           if (groupResult.kind === "not_found") {
-            return { kind: "stale_neighbor" };
+            throw new ReorderQueuedThreadMessageRollback({
+              kind: "stale_neighbor",
+            });
           }
           if (groupResult.kind === "claimed") {
-            return { kind: "claimed" };
+            throw new ReorderQueuedThreadMessageRollback({ kind: "claimed" });
           }
           if (groupResult.kind === "invalid_sender") {
-            return { kind: "invalid_sender" };
+            throw new ReorderQueuedThreadMessageRollback({
+              kind: "invalid_sender",
+            });
           }
           if (groupResult.kind === "invalid_execution_options") {
-            return { kind: "invalid_execution_options" };
+            throw new ReorderQueuedThreadMessageRollback({
+              kind: "invalid_execution_options",
+            });
           }
           if (groupResult.kind === "updated") {
             return {
@@ -736,60 +831,31 @@ export function reorderQueuedThreadMessage({
               queuedMessages: groupResult.queuedMessages,
             };
           }
+        } else {
+          return {
+            kind: "reordered",
+            queuedMessages: applyPreservedLeadGroupAfterReorder(
+              tx,
+              threadId,
+              originalLeadGroupIds,
+            ),
+          };
         }
+
         return {
-          kind: "unchanged",
-          queuedMessages: currentQueuedMessages,
+          kind: "reordered",
+          queuedMessages: listUnclaimedQueuedThreadMessages(tx, threadId),
         };
-      }
-
-      const sortKey = createOrderKeyBetween({
-        previousKey: previousQueuedMessage?.sortKey ?? null,
-        nextKey: nextQueuedMessage?.sortKey ?? null,
-      });
-      const updated = tx
-        .update(queuedThreadMessages)
-        .set({ sortKey, updatedAt: Date.now() })
-        .where(
-          and(
-            eq(queuedThreadMessages.id, queuedMessageId),
-            isNull(queuedThreadMessages.claimedAt),
-            isNull(queuedThreadMessages.claimToken),
-          ),
-        )
-        .returning({ id: queuedThreadMessages.id })
-        .get();
-      if (!updated) {
-        return { kind: "stale_neighbor" };
-      }
-
-      if (groupBoundaryQueuedMessageId !== undefined) {
-        const groupResult = applyQueuedThreadMessageGroupBoundary(
-          tx,
-          threadId,
-          groupBoundaryQueuedMessageId,
-        );
-        if (groupResult.kind === "not_found") {
-          return { kind: "stale_neighbor" };
-        }
-        if (groupResult.kind === "claimed") {
-          return { kind: "claimed" };
-        }
-        if (groupResult.kind === "invalid_sender") {
-          return { kind: "invalid_sender" };
-        }
-        if (groupResult.kind === "invalid_execution_options") {
-          return { kind: "invalid_execution_options" };
-        }
-      }
-
-      return {
-        kind: "reordered",
-        queuedMessages: listUnclaimedQueuedThreadMessages(tx, threadId),
-      };
-    },
-    { behavior: "immediate" },
-  );
+      },
+      { behavior: "immediate" },
+    );
+  } catch (error) {
+    if (error instanceof ReorderQueuedThreadMessageRollback) {
+      result = error.result;
+    } else {
+      throw error;
+    }
+  }
 
   if (result.kind === "reordered") {
     notifier.notifyThread(threadId, ["queue-changed"]);
