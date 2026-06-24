@@ -284,7 +284,7 @@ export function ThreadTableOfContents({
 
   return (
     <div
-      className="relative w-8"
+      className="group/toc relative w-8"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocusCapture={() => setOpen(true)}
@@ -305,8 +305,8 @@ export function ThreadTableOfContents({
               className={cn(
                 "h-[3px] rounded-full transition-all duration-150",
                 item.id === activeUserId
-                  ? "w-5 bg-foreground"
-                  : "w-3 bg-foreground/25",
+                  ? "w-5 bg-foreground/60 group-hover/toc:bg-foreground/90"
+                  : "w-3 bg-foreground/15 group-hover/toc:bg-foreground/30",
               )}
             />
           ))}
