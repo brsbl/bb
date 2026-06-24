@@ -314,10 +314,10 @@ export function ThreadTableOfContents({
 
         <div
           className={cn(
-            "absolute right-full top-0 mr-1 w-72 max-w-[calc(100vw-3rem)] rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
+            "absolute left-full top-0 ml-1 w-72 max-w-[calc(100vw-3rem)] rounded-lg border border-border bg-popover p-1 shadow-lg transition-all duration-150",
             open
               ? "pointer-events-auto translate-x-0 opacity-100"
-              : "pointer-events-none translate-x-1 opacity-0",
+              : "pointer-events-none -translate-x-1 opacity-0",
           )}
         >
           <div className="flex items-center gap-1 pb-1">
