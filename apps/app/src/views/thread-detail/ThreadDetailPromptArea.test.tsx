@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   queuedMessages: [] as ThreadQueuedMessage[],
   reorderQueuedMessageMutateAsync: vi.fn(),
   sendQueuedMessageMutateAsync: vi.fn(),
+  setQueuedMessageGroupBoundaryMutateAsync: vi.fn(),
   stopThreadMutate: vi.fn(),
   unarchiveThreadMutate: vi.fn(),
   uploadPromptAttachmentMutateAsync: vi.fn(),
@@ -183,6 +184,10 @@ vi.mock("@/hooks/mutations/thread-runtime-mutations", () => ({
     isPending: false,
     mutateAsync: mocks.reorderQueuedMessageMutateAsync,
   }),
+  useSetThreadQueuedMessageGroupBoundary: () => ({
+    isPending: false,
+    mutateAsync: mocks.setQueuedMessageGroupBoundaryMutateAsync,
+  }),
   useSendThreadQueuedMessage: () => ({
     isPending: false,
     mutateAsync: mocks.sendQueuedMessageMutateAsync,
@@ -236,6 +241,7 @@ function makeQueuedMessage(): ThreadQueuedMessage {
     reasoningLevel: "medium",
     permissionMode: "readonly",
     serviceTier: "default",
+    groupWithNext: false,
     createdAt: 1,
     updatedAt: 1,
   };
