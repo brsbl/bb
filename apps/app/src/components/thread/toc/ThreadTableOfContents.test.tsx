@@ -1,8 +1,32 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TimelineRow } from "@bb/server-contract";
+import type {
+  ThreadConversationOutlineItem,
+  ThreadConversationOutlineResponse,
+  TimelineRow,
+} from "@bb/server-contract";
+
+// The minimap now sources items from the conversation-outline query, so the
+// component needs a QueryClient unless we mock the hook. Mocking also lets us
+// drive the outline (and the scroll surface) directly without a provider tree.
+vi.mock("@/components/ui/bottom-anchored-scroll-body.js", () => ({
+  useBottomAnchoredScroll: vi.fn(),
+}));
+
+vi.mock("@/hooks/queries/thread-queries", () => ({
+  useThreadConversationOutline: vi.fn(),
+}));
+
+import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body.js";
+import { useThreadConversationOutline } from "@/hooks/queries/thread-queries";
 import {
   findActiveItemIds,
   ThreadTableOfContents,
@@ -40,7 +64,17 @@ function userConversationRow(index = 1): TimelineRow {
   };
 }
 
-function TocHost({ timelineRows }: { timelineRows: readonly TimelineRow[] }) {
+function TocHost({
+  hasOlderTimelineRows = false,
+  loadOlderTimelineRows = () => {},
+  threadId = "thr_toc_test",
+  timelineRows,
+}: {
+  hasOlderTimelineRows?: boolean;
+  loadOlderTimelineRows?: () => void | Promise<void>;
+  threadId?: string;
+  timelineRows: readonly TimelineRow[];
+}) {
   return (
     <div
       ref={(node) => {
@@ -52,7 +86,12 @@ function TocHost({ timelineRows }: { timelineRows: readonly TimelineRow[] }) {
       }}
       data-scroll-overlay=""
     >
-      <ThreadTableOfContents timelineRows={timelineRows} />
+      <ThreadTableOfContents
+        threadId={threadId}
+        timelineRows={timelineRows}
+        hasOlderTimelineRows={hasOlderTimelineRows}
+        loadOlderTimelineRows={loadOlderTimelineRows}
+      />
     </div>
   );
 }
@@ -109,6 +148,24 @@ function createScrollElement({
   return scrollElement;
 }
 
+function outlineResponse(
+  items: ThreadConversationOutlineItem[],
+): ThreadConversationOutlineResponse {
+  return { items, maxSeq: items.length };
+}
+
+function setOutline(items: ThreadConversationOutlineItem[] | undefined): void {
+  vi.mocked(useThreadConversationOutline).mockReturnValue({
+    data: items === undefined ? undefined : outlineResponse(items),
+  } as ReturnType<typeof useThreadConversationOutline>);
+}
+
+function timelineRowElement(id: string): HTMLElement {
+  const el = document.createElement("div");
+  el.setAttribute("data-timeline-row-id", id);
+  return el;
+}
+
 const userItems: TocItem[] = [
   { id: "user-1", label: "First prompt", role: "user" },
   { id: "user-2", label: "Second prompt", role: "user" },
@@ -118,6 +175,9 @@ const agentItems: TocItem[] = [
   { id: "agent-1", label: "First response", role: "assistant" },
   { id: "agent-2", label: "Second response", role: "assistant" },
 ];
+
+let scrollElement: HTMLElement;
+let scrollElementIntoView: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverMock);
@@ -129,11 +189,26 @@ beforeEach(() => {
     }),
   );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+  scrollElement = document.createElement("div");
+  scrollElementIntoView = vi.fn();
+  vi.mocked(useBottomAnchoredScroll).mockReturnValue({
+    getScrollElement: () => scrollElement,
+    isAtBottom: false,
+    scrollToBottom: vi.fn(),
+    scrollElementIntoView,
+    scrollElementIntoViewClampedToMaxScroll: vi.fn(),
+    captureScrollAnchor: vi.fn(),
+  } as unknown as ReturnType<typeof useBottomAnchoredScroll>);
+
+  // Default: outline not loaded, so the minimap falls back to timelineRows.
+  setOutline(undefined);
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe("ThreadTableOfContents", () => {
@@ -178,6 +253,159 @@ describe("ThreadTableOfContents", () => {
     );
 
     expect(screen.queryByText("Your messages")).not.toBeNull();
+  });
+
+  it("renders the full conversation outline, including attachment-only labels", async () => {
+    setOutline([
+      {
+        id: "u1",
+        role: "user",
+        preview: "First question",
+        attachmentSummary: null,
+      },
+      {
+        id: "a1",
+        role: "assistant",
+        preview: "First answer",
+        attachmentSummary: null,
+      },
+      {
+        id: "u2",
+        role: "user",
+        preview: "Second question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u3",
+        role: "user",
+        preview: "",
+        attachmentSummary: { imageCount: 1, fileCount: 0 },
+      },
+    ]);
+
+    // timelineRows is empty: the minimap lists the full thread from the outline,
+    // not just the loaded window.
+    render(<TocHost timelineRows={[]} />);
+
+    expect(await screen.findByText("First question")).not.toBeNull();
+    expect(screen.getByText("Second question")).not.toBeNull();
+    expect(screen.getByText("Image attachment")).not.toBeNull();
+    // The agent tab is offered because the outline has assistant messages.
+    expect(screen.getByText("Agent messages")).not.toBeNull();
+  });
+
+  it("scrolls straight to a message already loaded in the window", async () => {
+    scrollElement.appendChild(timelineRowElement("u2"));
+    const loadOlder = vi.fn();
+    setOutline([
+      {
+        id: "u1",
+        role: "user",
+        preview: "First question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u2",
+        role: "user",
+        preview: "Loaded question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u3",
+        role: "user",
+        preview: "Third question",
+        attachmentSummary: null,
+      },
+    ]);
+
+    render(
+      <TocHost
+        timelineRows={[]}
+        hasOlderTimelineRows
+        loadOlderTimelineRows={loadOlder}
+      />,
+    );
+    fireEvent.click(await screen.findByText("Loaded question"));
+
+    await waitFor(() => expect(scrollElementIntoView).toHaveBeenCalledTimes(1));
+    expect(loadOlder).not.toHaveBeenCalled();
+  });
+
+  it("auto-paginates older pages to reach an unloaded message, then scrolls to it", async () => {
+    // The target isn't in the loaded window; loadOlder simulates it paginating
+    // in, mirroring the real controller prepending older rows to the DOM.
+    const loadOlder = vi.fn(() => {
+      scrollElement.appendChild(timelineRowElement("u_old"));
+    });
+    setOutline([
+      {
+        id: "u_old",
+        role: "user",
+        preview: "Ancient question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u2",
+        role: "user",
+        preview: "Second question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u3",
+        role: "user",
+        preview: "Third question",
+        attachmentSummary: null,
+      },
+    ]);
+
+    render(
+      <TocHost
+        timelineRows={[]}
+        hasOlderTimelineRows
+        loadOlderTimelineRows={loadOlder}
+      />,
+    );
+    fireEvent.click(await screen.findByText("Ancient question"));
+
+    await waitFor(() => expect(loadOlder).toHaveBeenCalled());
+    await waitFor(() => expect(scrollElementIntoView).toHaveBeenCalled());
+  });
+
+  it("does not paginate when there are no older pages to load", async () => {
+    const loadOlder = vi.fn();
+    setOutline([
+      {
+        id: "missing",
+        role: "user",
+        preview: "Unreachable",
+        attachmentSummary: null,
+      },
+      {
+        id: "u2",
+        role: "user",
+        preview: "Second question",
+        attachmentSummary: null,
+      },
+      {
+        id: "u3",
+        role: "user",
+        preview: "Third question",
+        attachmentSummary: null,
+      },
+    ]);
+
+    render(
+      <TocHost
+        timelineRows={[]}
+        hasOlderTimelineRows={false}
+        loadOlderTimelineRows={loadOlder}
+      />,
+    );
+    fireEvent.click(await screen.findByText("Unreachable"));
+
+    // hasOlder is false, so the loop body never runs; no scroll, no pagination.
+    await waitFor(() => expect(loadOlder).not.toHaveBeenCalled());
+    expect(scrollElementIntoView).not.toHaveBeenCalled();
   });
 
   it("tracks the conversation item nearest the viewport top away from bottom", () => {

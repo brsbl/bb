@@ -124,6 +124,7 @@ import type {
   ThreadHostFileContentQuery,
   ThreadListQuery,
   ThreadListResponse,
+  ThreadConversationOutlineResponse,
   ThreadOpenRequest,
   ThreadOpenResponse,
   ThreadPendingInteractionsResponse,
@@ -821,6 +822,12 @@ export const publicApiRoutes = {
         threadTimelineQuerySchema,
       ),
       response: jsonResponse<ThreadTimelineResponse>(),
+    }),
+    conversationOutline: defineRoute({
+      path: "/threads/:id/conversation-outline",
+      method: "get",
+      request: noRequest<PathId>(),
+      response: jsonResponse<ThreadConversationOutlineResponse>(),
     }),
     timelineTurnSummaryDetails: defineRoute({
       path: "/threads/:id/timeline/turn-summary-details",

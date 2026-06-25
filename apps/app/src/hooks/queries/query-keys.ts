@@ -50,6 +50,8 @@ export const ENVIRONMENT_DIFF_FILE_QUERY_KEY = "environmentDiffFile";
 export const ENVIRONMENT_FILE_PREVIEW_QUERY_KEY = "environmentFilePreview";
 export const ENVIRONMENT_PATHS_QUERY_KEY = "environmentPaths";
 export const THREAD_TIMELINE_QUERY_KEY = "threadTimeline";
+export const THREAD_CONVERSATION_OUTLINE_QUERY_KEY =
+  "threadConversationOutline";
 export const THREAD_TIMELINE_TURN_SUMMARY_DETAILS_QUERY_KEY =
   "threadTimelineTurnSummaryDetails";
 export const SYSTEM_PROVIDERS_QUERY_KEY = "systemProviders";
@@ -309,6 +311,17 @@ export type EnvironmentMergeBaseBranchesQueryKeyPrefix = readonly [
 export type ThreadTimelineQueryKey = readonly [
   typeof THREAD_TIMELINE_QUERY_KEY,
   string,
+];
+export type ThreadConversationOutlineQueryKey = readonly [
+  typeof THREAD_CONVERSATION_OUTLINE_QUERY_KEY,
+  string,
+];
+export type ThreadConversationOutlineQueryKeyPrefix = readonly [
+  typeof THREAD_CONVERSATION_OUTLINE_QUERY_KEY,
+  string,
+];
+export type AllThreadConversationOutlineQueryKeyPrefix = readonly [
+  typeof THREAD_CONVERSATION_OUTLINE_QUERY_KEY,
 ];
 export interface ThreadTimelineTurnSummaryDetailsQueryIdentity {
   sourceSeqEnd: number;
@@ -833,6 +846,22 @@ export function threadTimelineQueryKey(
   threadId: string,
 ): ThreadTimelineQueryKey {
   return [THREAD_TIMELINE_QUERY_KEY, threadId];
+}
+
+export function threadConversationOutlineQueryKey(
+  threadId: string,
+): ThreadConversationOutlineQueryKey {
+  return [THREAD_CONVERSATION_OUTLINE_QUERY_KEY, threadId];
+}
+
+export function threadConversationOutlineQueryKeyPrefix(
+  threadId: string,
+): ThreadConversationOutlineQueryKeyPrefix {
+  return [THREAD_CONVERSATION_OUTLINE_QUERY_KEY, threadId];
+}
+
+export function allThreadConversationOutlineQueryKeyPrefix(): AllThreadConversationOutlineQueryKeyPrefix {
+  return [THREAD_CONVERSATION_OUTLINE_QUERY_KEY];
 }
 
 export function threadTimelineTurnSummaryDetailsQueryKey({

@@ -623,6 +623,54 @@ export type ThreadTimelineResponse = z.infer<
   typeof threadTimelineResponseSchema
 >;
 
+/**
+ * Lightweight attachment counts for a conversation-outline item. The full
+ * {@link timelineConversationAttachmentsSchema} carries image URLs and file
+ * paths the outline never renders, so the outline ships only the counts the
+ * minimap needs to label an attachment-only message.
+ */
+export const threadConversationOutlineAttachmentSummarySchema = z
+  .object({
+    imageCount: z.number().int().nonnegative(),
+    fileCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ThreadConversationOutlineAttachmentSummary = z.infer<
+  typeof threadConversationOutlineAttachmentSummarySchema
+>;
+
+/**
+ * A single conversation message in the thread's full table-of-contents
+ * outline. `id` matches the corresponding timeline row id (both are projected
+ * by the same builder), so the minimap can scroll-spy and jump to a row once
+ * it is paginated into the loaded window. `preview` is already whitespace-
+ * normalized and length-clamped server-side to keep the payload small for
+ * very long threads.
+ */
+export const threadConversationOutlineItemSchema = z
+  .object({
+    id: z.string().min(1),
+    role: z.enum(["user", "assistant"]),
+    preview: z.string(),
+    attachmentSummary:
+      threadConversationOutlineAttachmentSummarySchema.nullable(),
+  })
+  .strict();
+export type ThreadConversationOutlineItem = z.infer<
+  typeof threadConversationOutlineItemSchema
+>;
+
+export const threadConversationOutlineResponseSchema = z
+  .object({
+    items: z.array(threadConversationOutlineItemSchema),
+    /** Thread high-water event sequence this outline reflects. */
+    maxSeq: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ThreadConversationOutlineResponse = z.infer<
+  typeof threadConversationOutlineResponseSchema
+>;
+
 export const threadStorageFileListResponseSchema =
   workspaceFileListResponseSchema.extend({
     /**

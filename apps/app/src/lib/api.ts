@@ -73,6 +73,7 @@ import type {
   ThreadStoragePathsQuery,
   TerminalListQuery,
   TerminalSession,
+  ThreadConversationOutlineResponse,
   ThreadTimelineResponse,
   TimelineTurnSummaryDetailsRequest,
   TimelineTurnSummaryDetailsResponse,
@@ -1504,6 +1505,23 @@ export async function getThreadTimeline({
             : {}),
         },
       },
+      requestOptions(signal),
+    ),
+  );
+}
+
+interface GetThreadConversationOutlineArgs {
+  id: string;
+  signal?: AbortSignal;
+}
+
+export async function getThreadConversationOutline({
+  id,
+  signal,
+}: GetThreadConversationOutlineArgs): Promise<ThreadConversationOutlineResponse> {
+  return request<ThreadConversationOutlineResponse>(
+    apiClient.threads[":id"]["conversation-outline"].$get(
+      { param: { id } },
       requestOptions(signal),
     ),
   );

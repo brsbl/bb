@@ -72,7 +72,14 @@ export function ThreadTimelinePane({
         contentClassName="gap-2 pt-4"
         footerClassName="chat-prompt-box"
         footer={footer}
-        scrollOverlay={<ThreadTableOfContents timelineRows={timelineRows} />}
+        scrollOverlay={
+          <ThreadTableOfContents
+            threadId={threadId}
+            timelineRows={timelineRows}
+            hasOlderTimelineRows={hasOlderTimelineRows}
+            loadOlderTimelineRows={onLoadOlderRows}
+          />
+        }
       >
         <ThreadTimelineSurface
           activeThinking={activeThinking}

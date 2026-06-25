@@ -8,7 +8,11 @@ import {
 } from "@bb/thread-view";
 import type { ClientTurnRequestId, Thread } from "@bb/domain";
 import type {
+  ThreadConversationOutlineItem,
+  ThreadConversationOutlineResponse,
+  TimelineConversationAttachments,
   TimelinePaginationCursor,
+  ThreadConversationOutlineAttachmentSummary,
   ThreadTimelineResponse,
   TimelineTurnSummaryDetailsResponse,
 } from "@bb/server-contract";
@@ -814,13 +818,11 @@ function selectStandardTimelineEventRows(
     threadId: thread.id,
     rows: selectedRowsWithContext.rows,
   });
-  const selectedRowsWithParentedTurnStarts = ensureTimelineWindowTurnStartedRows(
-    db,
-    {
+  const selectedRowsWithParentedTurnStarts =
+    ensureTimelineWindowTurnStartedRows(db, {
       threadId: thread.id,
       rows: selectedRowsWithParentedContext.rows,
-    },
-  );
+    });
 
   return {
     acceptedClientRequestContextRows: selectedRowsWithContext.contextRows,
@@ -1079,6 +1081,99 @@ export function buildThreadTimeline(
     ...options,
     includeProfile: false,
   }).response;
+}
+
+export interface BuildThreadConversationOutlineOptions {
+  /** Thread high-water event sequence this outline reflects (echoed to clients). */
+  maxSeq: number;
+  providerDisplayName?: string;
+}
+
+const CONVERSATION_OUTLINE_PREVIEW_MAX_LENGTH = 200;
+
+function toConversationOutlinePreview(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= CONVERSATION_OUTLINE_PREVIEW_MAX_LENGTH) {
+    return normalized;
+  }
+  return normalized.slice(0, CONVERSATION_OUTLINE_PREVIEW_MAX_LENGTH).trimEnd();
+}
+
+function toConversationOutlineAttachmentSummary(
+  attachments: TimelineConversationAttachments | null,
+): ThreadConversationOutlineAttachmentSummary | null {
+  if (!attachments) {
+    return null;
+  }
+  const imageCount = attachments.webImages + attachments.localImages;
+  const fileCount = attachments.localFiles;
+  if (imageCount === 0 && fileCount === 0) {
+    return null;
+  }
+  return { imageCount, fileCount };
+}
+
+/**
+ * Projects the entire thread into a lightweight conversation outline for the
+ * table-of-contents minimap. Unlike {@link buildThreadTimeline}, this is not
+ * paginated: it reads every event and reuses the same
+ * {@link buildThreadTimelineFromEvents} projection so each outline item's `id`
+ * is identical to the timeline row it represents. That identity is what lets
+ * the minimap scroll-spy the loaded window and jump to a message once it is
+ * paginated in. Only conversation rows survive, and each is reduced to the few
+ * fields the minimap renders.
+ */
+export function buildThreadConversationOutline(
+  db: DbConnection,
+  thread: Thread,
+  options: BuildThreadConversationOutlineOptions,
+): ThreadConversationOutlineResponse {
+  const rawEventRows = listRecentStoredEventRows(db, {
+    threadId: thread.id,
+    excludedTypes: THREAD_TIMELINE_EXCLUDED_EVENT_TYPES,
+  });
+  const decodedRawEvents = rawEventRows.map((row) =>
+    toThreadEventWithMeta(row),
+  );
+  const decodedEvents = compactThreadTimelineSummaryEvents(decodedRawEvents);
+  const acceptedClientRequestContext: AcceptedClientRequestContext = {
+    acceptedClientRequestEvents: selectAcceptedClientRequestContextRows(db, {
+      rows: rawEventRows,
+      threadId: thread.id,
+    }).map((row) => toThreadEventWithMeta(row)),
+  };
+  const timeline = buildThreadTimelineFromEvents({
+    acceptedClientRequestContext,
+    contextWindowEvents: [],
+    events: decodedEvents,
+    options: {
+      includeDebugRawEvents: false,
+      includeNestedRows: false,
+      includeProviderUnhandledOperations: false,
+      isLatestPage: true,
+      providerDisplayName: options.providerDisplayName,
+      providerId: thread.providerId,
+      threadName: thread.title ?? thread.titleFallback ?? "",
+      threadStatus: thread.status,
+      turnMessageDetail: "summary",
+      workspaceRoot: resolveThreadWorkspaceRoot(db, thread),
+    },
+  });
+  const items: ThreadConversationOutlineItem[] = [];
+  for (const row of timeline.rows) {
+    if (row.kind !== "conversation") {
+      continue;
+    }
+    items.push({
+      id: row.id,
+      role: row.role,
+      preview: toConversationOutlinePreview(row.text),
+      attachmentSummary: toConversationOutlineAttachmentSummary(
+        row.attachments,
+      ),
+    });
+  }
+  return { items, maxSeq: options.maxSeq };
 }
 
 export function buildTimelineTurnSummaryDetails(

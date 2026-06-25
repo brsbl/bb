@@ -54,6 +54,7 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
   "hooks/cache-owners/cache-invalidation-groups.ts": [
     "allProjectPathsQueryKeyPrefix",
     "allProjectSourceBranchesQueryKeyPrefix",
+    "allThreadConversationOutlineQueryKeyPrefix",
     "allThreadPendingInteractionsQueryKeyPrefix",
     "allThreadQueryKeyPrefix",
     "allThreadQueuedMessagesQueryKeyPrefix",
@@ -66,6 +67,7 @@ const CACHE_OWNER_QUERY_KEY_IMPORTS: CacheOwnerQueryKeyImportRegistry = {
     "projectSourceBranchesQueryKeyPrefix",
     "projectsQueryKey",
     "sidebarNavigationQueryKey",
+    "threadConversationOutlineQueryKeyPrefix",
     "threadPendingInteractionsQueryKey",
     "threadPromptHistoryQueryKey",
     "threadPromptHistoryQueryKeyPrefix",

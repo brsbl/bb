@@ -98,7 +98,14 @@ export function Default() {
         footer={null}
         maxWidthClassName="max-w-3xl"
         contentClassName="gap-2 pt-4"
-        scrollOverlay={<ThreadTableOfContents timelineRows={timelineRows} />}
+        scrollOverlay={
+          <ThreadTableOfContents
+            threadId="thr_toc_story"
+            timelineRows={timelineRows}
+            hasOlderTimelineRows={false}
+            loadOlderTimelineRows={() => {}}
+          />
+        }
       >
         <ThreadTimelineSurface
           activeThinking={null}

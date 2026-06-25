@@ -19,6 +19,7 @@ import type {
   ThreadResponse,
   ThreadSearchResponse,
   ThreadWithIncludesResponse,
+  ThreadConversationOutlineResponse,
   ThreadStorageFileListResponse,
   ThreadStoragePathListResponse,
   ThreadTimelineResponse,
@@ -64,6 +65,7 @@ import {
   threadStoragePathsQueryKey,
   threadStorageFilePreviewQueryKey,
   threadHostFilePreviewQueryKey,
+  threadConversationOutlineQueryKey,
   threadTimelineQueryKey,
   threadTimelineTurnSummaryDetailsQueryKey,
   threadsQueryKey,
@@ -792,6 +794,35 @@ export function useThreadTimeline(
         previousQuery?.queryKey,
         id,
       ),
+  });
+}
+
+/**
+ * Full conversation outline (every user/agent message) for a thread's
+ * table-of-contents minimap. Unlike {@link useThreadTimeline}, this is not
+ * paginated — it always reflects the whole thread — so the minimap can show
+ * messages that have not yet been scrolled/paged into the loaded window. It is
+ * invalidated by the same realtime `events-appended` signal as the timeline
+ * window, so it stays in sync as new messages arrive.
+ */
+export function useThreadConversationOutline(
+  id: string,
+  options?: ThreadTimelineQueryOptions,
+) {
+  const enabled = (options?.enabled ?? true) && Boolean(id);
+  useThreadDetailRealtimeSubscription(id, { enabled });
+
+  return useQuery<ThreadConversationOutlineResponse>({
+    queryKey: threadConversationOutlineQueryKey(id),
+    queryFn: async ({ signal }) => {
+      const threadId = requireThreadId(id, "useThreadConversationOutline");
+      return api.getThreadConversationOutline({ id: threadId, signal });
+    },
+    enabled,
+    refetchOnMount: options?.refetchOnMount ?? true,
+    ...(options?.staleTime === undefined
+      ? {}
+      : { staleTime: options.staleTime }),
   });
 }
 
