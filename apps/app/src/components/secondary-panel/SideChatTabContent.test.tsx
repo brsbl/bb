@@ -449,8 +449,8 @@ describe("SideChatTabContent", () => {
     expect(screen.getByText("one").closest("li")).not.toBeNull();
   });
 
-  it("unwraps a whole-message markdown fence in the side-chat reply anchor", () => {
-    renderSideChat({
+  it("renders a whole-message markdown fence as a full code block in the side-chat reply anchor", () => {
+    const { view } = renderSideChat({
       threadId: null,
       sourceMessageText: [
         "```markdown",
@@ -463,12 +463,15 @@ describe("SideChatTabContent", () => {
       ].join("\n"),
     });
 
-    expect(
-      screen.getByRole("heading", { name: "Status Update" }),
-    ).toBeTruthy();
-    expect(screen.getByText("ready").tagName).toBe("STRONG");
-    expect(screen.getByText("Completed the pass").closest("li")).not.toBeNull();
-    expect(screen.queryByText("MARKDOWN")).toBeNull();
+    const languageLabel = screen.getByText("markdown");
+    const code = view.container.querySelector("pre code");
+
+    expect(screen.queryByRole("heading", { name: "Status Update" })).toBeNull();
+    expect(languageLabel).toBeTruthy();
+    expect(languageLabel.closest(".max-h-20")).toBeNull();
+    expect(code?.textContent).toContain("## Status Update");
+    expect(code?.textContent).toContain("The requested work is **ready**.");
+    expect(code?.textContent).toContain("- Completed the pass");
   });
 
   it("creates the side-chat child thread with the first submitted message", async () => {
