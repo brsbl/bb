@@ -201,11 +201,6 @@ vi.mock("@/components/thread/timeline", () => ({
   }),
 }));
 
-vi.mock("@/components/thread/timeline/ConversationMessageMentions", () => ({
-  messageBodyHasQuote: () => false,
-  renderMessageBodyWithQuotes: () => null,
-}));
-
 vi.mock("@/components/ui/height-transition.js", () => ({
   HeightTransition: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -369,24 +364,34 @@ describe("SideChatTabContent", () => {
     return renderSideChat({ threadId: null });
   }
 
-  function renderSideChat({ threadId }: { threadId: string | null }) {
+  function renderSideChat({
+    sourceMessageText,
+    threadId,
+  }: {
+    sourceMessageText?: string;
+    threadId: string | null;
+  }) {
     const onSetThreadId = vi.fn();
-    const view = render(buildSideChatElement({ onSetThreadId, threadId }));
+    const view = render(
+      buildSideChatElement({ onSetThreadId, sourceMessageText, threadId }),
+    );
 
     return { onSetThreadId, view };
   }
 
   function buildSideChatElement({
     onSetThreadId,
+    sourceMessageText = "Earlier answer",
     threadId,
   }: {
     onSetThreadId: (args: { tabId: string; threadId: string }) => void;
+    sourceMessageText?: string;
     threadId: string | null;
   }) {
     const tab: SideChatFixedPanelTab = {
       id: "side-chat:one",
       kind: "side-chat",
-      sourceMessageText: "Earlier answer",
+      sourceMessageText,
       sourceSeqEnd: 9,
       threadId,
       title: "Side chat",
@@ -424,6 +429,24 @@ describe("SideChatTabContent", () => {
     expect(screen.getByTestId("side-chat-stack-state").textContent).toBe(
       "provided",
     );
+  });
+
+  it("renders the side-chat reply anchor as markdown", () => {
+    renderSideChat({
+      threadId: null,
+      sourceMessageText: [
+        "# Anchor",
+        "",
+        "Status: **done** with `pnpm test`.",
+        "",
+        "- one",
+      ].join("\n"),
+    });
+
+    expect(screen.getByRole("heading", { name: "Anchor" })).toBeTruthy();
+    expect(screen.getByText("done").tagName).toBe("STRONG");
+    expect(screen.getByText("pnpm test").tagName).toBe("CODE");
+    expect(screen.getByText("one").closest("li")).not.toBeNull();
   });
 
   it("creates the side-chat child thread with the first submitted message", async () => {
