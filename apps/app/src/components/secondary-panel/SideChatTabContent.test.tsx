@@ -449,6 +449,28 @@ describe("SideChatTabContent", () => {
     expect(screen.getByText("one").closest("li")).not.toBeNull();
   });
 
+  it("unwraps a whole-message markdown fence in the side-chat reply anchor", () => {
+    renderSideChat({
+      threadId: null,
+      sourceMessageText: [
+        "```markdown",
+        "## Status Update",
+        "",
+        "The requested work is **ready**.",
+        "",
+        "- Completed the pass",
+        "```",
+      ].join("\n"),
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Status Update" }),
+    ).toBeTruthy();
+    expect(screen.getByText("ready").tagName).toBe("STRONG");
+    expect(screen.getByText("Completed the pass").closest("li")).not.toBeNull();
+    expect(screen.queryByText("MARKDOWN")).toBeNull();
+  });
+
   it("creates the side-chat child thread with the first submitted message", async () => {
     mocks.createThreadMutateAsync.mockResolvedValueOnce({ id: "thr_side" });
     const { onSetThreadId } = renderDraftSideChat();

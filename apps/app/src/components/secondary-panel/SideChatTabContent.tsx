@@ -147,6 +147,13 @@ const isVisibleSideChatTimelineRow: ThreadTimelineRowFilter = (row) =>
     row.operationKind === "thread-provisioning"
   );
 
+const SINGLE_MARKDOWN_FENCE_PATTERN =
+  /^(?: {0,3})(`{3,}|~{3,})[ \t]*(?:markdown|md|mdx)(?:[ \t][^\r\n]*)?\r?\n([\s\S]*?)\r?\n(?: {0,3})\1[ \t]*$/iu;
+
+function sideChatReplyAnchorMarkdownSource(text: string): string {
+  return SINGLE_MARKDOWN_FENCE_PATTERN.exec(text)?.[2] ?? text;
+}
+
 interface OptimisticSideChatUserRowArgs {
   createdAt: number;
   input: readonly PromptInput[];
@@ -454,6 +461,8 @@ export function SideChatTabContent({
   // opened from the new-tab page (those fork from the thread tip).
   const triggerMessageText = tab.sourceMessageText.trim();
   const hasTriggerMessage = triggerMessageText.length > 0;
+  const triggerMessagePreviewText =
+    sideChatReplyAnchorMarkdownSource(triggerMessageText);
 
   const sourceEnvironmentReady =
     sourceThread.environmentId === null || sourceEnvironment !== null;
@@ -1303,7 +1312,7 @@ export function SideChatTabContent({
       <div className="max-w-full rounded-md bg-surface-recessed p-1.5 text-xs leading-5 text-foreground">
         <div className="max-h-20 overflow-hidden break-words">
           <MarkdownPreview
-            content={triggerMessageText}
+            content={triggerMessagePreviewText}
             className="text-xs leading-5 [&_blockquote]:my-1 [&_h1]:mb-1 [&_h1]:mt-0 [&_h1]:text-sm [&_h2]:mb-1 [&_h2]:mt-0 [&_h2]:text-sm [&_h3]:mb-1 [&_h3]:mt-0 [&_h3]:text-xs [&_li]:mb-0 [&_ol]:mb-1 [&_p]:mb-1 [&_ul]:mb-1"
           />
         </div>
