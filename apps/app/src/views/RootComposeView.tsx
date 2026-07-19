@@ -105,6 +105,7 @@ import { useLocalOpenTargets } from "@/hooks/useLocalOpenTargets";
 import { selectPrimaryHost, useHosts } from "@/hooks/queries/host-queries";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
+import type { PluginComposerHost } from "@/components/plugin/plugin-composer-host";
 import { usePromptMentions } from "@/hooks/usePromptMentions";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import { useQuickCreateProjectController } from "@/hooks/useQuickCreateProject";
@@ -1090,6 +1091,27 @@ export function RootComposeView() {
         attachments: promptDraft.attachments,
       }),
     [promptDraft.attachments, promptDraft.mentions, promptDraft.text],
+  );
+  const pluginComposerHost = useMemo<PluginComposerHost>(
+    () => ({
+      scope: { kind: "new-thread", projectId },
+      draft: {
+        text: promptDraft.text,
+        mentions: promptDraft.mentions,
+        attachments: promptDraft.attachments,
+      },
+      getCurrent: promptDraft.getCurrent,
+      setDraft: promptDraft.setDraft,
+      focus: () => promptBoxRef.current?.focusEnd(),
+    }),
+    [
+      projectId,
+      promptDraft.attachments,
+      promptDraft.getCurrent,
+      promptDraft.mentions,
+      promptDraft.setDraft,
+      promptDraft.text,
+    ],
   );
   const rootComposeZenModeStorageKey = useMemo(
     () =>
@@ -3552,6 +3574,7 @@ export function RootComposeView() {
       mentionRanges={promptDraft.mentions}
       onChange={promptDraft.setTextAndMentions}
       onSubmit={submitPrompt}
+      pluginComposerHost={pluginComposerHost}
       isSubmitting={createThread.isPending}
       disabled={isSubmitDisabled}
       zenModeStorageKey={rootComposeZenModeStorageKey}
