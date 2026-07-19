@@ -39,6 +39,10 @@ import { PluginNavSidebarItems } from "./PluginNavSidebarItems";
 import { useComposer } from "@/lib/plugin-sdk-hooks";
 import { subscribeComposerFocusRequests } from "@/lib/composer-focus-requests";
 import { getComposerTextEffect } from "@/lib/composer-text-effects";
+import {
+  getPluginThreadRowStatus,
+  resetPluginThreadRowStatusesForTest,
+} from "@/lib/plugin-thread-row-status";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import {
   PluginPanelTabContent,
@@ -67,6 +71,7 @@ function registrationSet(
 afterEach(() => {
   cleanup();
   resetPluginSlotStoreForTest();
+  resetPluginThreadRowStatusesForTest();
   resetAllCrashedPluginSlotsForTest();
   vi.restoreAllMocks();
 });
@@ -210,12 +215,15 @@ describe("useComposer", () => {
         updateText: composer.updateText,
         clear: composer.clear,
         setTextEffect: composer.setTextEffect,
+        setThreadRowStatus: composer.setThreadRowStatus,
       });
       const methodsAreStable =
         initialMethods.current.setText === composer.setText &&
         initialMethods.current.updateText === composer.updateText &&
         initialMethods.current.clear === composer.clear &&
-        initialMethods.current.setTextEffect === composer.setTextEffect;
+        initialMethods.current.setTextEffect === composer.setTextEffect &&
+        initialMethods.current.setThreadRowStatus ===
+          composer.setThreadRowStatus;
       return (
         <div>
           <div>scope: {composer.scope.kind}</div>
@@ -267,6 +275,24 @@ describe("useComposer", () => {
             onClick={() => composer.setTextEffect(null)}
           >
             {label}-clear-effect
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              composer.setThreadRowStatus({
+                icon: "AiScanText",
+                label: "Prompt Shaper improving prompt",
+                effect: "shimmer",
+              })
+            }
+          >
+            {label}-start-row-status
+          </button>
+          <button
+            type="button"
+            onClick={() => composer.setThreadRowStatus(null)}
+          >
+            {label}-clear-row-status
           </button>
           <button type="button" onClick={() => composer.focus()}>
             {label}-focus
@@ -508,8 +534,19 @@ describe("useComposer", () => {
       JSON.parse(screen.getByTestId("queued-attachments").textContent ?? "[]"),
     ).toHaveLength(1);
 
+    const firstEffectKey = "queued-message:thr_queue:qmsg_1:1";
+    fireEvent.click(screen.getByText("queued-start-effect"));
+    expect(getComposerTextEffect(firstEffectKey)).toBe("shimmer");
+    fireEvent.click(screen.getByText("queued-start-row-status"));
+    expect(getPluginThreadRowStatus("thr_queue")).toEqual({
+      icon: "AiScanText",
+      label: "Prompt Shaper improving prompt",
+      effect: "shimmer",
+    });
     fireEvent.click(screen.getByText("change-queued-scope"));
     expect(screen.getByText("scope: queued-message")).toBeDefined();
+    expect(getComposerTextEffect(firstEffectKey)).toBeNull();
+    expect(getPluginThreadRowStatus("thr_queue")).toBeNull();
   });
 
   it("targets the new-thread composer without leaking replacements to thread drafts", () => {
@@ -682,13 +719,17 @@ describe("useComposer", () => {
     const storageKey = screen.getByTestId("draft-key").textContent ?? "";
 
     fireEvent.click(screen.getByText("effect-start-effect"));
+    fireEvent.click(screen.getByText("effect-start-row-status"));
     expect(getComposerTextEffect(storageKey)).toBe("shimmer");
+    expect(getPluginThreadRowStatus("thr_effect")).not.toBeNull();
     fireEvent.click(screen.getByText("effect-clear-effect"));
     expect(getComposerTextEffect(storageKey)).toBeNull();
     fireEvent.click(screen.getByText("effect-start-effect"));
+    fireEvent.click(screen.getByText("effect-start-row-status"));
 
     view.unmount();
     expect(getComposerTextEffect(storageKey)).toBeNull();
+    expect(getPluginThreadRowStatus("thr_effect")).toBeNull();
   });
 
   it("clears a text effect when the plugin composer scope changes", () => {
