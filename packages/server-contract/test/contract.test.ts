@@ -1254,6 +1254,33 @@ describe("server-contract canonical schemas", () => {
     expect(parsed.origin).toBe("sdk");
   });
 
+  it("normalizes only the deprecated workspace-write create input", () => {
+    const request = {
+      projectId: "proj_123",
+      providerId: "codex",
+      origin: "sdk" as const,
+      input: [{ type: "text" as const, text: "Scripted start" }],
+      environment: {
+        type: "host" as const,
+        hostId: "host_abc",
+        workspace: { type: "unmanaged" as const, path: null },
+      },
+    };
+
+    expect(
+      createThreadRequestSchema.parse({
+        ...request,
+        permissionMode: "workspace-write",
+      }).permissionMode,
+    ).toBe("accept-edits");
+    expect(
+      createThreadRequestSchema.safeParse({
+        ...request,
+        permissionMode: "readonly",
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts generic hidden thread visibility without changing omitted requests", () => {
     const base = {
       projectId: "proj_123",

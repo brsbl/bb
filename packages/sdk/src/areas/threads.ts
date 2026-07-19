@@ -13,6 +13,7 @@ import { threadTabsResponseSchema } from "@bb/server-contract";
 import type {
   CreateQueuedMessageRequest,
   CreateThreadRequest,
+  CreateThreadRequestInput,
   DeleteThreadRequest,
   PromptHistoryResponse,
   SendQueuedMessageResponse,
@@ -132,11 +133,17 @@ export type ThreadTimelineTurnSummaryDetailsResult =
 
 export interface ThreadSpawnBaseArgs extends Omit<
   CreateThreadRequest,
-  "childOrigin" | "input" | "origin" | "originKind" | "startedOnBehalfOf"
+  | "childOrigin"
+  | "input"
+  | "origin"
+  | "originKind"
+  | "permissionMode"
+  | "startedOnBehalfOf"
 > {
   childOrigin?: CreateThreadRequest["childOrigin"];
   origin?: CreateThreadRequest["origin"];
   originKind?: CreateThreadRequest["originKind"];
+  permissionMode?: CreateThreadRequestInput["permissionMode"];
   startedOnBehalfOf?: CreateThreadRequest["startedOnBehalfOf"];
 }
 
@@ -491,7 +498,10 @@ function spawnInput(input: ThreadSpawnArgs): PromptInput[] {
   return [{ type: "text", text: input.prompt, mentions: [] }];
 }
 
-function spawnJson(args: ThreadSpawnArgs): CreateThreadRequest {
+type ThreadSpawnRequest = Omit<CreateThreadRequest, "permissionMode"> &
+  Pick<CreateThreadRequestInput, "permissionMode">;
+
+function spawnJson(args: ThreadSpawnArgs): ThreadSpawnRequest {
   const {
     childOrigin,
     input: _input,
@@ -980,7 +990,9 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     async spawn(input) {
       return transport.readJson(
         transport.api.v1.threads.$post({
-          json: spawnJson(input),
+          // The route accepts the deprecated `workspace-write` input and
+          // normalizes it server-side; its inferred output type is narrower.
+          json: spawnJson(input) as CreateThreadRequest,
         }),
       );
     },

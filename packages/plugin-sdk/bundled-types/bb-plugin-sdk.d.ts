@@ -7546,6 +7546,7 @@ declare const createThreadRequestSchema: z$1.ZodObject<{
     }>>>;
 }, z$1.core.$strip>;
 type CreateThreadRequest = z$1.infer<typeof createThreadRequestSchema>;
+type CreateThreadRequestInput = z$1.input<typeof createThreadRequestSchema>;
 declare const sendMessageRequestSchema: z$1.ZodObject<{
     input: z$1.ZodArray<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         visibility: z$1.ZodOptional<z$1.ZodEnum<{
@@ -10137,10 +10138,11 @@ type ThreadChildSummaryResult = ThreadChildSummaryResponse;
 type ThreadDefaultExecutionOptionsResult = ResolvedThreadExecutionOptions | null;
 type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
 type ThreadTimelineTurnSummaryDetailsResult = TimelineTurnSummaryDetailsResponse;
-interface ThreadSpawnBaseArgs extends Omit<CreateThreadRequest, "childOrigin" | "input" | "origin" | "originKind" | "startedOnBehalfOf"> {
+interface ThreadSpawnBaseArgs extends Omit<CreateThreadRequest, "childOrigin" | "input" | "origin" | "originKind" | "permissionMode" | "startedOnBehalfOf"> {
     childOrigin?: CreateThreadRequest["childOrigin"];
     origin?: CreateThreadRequest["origin"];
     originKind?: CreateThreadRequest["originKind"];
+    permissionMode?: CreateThreadRequestInput["permissionMode"];
     startedOnBehalfOf?: CreateThreadRequest["startedOnBehalfOf"];
 }
 type ThreadSpawnArgs = ThreadSpawnBaseArgs & ({

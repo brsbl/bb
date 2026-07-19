@@ -949,9 +949,10 @@ describe("@bb/sdk", () => {
     );
   });
 
-  it("forwards every public permission mode through thread surfaces", async () => {
+  it("forwards current permission modes and the legacy spawn input", async () => {
     const queue = createFetchQueue([
       { body: { id: "thr_auto" }, status: 201 },
+      { body: { id: "thr_workspace_write" }, status: 201 },
       { body: null, status: 204 },
       { body: { id: "qmsg_full" }, status: 201 },
     ]);
@@ -973,6 +974,16 @@ describe("@bb/sdk", () => {
       permissionMode: "auto",
       prompt: "Approve for me",
     });
+    await sdk.threads.spawn({
+      projectId: "proj_123",
+      environment: {
+        type: "host",
+        hostId: "host_123",
+        workspace: { type: "unmanaged", path: null },
+      },
+      permissionMode: "workspace-write",
+      prompt: "Use the compatibility alias",
+    });
     await sdk.threads.send({
       threadId: "thr_auto",
       input: [{ type: "text", text: "Accept edits", mentions: [] }],
@@ -989,6 +1000,7 @@ describe("@bb/sdk", () => {
       queue.requests.map((request) => JSON.parse(request.bodyText ?? "{}")),
     ).toEqual([
       expect.objectContaining({ permissionMode: "auto" }),
+      expect.objectContaining({ permissionMode: "workspace-write" }),
       expect.objectContaining({ permissionMode: "accept-edits" }),
       expect.objectContaining({ permissionMode: "full" }),
     ]);

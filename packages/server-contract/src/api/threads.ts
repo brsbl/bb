@@ -170,6 +170,9 @@ export const createThreadRequestSchema = z
     }
   });
 export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>;
+export type CreateThreadRequestInput = z.input<
+  typeof createThreadRequestSchema
+>;
 
 export const sendMessageRequestSchema = z.object({
   input: z.array(promptInputSchema).min(1),

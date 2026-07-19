@@ -26,6 +26,7 @@ import type {
   ThemeCatalogResult as RootThemeCatalog,
   ThemeSetInput as RootThemeSetInput,
   ThreadSectionListResult as RootThreadSectionList,
+  ThreadSpawnArgs as RootThreadSpawnArgs,
   ThreadSpawnResult as RootThreadSpawn,
 } from "@bb/sdk";
 import type {
@@ -417,6 +418,15 @@ describe("SDK public type entrypoints", () => {
   it("exports only the public permission presets", () => {
     expectTypeOf<RootPermissionMode>().toEqualTypeOf<
       "accept-edits" | "auto" | "full"
+    >();
+  });
+
+  it("accepts only the deprecated workspace-write spawn input alias", () => {
+    expectTypeOf<
+      NonNullable<RootThreadSpawnArgs["permissionMode"]>
+    >().toEqualTypeOf<"accept-edits" | "auto" | "full" | "workspace-write">();
+    expectTypeOf<"readonly">().not.toMatchTypeOf<
+      NonNullable<RootThreadSpawnArgs["permissionMode"]>
     >();
   });
 
