@@ -1102,6 +1102,7 @@ export function RootComposeView() {
         mentions: promptDraft.mentions,
         attachments: promptDraft.attachments,
       },
+      textEffectKey: promptDraft.storageKey,
       getCurrent: promptDraft.getCurrent,
       setDraft: promptDraft.setDraft,
       focus: () => promptBoxRef.current?.focusEnd(),
@@ -1112,6 +1113,7 @@ export function RootComposeView() {
       promptDraft.getCurrent,
       promptDraft.mentions,
       promptDraft.setDraft,
+      promptDraft.storageKey,
       promptDraft.text,
     ],
   );
