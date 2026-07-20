@@ -898,16 +898,17 @@ Hooks:
   to one of YOUR `bb.ui.registerMentionProvider` providers, resolved to
   fresh context at send time; `focus()` focuses the caret. `scope` reports
   where writes land: `{ kind: "thread", threadId }` for a thread draft,
-  `{ kind: "queued-message", threadId, queuedMessageId }` for the active
-  inline queue editor, `{ kind: "side-chat", projectId, parentThreadId, tabId,
-childThreadId }` for the visible side-chat draft, or
+  experimental `{ kind: "queued-message", threadId, queuedMessageId }` for the
+  active inline queue editor, experimental
+  `{ kind: "side-chat", projectId, parentThreadId, tabId, childThreadId }` for
+  the visible side-chat draft, or
   `{ kind: "new-thread", projectId }` for root and nav-panel compose surfaces.
-  `setTextEffect("shimmer" | null)` paints the active draft;
-  `setThreadRowStatus({ icon, label, effect, tone } | null)` replaces the
-  visible thread's draft glyph (a side chat targets its parent row; `tone` is
-  `"default"` or `"success"` and `label` must be non-blank). Both visuals
-  belong to the calling hook instance and clear automatically when it unmounts
-  or its composer scope changes.
+  `experimental_setTextEffect("shimmer" | null)` paints the active draft;
+  `experimental_setThreadRowStatus({ icon, label, effect, tone } | null)`
+  replaces the visible thread's draft glyph (a side chat targets its parent
+  row; `tone` is `"default"` or `"success"` and `label` must be non-blank).
+  Both visuals belong to the calling hook instance and clear automatically
+  when it unmounts or its composer scope changes.
 
 ```tsx
 const composer = useComposer();
@@ -1076,7 +1077,7 @@ const slot = renderSlot(
 );
 await slot.findByText("…"); // Testing Library queries
 await slot.behavior.setRealtimeConnectionState("connected");
-await slot.behavior.setComposerScope(
+await slot.behavior.experimental_setComposerScope(
   { kind: "queued-message", threadId: "t1", queuedMessageId: "q1" },
   "queued draft",
 );

@@ -7,7 +7,7 @@ import type {
   BbNavigate,
   PluginComposerApi,
   PluginComposerMention,
-  PluginComposerThreadRowStatus,
+  experimental_PluginComposerThreadRowStatus,
   PluginRealtimeConnectionState,
   PluginRpcContract,
   PluginRpcClient,
@@ -369,8 +369,8 @@ function createComposerScopeOwnership(scopeKey: string) {
 
 function normalizePluginThreadRowStatus(
   pluginId: string,
-  status: PluginComposerThreadRowStatus | null,
-): PluginComposerThreadRowStatus | null | undefined {
+  status: experimental_PluginComposerThreadRowStatus | null,
+): experimental_PluginComposerThreadRowStatus | null | undefined {
   if (status === null) return null;
   if (
     typeof status !== "object" ||
@@ -380,14 +380,14 @@ function normalizePluginThreadRowStatus(
     (status.tone !== "default" && status.tone !== "success")
   ) {
     console.warn(
-      `[plugin:${pluginId}] useComposer().setThreadRowStatus: invalid status`,
+      `[plugin:${pluginId}] useComposer().experimental_setThreadRowStatus: invalid status`,
     );
     return undefined;
   }
   const label = status.label.trim();
   if (label.length === 0) {
     console.warn(
-      `[plugin:${pluginId}] useComposer().setThreadRowStatus: "label" must be a non-empty string`,
+      `[plugin:${pluginId}] useComposer().experimental_setThreadRowStatus: "label" must be a non-empty string`,
     );
     return undefined;
   }
@@ -507,15 +507,17 @@ export function useComposer(): PluginComposerApi {
     () => Symbol(`${pluginId}:${scopeOwnershipKey}`),
     [pluginId, scopeOwnershipKey],
   );
-  const setTextEffect = useCallback(
-    (effect: Parameters<PluginComposerApi["setTextEffect"]>[0]) => {
+  const experimental_setTextEffect = useCallback(
+    (
+      effect: Parameters<PluginComposerApi["experimental_setTextEffect"]>[0],
+    ) => {
       if (!scopeOwnership.isActive()) return;
       setComposerTextEffect(textEffectKey, pluginId, effect, visualStateOwner);
     },
     [pluginId, scopeOwnership, textEffectKey, visualStateOwner],
   );
-  const setThreadRowStatus = useCallback(
-    (status: PluginComposerThreadRowStatus | null) => {
+  const experimental_setThreadRowStatus = useCallback(
+    (status: experimental_PluginComposerThreadRowStatus | null) => {
       if (
         !scopeOwnership.isActive() ||
         threadRowStatusScopeKey === "new-thread"
@@ -629,8 +631,8 @@ export function useComposer(): PluginComposerApi {
       setText,
       updateText,
       clear,
-      setTextEffect,
-      setThreadRowStatus,
+      experimental_setTextEffect,
+      experimental_setThreadRowStatus,
       addQuote,
       insertMention,
       focus,
@@ -644,8 +646,8 @@ export function useComposer(): PluginComposerApi {
       insertMention,
       projectId,
       setText,
-      setTextEffect,
-      setThreadRowStatus,
+      experimental_setTextEffect,
+      experimental_setThreadRowStatus,
       threadId,
       updateText,
     ],
