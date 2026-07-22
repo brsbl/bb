@@ -7,7 +7,7 @@
 
 import { ReactNode, ComponentType } from 'react';
 import { RenderResult } from '@testing-library/react';
-import { PluginHomepageSectionRegistration, PluginSettingsSectionRegistration, PluginNavPanelRegistration, PluginThreadPanelActionRegistration, ComposerCustomization, PluginPendingInteractionRegistration, PluginSidebarFooterActionRegistration, PluginFileOpenerRegistration, PluginMessageDirectiveRegistration, PluginMessageActionRegistration, PluginContentScriptRegistration, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginComposerMention, BbNavigate, PluginAppDefinition, PluginRpcContract, StandardSchemaV1InferInput, PluginRpcResult, PluginRealtimeConnectionState } from '@bb/plugin-sdk';
+import { PluginHomepageSectionRegistration, PluginSettingsSectionRegistration, PluginNavPanelRegistration, PluginThreadPanelActionRegistration, ComposerCustomization, PluginPendingInteractionRegistration, PluginSidebarFooterActionRegistration, PluginFileOpenerRegistration, PluginMessageDirectiveRegistration, PluginMessageActionRegistration, PluginContentScriptRegistration, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginComposerMention, PluginRealtimeConnectionState, BbNavigate, PluginAppDefinition, PluginRpcContract, StandardSchemaV1InferInput, PluginRpcResult } from '@bb/plugin-sdk';
 
 /**
  * `@bb/plugin-sdk/testing/app` — the frontend plugin test harness. Tests a
@@ -114,12 +114,22 @@ interface ContentScriptTestMountOptions {
     pluginId: string;
     /** Defaults to 1. Pass the host generation you want the plugin to observe. */
     generation?: number;
+    /** Backing handlers for `context.rpc.call`. */
+    rpc?: Record<string, (input: unknown) => unknown | Promise<unknown>>;
+    /** Initial shared-socket lifecycle state. Defaults to connected. */
+    realtimeConnectionState?: PluginRealtimeConnectionState;
 }
 interface MountedPluginContentScripts {
     inspection: {
         readonly mountedIds: readonly string[];
         readonly signal: AbortSignal;
         readonly disposed: boolean;
+        readonly rpcCalls: readonly RpcCall[];
+        readonly navigateCalls: readonly NavigateCall[];
+    };
+    behavior: {
+        publishRealtime(channel: string, payload: unknown): void;
+        setRealtimeConnectionState(state: PluginRealtimeConnectionState): void;
     };
     lifecycle: {
         /** Abort, then run returned cleanup functions once in reverse order. */

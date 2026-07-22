@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import type { PluginComposerApi, PluginThreadPanelProps } from "@bb/plugin-sdk";
 import { createPluginPanelFixedPanelTab } from "@/lib/fixed-panel-tabs-state";
+import { registerPluginThreadMessageRevealHandler } from "@/lib/plugin-thread-message-reveal";
 import {
   resetPluginSlotStoreForTest,
   setPluginSlotRegistrations,
@@ -1564,6 +1565,18 @@ describe("plugin thread panel actions", () => {
     );
   }
 
+  function RevealProbe({ revealMessage }: PluginThreadPanelProps) {
+    const [result, setResult] = useState("idle");
+    return (
+      <button
+        type="button"
+        onClick={() => void revealMessage("msg_1").then(setResult)}
+      >
+        reveal:{result}
+      </button>
+    );
+  }
+
   function ActionsProbe({
     threadId,
     openPluginPanel,
@@ -1628,6 +1641,36 @@ describe("plugin thread panel actions", () => {
         'panel body for thr_9 / {"n":1,"nested":[true,null,{"label":"ok"}]}',
       ),
     ).toBeDefined();
+  });
+
+  it("scopes panel message reveal to the panel thread", async () => {
+    const reveal = vi.fn().mockResolvedValue("revealed");
+    const unregister = registerPluginThreadMessageRevealHandler(
+      "thr_9",
+      reveal,
+    );
+    setPluginSlotRegistrations(
+      "demo",
+      registrationSet({
+        threadPanelActions: [
+          { id: "comments", title: "Comments", component: RevealProbe },
+        ],
+      }),
+    );
+    const tab = createPluginPanelFixedPanelTab({
+      actionId: "comments",
+      paramsJson: null,
+      pluginId: "demo",
+      title: "Comments",
+    });
+    render(<PluginPanelTabContent tab={tab} threadId="thr_9" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "reveal:idle" }));
+    expect(
+      await screen.findByRole("button", { name: "reveal:revealed" }),
+    ).toBeDefined();
+    expect(reveal).toHaveBeenCalledWith("msg_1");
+    unregister();
   });
 
   it("contains a throwing run and rejects non-JSON params without opening", () => {

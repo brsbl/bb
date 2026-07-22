@@ -285,6 +285,56 @@ describe("loadPluginApp", () => {
     ]);
   });
 
+  it("drives content-script RPC, realtime, connection state, and navigation with abort cleanup", async () => {
+    const events: string[] = [];
+    const captured = await loadPluginApp(
+      definePluginApp((builder) => {
+        builder.experimental_contentScripts.register({
+          id: "controller",
+          async mount({ rpc, realtime, navigate }) {
+            const result = await rpc.call("list", { threadId: "thr_1" });
+            events.push(`rpc:${String(result)}`);
+            realtime.subscribe("changed", (payload) => {
+              events.push(`signal:${String(payload)}`);
+            });
+            realtime.subscribeConnectionState((state) => {
+              events.push(`connection:${state}`);
+            });
+            navigate.toCompose({
+              initialPrompt: "Follow up",
+              focusPrompt: true,
+            });
+          },
+        });
+      }),
+    );
+    const mounted = await mountPluginContentScripts(captured, {
+      pluginId: "demo",
+      rpc: { list: () => "ready" },
+    });
+
+    expect(mounted.inspection.rpcCalls).toEqual([
+      { method: "list", input: { threadId: "thr_1" } },
+    ]);
+    expect(mounted.inspection.navigateCalls).toEqual([
+      {
+        method: "toCompose",
+        options: { initialPrompt: "Follow up", focusPrompt: true },
+      },
+    ]);
+    mounted.behavior.publishRealtime("changed", "thread-1");
+    mounted.behavior.setRealtimeConnectionState("reconnecting");
+    expect(events).toEqual([
+      "rpc:ready",
+      "signal:thread-1",
+      "connection:reconnecting",
+    ]);
+
+    await mounted.lifecycle.dispose();
+    mounted.behavior.publishRealtime("changed", "ignored");
+    expect(events).toHaveLength(3);
+  });
+
   it("rolls back earlier content scripts when a later mount rejects", async () => {
     const events: string[] = [];
     const captured = await loadPluginApp(

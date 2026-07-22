@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import type { PluginRenderedTextSelection } from "@bb/plugin-sdk";
 
 export interface SelectionAnchorPoint {
   x: number;
@@ -15,6 +16,8 @@ export interface SelectionAnchor {
 export interface MessageProseSelection {
   text: string;
   rect: DOMRect;
+  /** Present for selections captured inside canonical message prose roots. */
+  renderedText?: PluginRenderedTextSelection;
   anchorPoint?: SelectionAnchorPoint;
   anchorSide?: SelectionAnchorSide;
   sourceSeqEnd?: number;
@@ -106,17 +109,126 @@ function isSelectionBoundarySpillWithinNode(
   );
 }
 
+function textOffsetAtBoundary(
+  root: HTMLElement,
+  container: Node,
+  offset: number,
+): number | null {
+  if (container !== root && !root.contains(container)) return null;
+  const prefix = document.createRange();
+  prefix.selectNodeContents(root);
+  try {
+    prefix.setEnd(container, offset);
+  } catch {
+    return null;
+  }
+  return (prefix.cloneContents().textContent ?? "").length;
+}
+
+function slicePrefixWithoutSplittingSurrogate(
+  text: string,
+  end: number,
+): string {
+  let start = Math.max(0, end - 32);
+  const first = text.charCodeAt(start);
+  if (
+    start > 0 &&
+    first >= 0xdc00 &&
+    first <= 0xdfff &&
+    text.charCodeAt(start - 1) >= 0xd800 &&
+    text.charCodeAt(start - 1) <= 0xdbff
+  ) {
+    start += 1;
+  }
+  return text.slice(start, end);
+}
+
+function sliceSuffixWithoutSplittingSurrogate(
+  text: string,
+  start: number,
+): string {
+  let end = Math.min(text.length, start + 32);
+  const last = text.charCodeAt(end - 1);
+  if (
+    end < text.length &&
+    last >= 0xd800 &&
+    last <= 0xdbff &&
+    text.charCodeAt(end) >= 0xdc00 &&
+    text.charCodeAt(end) <= 0xdfff
+  ) {
+    end -= 1;
+  }
+  return text.slice(start, end);
+}
+
+export function renderedTextSelectionFromRange(
+  root: HTMLElement,
+  range: Range,
+  geometryRange: Range = range,
+): PluginRenderedTextSelection | null {
+  const start = textOffsetAtBoundary(
+    root,
+    range.startContainer,
+    range.startOffset,
+  );
+  const end = textOffsetAtBoundary(root, range.endContainer, range.endOffset);
+  if (start === null || end === null || end <= start) return null;
+
+  const text = root.textContent ?? "";
+  const exact = text.slice(start, end);
+  if (exact.trim().length === 0) return null;
+  const rects: PluginRenderedTextSelection["rects"][number][] = [];
+  const clientRects = geometryRange.getClientRects();
+  for (let index = 0; index < clientRects.length; index += 1) {
+    const rect = clientRects.item(index);
+    if (rect === null || (rect.width <= 0 && rect.height <= 0)) continue;
+    rects.push({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    });
+  }
+  if (rects.length === 0) {
+    const rect = geometryRange.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      rects.push({
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      });
+    }
+  }
+  if (rects.length === 0) return null;
+
+  return {
+    version: 1,
+    coordinateSpace: "rendered-text-utf16",
+    start,
+    end,
+    exact,
+    prefix: slicePrefixWithoutSplittingSurrogate(text, start),
+    suffix: sliceSuffixWithoutSplittingSurrogate(text, end),
+    rects,
+  };
+}
+
 function toMessageProseSelection({
   anchor,
   rect,
-  text,
+  renderedText,
 }: {
   anchor: SelectionAnchor | null;
   rect: DOMRect | null;
-  text: string;
+  renderedText: PluginRenderedTextSelection | null;
 }): MessageProseSelection | null {
-  if (text.length === 0 || rect === null) return null;
-  const selection: MessageProseSelection = { text, rect };
+  if (renderedText === null || rect === null) return null;
+  const selection: MessageProseSelection = {
+    text: renderedText.exact,
+    rect,
+    renderedText,
+  };
   if (anchor !== null) {
     selection.anchorPoint = anchor.point;
     selection.anchorSide = anchor.side;
@@ -193,15 +305,31 @@ function readSelectionWithinNode(
     commonAncestorContainer: range.commonAncestorContainer,
   });
   if (accepted) {
-    const text = selection.toString().trim();
     const rect = firstClientRect(range);
-    return toMessageProseSelection({ anchor, rect, text });
+    const renderedText = renderedTextSelectionFromRange(node, range);
+    return toMessageProseSelection({ anchor, rect, renderedText });
   }
 
-  const text = selection.toString().trim();
+  const text = selection.toString();
   if (isSelectionBoundarySpillWithinNode(node, range, text)) {
+    const clippedRange = document.createRange();
+    if (node.contains(range.startContainer)) {
+      clippedRange.setStart(range.startContainer, range.startOffset);
+    } else {
+      clippedRange.setStart(node, 0);
+    }
+    if (node.contains(range.endContainer)) {
+      clippedRange.setEnd(range.endContainer, range.endOffset);
+    } else {
+      clippedRange.setEnd(node, node.childNodes.length);
+    }
     const rect = firstClientRect(range);
-    return toMessageProseSelection({ anchor, rect, text });
+    const renderedText = renderedTextSelectionFromRange(
+      node,
+      clippedRange,
+      range,
+    );
+    return toMessageProseSelection({ anchor, rect, renderedText });
   }
 
   return null;
@@ -375,6 +503,7 @@ export function SelectableMessageProse({
       // inset. A long-press text selection uses the same touch sequence, so
       // keep sidebar swipe recognition out of selectable message prose.
       data-no-sidebar-swipe
+      data-bb-message-prose-root=""
     >
       {children}
     </div>

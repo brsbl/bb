@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { bootPluginFrontends } from "../lib/plugin-frontend";
+import { setPluginContentScriptNavigate } from "../lib/plugin-content-script-context";
 import { useSystemConfig } from "./queries/system-queries";
 
 /**
@@ -13,8 +15,13 @@ import { useSystemConfig } from "./queries/system-queries";
  */
 export function usePluginFrontendBoot(): void {
   const systemConfig = useSystemConfig();
+  const navigate = useNavigate();
   const resolved = systemConfig.data !== undefined;
   useEffect(() => {
+    const disposeNavigate = setPluginContentScriptNavigate(navigate);
     if (resolved) void bootPluginFrontends();
-  }, [resolved]);
+    return () => {
+      void disposeNavigate();
+    };
+  }, [navigate, resolved]);
 }

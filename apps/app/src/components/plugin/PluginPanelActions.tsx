@@ -6,6 +6,7 @@ import {
   type PluginThreadPanelActionSlot,
 } from "@/lib/plugin-slots";
 import type { PluginPanelFixedPanelTab } from "@/lib/fixed-panel-tabs-state";
+import { revealPluginThreadMessage } from "@/lib/plugin-thread-message-reveal";
 import {
   parsePersistedPluginPanelParams,
   serializePluginPanelParams,
@@ -178,7 +179,13 @@ function ActionTabContent({
         slotKind="threadPanelAction"
         slotId={action.id}
       >
-        <action.component threadId={threadId} params={params} />
+        <action.component
+          threadId={threadId}
+          params={params}
+          revealMessage={(messageId) =>
+            revealPluginThreadMessage(threadId, messageId)
+          }
+        />
       </PluginSlotMount>
     </div>
   );

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MULTI_CLICK_SELECTION_REPORT_DELAY_MS,
+  renderedTextSelectionFromRange,
   SelectableMessageProse,
 } from "./SelectableMessageProse.js";
 
@@ -27,8 +28,19 @@ function makeWindowSelection({
   text: string;
 }): Selection {
   const rect = new DOMRect(10, 20, 30, 8);
+  const fullText = node.textContent ?? text;
+  const normalizedText = text.trim();
+  const selectedStart = Math.max(0, fullText.indexOf(normalizedText));
+  const selectedEnd = Math.min(
+    fullText.length,
+    selectedStart + normalizedText.length,
+  );
   const range = {
     commonAncestorContainer: commonAncestorContainer ?? node,
+    startContainer: node,
+    startOffset: selectedStart,
+    endContainer: node,
+    endOffset: selectedEnd,
     getBoundingClientRect: () => rect,
     getClientRects: () => ({
       length: 1,
@@ -66,6 +78,37 @@ describe("SelectableMessageProse", () => {
     expect(
       getByText("Selectable answer text").closest("[data-no-sidebar-swipe]"),
     ).not.toBeNull();
+  });
+
+  it("captures one UTF-16 rendered-text selector across nested Markdown nodes", () => {
+    const root = document.createElement("div");
+    root.append("Before ");
+    const strong = document.createElement("strong");
+    strong.textContent = "nested 😀 text";
+    root.append(strong, " after");
+    document.body.append(root);
+    const range = document.createRange();
+    range.setStart(root.firstChild!, 3);
+    range.setEnd(strong.firstChild!, "nested 😀".length);
+    const rect = new DOMRect(10, 20, 90, 18);
+    vi.spyOn(Range.prototype, "getClientRects").mockReturnValue({
+      0: rect,
+      length: 1,
+      item: (index: number) => (index === 0 ? rect : null),
+    } as unknown as DOMRectList);
+    vi.spyOn(Range.prototype, "getBoundingClientRect").mockReturnValue(rect);
+
+    expect(renderedTextSelectionFromRange(root, range)).toEqual({
+      version: 1,
+      coordinateSpace: "rendered-text-utf16",
+      start: 3,
+      end: "Before nested 😀".length,
+      exact: "ore nested 😀",
+      prefix: "Bef",
+      suffix: " text after",
+      rects: [{ x: 10, y: 20, width: 90, height: 18 }],
+    });
+    root.remove();
   });
 
   it("reports a selection only after pointer release", async () => {

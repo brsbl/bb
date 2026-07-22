@@ -63,6 +63,8 @@ export interface BottomAnchoredScrollBodyProps {
   // a thread preserves where the user was reading instead of snapping to the
   // bottom. Absent ⇒ no capture/restore (e.g. surfaces without a thread id).
   scrollAnchorThreadId?: string;
+  /** Stable plugin DOM hook for a native thread timeline's scroll owner. */
+  pluginThreadScrollRootId?: string;
 }
 
 export interface ScrollElementIntoViewArgs {
@@ -236,6 +238,7 @@ export function BottomAnchoredScrollBody({
   scrollOverlay,
   children,
   scrollAnchorThreadId,
+  pluginThreadScrollRootId,
 }: BottomAnchoredScrollBodyProps) {
   const store = useStore();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -757,6 +760,7 @@ export function BottomAnchoredScrollBody({
       <div className="grid min-h-0 flex-1 overflow-hidden">
         <div
           ref={scrollAreaRef}
+          data-bb-thread-scroll-root={pluginThreadScrollRootId}
           className={cn(
             "@container/page col-start-1 row-start-1 min-h-0 overflow-x-hidden overflow-y-auto",
             scrollAreaClassName,

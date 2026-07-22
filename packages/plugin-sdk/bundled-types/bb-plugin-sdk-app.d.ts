@@ -116,6 +116,13 @@ interface PluginThreadPanelProps {
      * action opened the panel without params.
      */
     params: JsonValue | null;
+    /**
+     * Reveal a native user or assistant conversation message in this panel's
+     * thread. The host loads older history and expands containing groups as
+     * needed, centers the stable row, and resolves only after its canonical
+     * prose root mounts. A message from another thread is reported as missing.
+     */
+    revealMessage(messageId: string): Promise<"revealed" | "missing">;
 }
 interface PluginPendingInteractionView {
     id: string;
@@ -348,6 +355,31 @@ interface PluginMessageActionThreadPanelOptions {
     title?: string;
     params?: JsonValue;
 }
+/** Where a plugin message action is rendered by host chrome. */
+type PluginMessageActionPlacement = "action-bar" | "selection-menu";
+/**
+ * A stable rendered-text selector captured inside one canonical message prose
+ * root. Offsets index the concatenation of descendant DOM text nodes in DOM
+ * order and therefore survive Markdown element boundaries.
+ */
+interface PluginRenderedTextSelection {
+    version: 1;
+    coordinateSpace: "rendered-text-utf16";
+    start: number;
+    end: number;
+    exact: string;
+    /** At most 32 UTF-16 code units, never ending inside a surrogate pair. */
+    prefix: string;
+    /** At most 32 UTF-16 code units, never starting inside a surrogate pair. */
+    suffix: string;
+    /** Viewport-relative line-fragment rectangles for the captured range. */
+    rects: readonly {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    }[];
+}
 /** Context handed to a `messageAction`'s `run`. */
 interface PluginMessageActionContext {
     /** The thread whose timeline surfaced the action. */
@@ -358,6 +390,11 @@ interface PluginMessageActionContext {
      * the exact text the user highlighted inside `message`.
      */
     selectedText?: string;
+    /**
+     * Present with `selectedText` for selection-menu invocations. Omitted for
+     * action-bar invocations. `selection.exact` always equals `selectedText`.
+     */
+    selection?: PluginRenderedTextSelection;
     /**
      * Open one of this plugin's `threadPanelAction` components in the current
      * thread's side panel — the registration-callback equivalent of
@@ -380,6 +417,12 @@ interface PluginMessageActionRegistration {
     title: string;
     /** Icon hint (BB icon name); unknown names fall back to a generic icon. */
     icon?: string;
+    /**
+     * Host placements where the action appears. Omission preserves the legacy
+     * behavior of rendering in both the per-message action bar and the floating
+     * selection menu.
+     */
+    placements?: readonly PluginMessageActionPlacement[];
     /**
      * Runs when the user activates the action. Errors (sync or async) are
      * contained and logged; they never break the timeline.
@@ -408,6 +451,16 @@ interface PluginContentScriptContext {
     readonly generation: number;
     /** Aborted before cleanup begins on replacement, deactivation, or teardown. */
     readonly signal: AbortSignal;
+    /** Plugin-scoped schema-validated RPC transport. */
+    readonly rpc: PluginRpcClient;
+    /** Plugin-scoped realtime signals and shared socket lifecycle. */
+    readonly realtime: {
+        subscribe(channel: string, handler: (payload: unknown) => void): PluginContentScriptDisposer;
+        getConnectionState(): PluginRealtimeConnectionState;
+        subscribeConnectionState(handler: (state: PluginRealtimeConnectionState) => void): PluginContentScriptDisposer;
+    };
+    /** Imperative navigation available outside a React slot. */
+    readonly navigate: Pick<BbNavigate, "toCompose">;
 }
 /** Cleanup returned by a frontend content script. */
 type PluginContentScriptDisposer = () => void | Promise<void>;
@@ -791,4 +844,4 @@ declare const useComposer: () => PluginComposerApi;
 declare const useComposerView: () => ComposerView;
 
 export { definePluginApp, experimental_Markdown, experimental_ThreadChat, useBbContext, useBbNavigate, useComposer, useComposerView, useRealtime, useRealtimeConnectionState, useRpc, useSettings };
-export type { BbContext, BbNavigate, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue, MarkdownProps, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginMessageActionContext, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtimeConnectionState, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps };
+export type { BbContext, BbNavigate, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue, MarkdownProps, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginMessageActionContext, PluginMessageActionPlacement, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtimeConnectionState, PluginRenderedTextSelection, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps };

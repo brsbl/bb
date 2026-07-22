@@ -107,6 +107,7 @@ import {
   type PluginMessageActionSlot,
 } from "@/lib/plugin-slots.js";
 import { runPluginMessageAction } from "@/lib/plugin-message-actions.js";
+import { registerPluginThreadMessageRevealHandler } from "@/lib/plugin-thread-message-reveal.js";
 import { isPluginSideChatSenderThread } from "@/lib/side-chat-plugin.js";
 import {
   buildMessageDirectiveRegistry,
@@ -800,6 +801,107 @@ export function findLastActionableUserMessageId(
 const EMPTY_CONSUMER_MESSAGE_ACTIONS: readonly ThreadTimelineConsumerMessageAction[] =
   [];
 
+function nestedRawTimelineRows(row: TimelineRow): readonly TimelineRow[] {
+  if ("childRows" in row && Array.isArray(row.childRows)) {
+    return row.childRows;
+  }
+  if ("children" in row && Array.isArray(row.children)) {
+    return row.children;
+  }
+  return [];
+}
+
+function collectMessageAncestorRowIds(
+  rows: readonly TimelineRow[],
+  messageId: string,
+  ancestors: Set<string>,
+): boolean {
+  for (const row of rows) {
+    if (row.kind === "conversation" && row.id === messageId) {
+      return true;
+    }
+    const nested = nestedRawTimelineRows(row);
+    if (
+      nested.length > 0 &&
+      collectMessageAncestorRowIds(nested, messageId, ancestors)
+    ) {
+      ancestors.add(row.id);
+      return true;
+    }
+  }
+  return false;
+}
+
+function findElementByDataValue(
+  root: ParentNode,
+  attribute: string,
+  value: string,
+): HTMLElement | null {
+  for (const element of root.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+    if (element.getAttribute(attribute) === value) return element;
+  }
+  return null;
+}
+
+function waitForAnimationFrame(): Promise<void> {
+  return new Promise((resolve) =>
+    window.requestAnimationFrame(() => resolve()),
+  );
+}
+
+async function revealMountedPluginMessage(
+  threadId: string,
+  messageId: string,
+  isDisposed: () => boolean,
+): Promise<boolean> {
+  const deadline = window.performance.now() + 5_000;
+  while (!isDisposed() && window.performance.now() < deadline) {
+    const threadWindow = findElementByDataValue(
+      document,
+      "data-bb-thread-window",
+      threadId,
+    );
+    if (threadWindow !== null) {
+      const row = findElementByDataValue(
+        threadWindow,
+        "data-bb-conversation-message-id",
+        messageId,
+      );
+      if (row !== null) {
+        const proseRoots = row.querySelectorAll<HTMLElement>(
+          "[data-bb-message-prose-root]",
+        );
+        if (proseRoots.length !== 1) return false;
+        const scrollRoot = findElementByDataValue(
+          threadWindow,
+          "data-bb-thread-scroll-root",
+          threadId,
+        );
+        if (scrollRoot !== null) {
+          const rowRect = row.getBoundingClientRect();
+          const scrollRect = scrollRoot.getBoundingClientRect();
+          scrollRoot.scrollTop +=
+            rowRect.top +
+            rowRect.height / 2 -
+            (scrollRect.top + scrollRect.height / 2);
+        } else {
+          row.scrollIntoView({ block: "center", inline: "nearest" });
+        }
+        return true;
+      }
+    }
+    await waitForAnimationFrame();
+  }
+  return false;
+}
+
+function pluginMessageActionSupportsPlacement(
+  slot: PluginMessageActionSlot,
+  placement: "action-bar" | "selection-menu",
+): boolean {
+  return slot.placements === undefined || slot.placements.includes(placement);
+}
+
 /**
  * Resolve the registered plugin `messageAction`s into concrete per-message
  * actions for one row. Undefined (no actions rendered) when the surface has
@@ -816,19 +918,21 @@ function buildRowPluginMessageActions(args: {
   if (timelineThreadId === undefined || slots.length === 0) {
     return undefined;
   }
-  return slots.map((slot) => ({
-    key: `${slot.pluginId}/${slot.id}/${slot.generation}`,
-    pluginId: slot.pluginId,
-    icon: slot.icon ?? null,
-    label: slot.title,
-    onSelect: () =>
-      runPluginMessageAction({
-        slot,
-        threadId: timelineThreadId,
-        message,
-        openThreadPanel,
-      }),
-  }));
+  return slots
+    .filter((slot) => pluginMessageActionSupportsPlacement(slot, "action-bar"))
+    .map((slot) => ({
+      key: `${slot.pluginId}/${slot.id}/${slot.generation}`,
+      pluginId: slot.pluginId,
+      icon: slot.icon ?? null,
+      label: slot.title,
+      onSelect: () =>
+        runPluginMessageAction({
+          slot,
+          threadId: timelineThreadId,
+          message,
+          openThreadPanel,
+        }),
+    }));
 }
 
 /**
@@ -843,7 +947,8 @@ function buildRowConsumerMessageActions(args: {
   const { actions, message } = args;
   return actions
     .filter(
-      (action) => action.roles === undefined || action.roles.includes(message.role),
+      (action) =>
+        action.roles === undefined || action.roles.includes(message.role),
     )
     .map((action) => ({
       key: `consumer/${action.id}`,
@@ -929,6 +1034,17 @@ function ConversationRow({
     rowConsumerActions.length === 0
       ? rowSlotActions
       : [...(rowSlotActions ?? []), ...rowConsumerActions];
+  const onSelectProse =
+    reportProseSelection === undefined
+      ? undefined
+      : (selection: MessageProseSelection | null) =>
+          reportProseSelection(
+            row.id,
+            selection === null
+              ? null
+              : { ...selection, sourceSeqEnd: row.sourceSeqEnd },
+            messageReference,
+          );
   if (row.role === "user") {
     const senderThreadMetadata =
       row.senderThreadId === null
@@ -948,6 +1064,7 @@ function ConversationRow({
           row.id === latestActionableUserMessageId ? "inline" : "overflow"
         }
         onAddToChat={onSelectionAddToChat}
+        onSelectProse={onSelectProse}
         onOpenLink={onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}
@@ -993,17 +1110,6 @@ function ConversationRow({
     onSendToMainMessage === undefined
       ? undefined
       : () => onSendToMainMessage({ messageText: row.text });
-  const onSelectProse =
-    reportProseSelection === undefined
-      ? undefined
-      : (selection: MessageProseSelection | null) =>
-          reportProseSelection(
-            row.id,
-            selection === null
-              ? null
-              : { ...selection, sourceSeqEnd: row.sourceSeqEnd },
-            messageReference,
-          );
   return (
     <ConversationMessageContent
       attachments={row.attachments}
@@ -1833,7 +1939,16 @@ function TimelineRowsList({
           }
 
           return (
-            <div key={item.row.id} data-timeline-row-id={item.row.id}>
+            <div
+              key={item.row.id}
+              data-timeline-row-id={item.row.id}
+              data-bb-conversation-message-id={
+                item.row.kind === "conversation" ? item.row.id : undefined
+              }
+              data-bb-message-role={
+                item.row.kind === "conversation" ? item.row.role : undefined
+              }
+            >
               <MemoizedTimelineRowView
                 activeLatestBundleId={activeLatestBundleId}
                 row={item.row}
@@ -1864,6 +1979,79 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
     () => getViewRows(props.timelineRows),
     [getViewRows, props.timelineRows],
   );
+  const [pluginRevealExpandedRowIds, setPluginRevealExpandedRowIds] =
+    useState<ReadonlySet<string>>(EMPTY_ROW_ID_SET);
+  const stablePluginRevealExpandedRowIds = useStableReadonlySet(
+    pluginRevealExpandedRowIds,
+  );
+  const revealStateRef = useRef({
+    timelineRows: props.timelineRows,
+    hasOlderTimelineRows: props.hasOlderTimelineRows ?? false,
+    isLoadingOlderTimelineRows: props.isLoadingOlderTimelineRows ?? false,
+    onLoadOlderRows: props.onLoadOlderRows,
+  });
+  revealStateRef.current = {
+    timelineRows: props.timelineRows,
+    hasOlderTimelineRows: props.hasOlderTimelineRows ?? false,
+    isLoadingOlderTimelineRows: props.isLoadingOlderTimelineRows ?? false,
+    onLoadOlderRows: props.onLoadOlderRows,
+  };
+  useEffect(() => {
+    const threadId = props.threadId;
+    if (threadId === undefined || props.includePluginMessageActions === false) {
+      return;
+    }
+    let disposed = false;
+    const unregister = registerPluginThreadMessageRevealHandler(
+      threadId,
+      async (messageId) => {
+        for (let page = 0; page < 500 && !disposed; page += 1) {
+          const current = revealStateRef.current;
+          const ancestors = new Set<string>();
+          if (
+            collectMessageAncestorRowIds(
+              current.timelineRows,
+              messageId,
+              ancestors,
+            )
+          ) {
+            setPluginRevealExpandedRowIds(ancestors);
+            return (await revealMountedPluginMessage(
+              threadId,
+              messageId,
+              () => disposed,
+            ))
+              ? "revealed"
+              : "missing";
+          }
+          if (!current.hasOlderTimelineRows) return "missing";
+          if (current.isLoadingOlderTimelineRows) {
+            await waitForAnimationFrame();
+            continue;
+          }
+          if (current.onLoadOlderRows === undefined) return "missing";
+          const previousRows = current.timelineRows;
+          await current.onLoadOlderRows();
+          const deadline = window.performance.now() + 5_000;
+          while (
+            !disposed &&
+            revealStateRef.current.timelineRows === previousRows &&
+            window.performance.now() < deadline
+          ) {
+            await waitForAnimationFrame();
+          }
+          if (revealStateRef.current.timelineRows === previousRows) {
+            return "missing";
+          }
+        }
+        return "missing";
+      },
+    );
+    return () => {
+      disposed = true;
+      unregister();
+    };
+  }, [props.includePluginMessageActions, props.threadId]);
   const latestActionableAssistantMessageId = useMemo(
     () => findLastActionableAssistantMessageId(rows),
     [rows],
@@ -1928,7 +2116,10 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
   const onSelectionReplyInSideChat = props.onSelectionReplyInSideChat;
   const timelineThreadId = props.threadId;
   const hasPluginSelectionActions =
-    timelineThreadId !== undefined && messageActionSlots.length > 0;
+    timelineThreadId !== undefined &&
+    messageActionSlots.some((slot) =>
+      pluginMessageActionSupportsPlacement(slot, "selection-menu"),
+    );
   const hasSelectionActions =
     onSelectionAddToChat !== undefined ||
     onSelectionReplyInSideChat !== undefined ||
@@ -2001,25 +2192,31 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
   >(() => {
     if (
       activeSelection === null ||
+      activeSelection.selection.renderedText === undefined ||
       timelineThreadId === undefined ||
       messageActionSlots.length === 0
     ) {
       return [];
     }
-    return messageActionSlots.map((slot) => ({
-      key: `${slot.pluginId}/${slot.id}/${slot.generation}`,
-      pluginId: slot.pluginId,
-      icon: slot.icon ?? null,
-      label: slot.title,
-      onSelect: () =>
-        runPluginMessageAction({
-          slot,
-          threadId: timelineThreadId,
-          message: activeSelection.message,
-          selectedText: activeSelection.selection.text,
-          openThreadPanel: onOpenPluginPanel,
-        }),
-    }));
+    return messageActionSlots
+      .filter((slot) =>
+        pluginMessageActionSupportsPlacement(slot, "selection-menu"),
+      )
+      .map((slot) => ({
+        key: `${slot.pluginId}/${slot.id}/${slot.generation}`,
+        pluginId: slot.pluginId,
+        icon: slot.icon ?? null,
+        label: slot.title,
+        onSelect: () =>
+          runPluginMessageAction({
+            slot,
+            threadId: timelineThreadId,
+            message: activeSelection.message,
+            selectedText: activeSelection.selection.text,
+            selection: activeSelection.selection.renderedText,
+            openThreadPanel: onOpenPluginPanel,
+          }),
+      }));
   }, [
     activeSelection,
     messageActionSlots,
@@ -2110,22 +2307,30 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
             value={latestActionableUserMessageId}
           >
             <TimelineTurnStateContext.Provider value={turnStateContextValue}>
-              <AutoHeightContainer>
-                <TimelineRowsList
-                  hasOlderTimelineRows={props.hasOlderTimelineRows}
-                  isLoadingOlderTimelineRows={props.isLoadingOlderTimelineRows}
-                  onLoadOlderRows={props.onLoadOlderRows}
-                  rows={rows}
-                  scopeActive={scopeActive}
-                  showAssistantMessageActions={true}
-                  compactActivityIntents={false}
-                  spacing="top-level"
-                  unreadDividerAutoScroll={
-                    props.unreadDividerAutoScroll ?? true
-                  }
-                  unreadDividerPlacement={props.unreadDividerPlacement ?? null}
-                />
-              </AutoHeightContainer>
+              <TimelineSearchExpansionContext.Provider
+                value={stablePluginRevealExpandedRowIds}
+              >
+                <AutoHeightContainer>
+                  <TimelineRowsList
+                    hasOlderTimelineRows={props.hasOlderTimelineRows}
+                    isLoadingOlderTimelineRows={
+                      props.isLoadingOlderTimelineRows
+                    }
+                    onLoadOlderRows={props.onLoadOlderRows}
+                    rows={rows}
+                    scopeActive={scopeActive}
+                    showAssistantMessageActions={true}
+                    compactActivityIntents={false}
+                    spacing="top-level"
+                    unreadDividerAutoScroll={
+                      props.unreadDividerAutoScroll ?? true
+                    }
+                    unreadDividerPlacement={
+                      props.unreadDividerPlacement ?? null
+                    }
+                  />
+                </AutoHeightContainer>
+              </TimelineSearchExpansionContext.Provider>
               {hasSelectionActions ? (
                 <TimelineSelectionMenu
                   selection={activeSelection?.selection ?? null}

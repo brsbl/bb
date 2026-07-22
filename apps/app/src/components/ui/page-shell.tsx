@@ -23,6 +23,8 @@ export interface PageShellProps extends PageShellBaseProps {
   // the timeline scroll position per thread so switching away and back doesn't
   // snap to the bottom.
   scrollAnchorThreadId?: string;
+  /** Stable plugin DOM hook for a native thread timeline's scroll owner. */
+  pluginThreadScrollRootId?: string;
 }
 
 interface FooterRenderOptions {
@@ -66,6 +68,7 @@ export function PageShell({
   maxWidthClassName = DEFAULT_MAX_WIDTH_CLASS,
   scrollBehavior = "static",
   scrollAnchorThreadId,
+  pluginThreadScrollRootId,
 }: PageShellProps) {
   const staticFooter = renderStaticFooter(footer, {
     maxWidthClassName,
@@ -82,6 +85,7 @@ export function PageShell({
           footer={staticFooter}
           scrollOverlay={scrollOverlay}
           scrollAnchorThreadId={scrollAnchorThreadId}
+          pluginThreadScrollRootId={pluginThreadScrollRootId}
         >
           {children}
         </BottomAnchoredScrollBody>
@@ -93,6 +97,7 @@ export function PageShell({
     <div className={cn(SHELL_BLEED_CLASS, shellClassName)}>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
+          data-bb-thread-scroll-root={pluginThreadScrollRootId}
           className={cn(
             "@container/page min-h-0 flex-1 overflow-y-auto",
             scrollAreaClassName,

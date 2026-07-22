@@ -25,6 +25,7 @@ import {
   setPluginSlotRegistrations,
   type PluginRegistrationSet,
 } from "@/lib/plugin-slots";
+import { revealPluginThreadMessage } from "@/lib/plugin-thread-message-reveal";
 import { ThreadTimelineRows } from "./ThreadTimelineRows";
 
 function messageActionRegistrationSet(
@@ -131,18 +132,22 @@ function SearchOlderRowsHarness({
       ];
 
   return (
-    <ThreadTimelineRows
-      threadId="thr_main"
-      timelineRows={rows}
-      hasOlderTimelineRows={!loadedOlderRows}
-      isLoadingOlderTimelineRows={false}
-      onLoadOlderRows={() => {
-        onLoadOlderRows();
-        setLoadedOlderRows(true);
-      }}
-      threadRuntimeDisplayStatus="idle"
-      workspaceRootPath={undefined}
-    />
+    <div data-bb-thread-window="thr_main">
+      <div data-bb-thread-scroll-root="thr_main">
+        <ThreadTimelineRows
+          threadId="thr_main"
+          timelineRows={rows}
+          hasOlderTimelineRows={!loadedOlderRows}
+          isLoadingOlderTimelineRows={false}
+          onLoadOlderRows={() => {
+            onLoadOlderRows();
+            setLoadedOlderRows(true);
+          }}
+          threadRuntimeDisplayStatus="idle"
+          workspaceRootPath={undefined}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -189,8 +194,14 @@ function SearchOlderRowsFailedLoadHarness({
 
 function mockWindowSelection({ node, text }: { node: Node; text: string }) {
   const rect = new DOMRect(10, 20, 30, 8);
+  const source = node.textContent ?? text;
+  const start = Math.max(0, source.indexOf(text));
   const range = {
     commonAncestorContainer: node,
+    startContainer: node,
+    startOffset: start,
+    endContainer: node,
+    endOffset: start + text.length,
     getBoundingClientRect: () => rect,
     getClientRects: () => ({
       length: 1,
@@ -998,10 +1009,11 @@ describe("ThreadTimelineRows actions", () => {
   it("loads older timeline rows before scrolling to an older sidebar search match", async () => {
     const onLoadOlderRows = vi.fn();
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callback(performance.now());
-      return 1;
+      return window.setTimeout(() => callback(performance.now()), 0);
     });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle) =>
+      window.clearTimeout(handle),
+    );
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
@@ -1031,6 +1043,36 @@ describe("ThreadTimelineRows actions", () => {
     await waitFor(() =>
       expect(olderRow.classList.contains("bb-search-flash")).toBe(true),
     );
+  });
+
+  it("loads older history and waits for canonical prose during plugin reveal", async () => {
+    const onLoadOlderRows = vi.fn();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      return window.setTimeout(() => callback(performance.now()), 0);
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle) =>
+      window.clearTimeout(handle),
+    );
+
+    const { container } = renderWithRouter(
+      <SearchOlderRowsHarness onLoadOlderRows={onLoadOlderRows} />,
+    );
+    const reveal = revealPluginThreadMessage("thr_main", "older_match");
+    const olderRow = await waitFor(() => {
+      const row = container.querySelector(
+        '[data-bb-conversation-message-id="older_match"]',
+      );
+      if (row === null) throw new Error("Older plugin reveal row not mounted");
+      return row;
+    });
+    expect(
+      olderRow?.querySelectorAll("[data-bb-message-prose-root]"),
+    ).toHaveLength(1);
+    await expect(reveal).resolves.toBe("revealed");
+    expect(onLoadOlderRows).toHaveBeenCalledTimes(1);
+    await expect(
+      revealPluginThreadMessage("thr_main", "not_in_this_thread"),
+    ).resolves.toBe("missing");
   });
 
   it("does not retry failed older-row auto-loading until rows advance", async () => {
@@ -1094,11 +1136,21 @@ describe("ThreadTimelineRows actions", () => {
     const userRow = container.querySelector(
       '[data-timeline-row-id="user_row"]',
     );
+    expect(userRow?.getAttribute("data-bb-conversation-message-id")).toBe(
+      "user_row",
+    );
+    expect(userRow?.getAttribute("data-bb-message-role")).toBe("user");
+    expect(
+      userRow?.querySelectorAll("[data-bb-message-prose-root]").length,
+    ).toBe(1);
     expect(userRow?.querySelector('[aria-label="Summarize"]')).not.toBeNull();
 
     const assistantRow = container.querySelector(
       '[data-timeline-row-id="assistant_row"]',
     );
+    expect(
+      assistantRow?.querySelectorAll("[data-bb-message-prose-root]").length,
+    ).toBe(1);
     const assistantAction = assistantRow?.querySelector(
       '[aria-label="Summarize"]',
     );
@@ -1341,6 +1393,16 @@ describe("ThreadTimelineRows actions", () => {
     expect(run).toHaveBeenCalledTimes(1);
     const context = run.mock.calls[0]![0];
     expect(context.selectedText).toBe("part of this answer");
+    expect(context.selection).toEqual({
+      version: 1,
+      coordinateSpace: "rendered-text-utf16",
+      start: 7,
+      end: 26,
+      exact: "part of this answer",
+      prefix: "Select ",
+      suffix: ".",
+      rects: [{ x: 10, y: 20, width: 30, height: 8 }],
+    });
     expect(context.message).toEqual({
       id: "selectable_row",
       threadId: "thr_main",
@@ -1350,6 +1412,67 @@ describe("ThreadTimelineRows actions", () => {
     });
     // No panel opener on this surface: openPanel reports false, never throws.
     expect(context.openPanel({ actionId: "panel" })).toBe(false);
+  });
+
+  it("supports selection-only actions on ordinary user message prose", async () => {
+    const run = vi.fn();
+    setPluginSlotRegistrations(
+      "comments",
+      messageActionRegistrationSet([
+        {
+          id: "comment",
+          title: "Comment",
+          placements: ["selection-menu"],
+          run,
+        },
+      ]),
+    );
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(performance.now());
+      return 1;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+
+    const { container } = renderWithRouter(
+      <ThreadTimelineRows
+        threadId="thr_main"
+        timelineRows={[
+          conversationRow({
+            id: "user_selectable",
+            role: "user",
+            text: "Please make this contract explicit.",
+            sourceSeqEnd: 12,
+            threadId: "thr_main",
+          }),
+        ]}
+        threadRuntimeDisplayStatus="idle"
+        workspaceRootPath={undefined}
+      />,
+    );
+    expect(container.querySelector('[aria-label="Comment"]')).toBeNull();
+    const textNode = screen.getByText(
+      "Please make this contract explicit.",
+    ).firstChild;
+    expect(textNode).not.toBeNull();
+    mockWindowSelection({ node: textNode!, text: "this contract" });
+    fireEvent(document, new Event("selectionchange"));
+    const action = await screen.findByRole("button", { name: "Comment" });
+    fireEvent.click(action);
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thr_main",
+        selectedText: "this contract",
+        message: expect.objectContaining({
+          id: "user_selectable",
+          role: "user",
+        }),
+        selection: expect.objectContaining({
+          exact: "this contract",
+          start: 12,
+        }),
+      }),
+    );
   });
 
   it("forces a manually collapsed same-thread search ancestor open", async () => {

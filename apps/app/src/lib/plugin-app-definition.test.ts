@@ -77,6 +77,12 @@ describe("collectPluginAppRegistrations", () => {
         id: "summarize",
         title: "Summarize",
         icon: "Zap",
+        placements: ["selection-menu"],
+        run,
+      });
+      app.slots.experimental_messageAction({
+        id: "legacy",
+        title: "Legacy",
         run,
       });
       app.composer.customize({
@@ -139,7 +145,14 @@ describe("collectPluginAppRegistrations", () => {
       { id: "inline-vis", component: Component },
     ]);
     expect(registrations.messageActions).toEqual([
-      { id: "summarize", title: "Summarize", icon: "Zap", run },
+      {
+        id: "summarize",
+        title: "Summarize",
+        icon: "Zap",
+        placements: ["selection-menu"],
+        run,
+      },
+      { id: "legacy", title: "Legacy", run },
     ]);
     expect(registrations.composerCustomizations).toEqual([
       {
@@ -379,6 +392,19 @@ describe("collectPluginAppRegistrations", () => {
           });
         }),
       /duplicate id "a"/,
+    ],
+    [
+      "invalid message action placement",
+      () =>
+        definePluginApp((app) => {
+          app.slots.experimental_messageAction({
+            id: "bad-placement",
+            title: "Bad placement",
+            placements: ["sidebar" as never],
+            run: () => {},
+          });
+        }),
+      /entries must be "action-bar" or "selection-menu"/,
     ],
     [
       "sidebar footer action missing run",

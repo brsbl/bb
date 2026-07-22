@@ -29,6 +29,7 @@ import type {
   PluginContentScriptRegistration,
   PluginSdkApp,
 } from "@bb/plugin-sdk";
+import { createPluginContentScriptContext } from "./plugin-content-script-context.js";
 import { resetCrashedPluginSlots } from "@/components/plugin/PluginSlotMount";
 import {
   collectPluginAppRegistrations,
@@ -482,11 +483,13 @@ async function mountWithTimeout(
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
   const mountPromise = Promise.resolve().then(() =>
-    registration.mount({
-      pluginId,
-      generation,
-      signal: controller.signal,
-    }),
+    registration.mount(
+      createPluginContentScriptContext({
+        pluginId,
+        generation,
+        signal: controller.signal,
+      }),
+    ),
   );
   const timeoutMs =
     deps.mountTimeoutMs ?? DEFAULT_CONTENT_SCRIPT_MOUNT_TIMEOUT_MS;

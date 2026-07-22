@@ -247,6 +247,29 @@ export function collectPluginAppRegistrations(
         if (typeof registration.run !== "function") {
           throw new Error(`${kind}: "run" must be a function`);
         }
+        const rawPlacements = registration.placements;
+        let placements: ("action-bar" | "selection-menu")[] | undefined;
+        if (rawPlacements !== undefined) {
+          if (!Array.isArray(rawPlacements) || rawPlacements.length === 0) {
+            throw new Error(
+              `${kind}: "placements" must be a non-empty array when set`,
+            );
+          }
+          placements = [];
+          for (const placement of rawPlacements) {
+            if (placement !== "action-bar" && placement !== "selection-menu") {
+              throw new Error(
+                `${kind}: "placements" entries must be "action-bar" or "selection-menu"`,
+              );
+            }
+            if (placements.includes(placement)) {
+              throw new Error(
+                `${kind}: "placements" must not contain duplicates`,
+              );
+            }
+            placements.push(placement);
+          }
+        }
         messageActions.push({
           id,
           title: requireNonEmptyString(kind, "title", registration.title),
@@ -255,6 +278,7 @@ export function collectPluginAppRegistrations(
                 icon: requireNonEmptyString(kind, "icon", registration.icon),
               }
             : {}),
+          ...(placements !== undefined ? { placements } : {}),
           run: registration.run,
         });
       },

@@ -86,6 +86,8 @@ export interface ConversationMessageContentUserProps extends ConversationMessage
   initiator: TimelineUserConversationRow["initiator"];
   mentions: readonly PromptTextMention[];
   onAddToChat?: ThreadTimelineAddToChatHandler;
+  /** Reports selections from ordinary user-authored message prose. */
+  onSelectProse?: (selection: MessageProseSelection | null) => void;
   resolveMentionLink?: PromptMentionLinkResolver;
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
   onOpenLink?: ThreadTimelineLinkHandler;
@@ -192,6 +194,7 @@ interface UserConversationMessageProps {
   mentions: readonly PromptTextMention[];
   mobileActionDisplay: "inline" | "overflow";
   onAddToChat?: ThreadTimelineAddToChatHandler;
+  onSelectProse?: (selection: MessageProseSelection | null) => void;
   onOpenLink?: ThreadTimelineLinkHandler;
   onOpenLocalFileLink?: ThreadTimelineLocalFileLinkHandler;
   projectId?: string;
@@ -385,6 +388,7 @@ function UserConversationMessage({
   mentions,
   mobileActionDisplay,
   onAddToChat,
+  onSelectProse,
   onOpenLink,
   onOpenLocalFileLink,
   pluginActions = [],
@@ -484,14 +488,16 @@ function UserConversationMessage({
         ) : null}
         <div className="rounded-xl border border-border-seam bg-surface-recessed px-4 py-2.5 text-sm leading-relaxed text-foreground">
           {messageText ? (
-            <CollapsibleMessageText
-              mentions={mentions}
-              resolveMentionLink={resolveMentionLink}
-              resolveSegmentLinkHref={resolveSegmentLinkHref}
-              onOpenLink={onOpenLink}
-              text={text}
-              mutePrefixLength={mutePrefixLength || undefined}
-            />
+            <SelectableMessageProse onSelect={onSelectProse}>
+              <CollapsibleMessageText
+                mentions={mentions}
+                resolveMentionLink={resolveMentionLink}
+                resolveSegmentLinkHref={resolveSegmentLinkHref}
+                onOpenLink={onOpenLink}
+                text={text}
+                mutePrefixLength={mutePrefixLength || undefined}
+              />
+            </SelectableMessageProse>
           ) : (
             <p className="text-muted-foreground">Sent attachments</p>
           )}
@@ -727,6 +733,7 @@ export function ConversationMessageContent(
         mentions={props.mentions}
         mobileActionDisplay={props.mobileActionDisplay ?? "overflow"}
         onAddToChat={props.onAddToChat}
+        onSelectProse={props.onSelectProse}
         onOpenLink={props.onOpenLink}
         onOpenLocalFileLink={onOpenLocalFileLink}
         projectId={projectId}

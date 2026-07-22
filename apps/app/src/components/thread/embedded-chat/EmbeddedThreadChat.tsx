@@ -256,15 +256,21 @@ function EmbeddedThreadChatHostedFooter({
   scrollOverlay,
   surface,
 }: EmbeddedThreadChatHostedFooterProps) {
+  const exposePluginTimelineHooks =
+    surface.includePluginMessageActions !== false;
   return (
     <div
       data-thread-window=""
+      data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-clip"
     >
       <PageShell
         key={threadId}
         scrollBehavior="bottom-anchor"
         scrollAnchorThreadId={threadId}
+        pluginThreadScrollRootId={
+          exposePluginTimelineHooks ? threadId : undefined
+        }
         shellClassName="!mx-0 !mt-0 md:!mx-0 md:!mt-0"
         contentClassName="gap-2 pt-4"
         footerClassName="chat-prompt-box"
@@ -300,6 +306,8 @@ function EmbeddedThreadChatWithComposer({
 }: EmbeddedThreadChatComposerModeProps) {
   const labels = { ...DEFAULT_LABELS, ...labelOverrides };
   const surfaceKey = threadId ?? surfaceFallbackKey ?? "embedded-thread-chat";
+  const exposePluginTimelineHooks =
+    threadId !== null && includePluginMessageActions !== false;
   const markThreadRead = useMarkThreadRead();
   const stopThread = useStopThread();
   const sendThreadMessage = useSendThreadMessage();
@@ -1162,6 +1170,7 @@ function EmbeddedThreadChatWithComposer({
       <div
         key={surfaceKey}
         data-thread-window=""
+        data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
         className="flex min-w-0 flex-col bg-background"
       >
         <div
@@ -1179,7 +1188,11 @@ function EmbeddedThreadChatWithComposer({
   }
 
   return (
-    <div data-thread-window="" className="flex min-h-0 flex-1 flex-col">
+    <div
+      data-thread-window=""
+      data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
+      className="flex min-h-0 flex-1 flex-col"
+    >
       <BottomAnchoredScrollBody
         key={surfaceKey}
         scrollAreaClassName="bg-background"
@@ -1189,6 +1202,9 @@ function EmbeddedThreadChatWithComposer({
         maxWidthClassName={maxWidthClassName}
         footer={footer}
         scrollAnchorThreadId={threadId ?? undefined}
+        pluginThreadScrollRootId={
+          exposePluginTimelineHooks ? threadId : undefined
+        }
       >
         {timelineBody}
       </BottomAnchoredScrollBody>

@@ -810,8 +810,12 @@ compatible ESM bundle.
 
 The host mounts scripts in registration order after the bundle loads and
 `definePluginApp` setup validates. `mount` receives
-`{ pluginId, generation, signal }`: `generation` is a monotonic per-window
-mount attempt number, and `signal` aborts before cleanup starts. A script may
+`{ pluginId, generation, signal, rpc, realtime, navigate }`: `generation` is
+a monotonic per-window mount attempt number, and `signal` aborts before cleanup
+starts. `rpc.call(...)` uses the plugin's validated RPC contract; `realtime`
+supplies signal subscriptions plus connection-state observation; and
+`navigate.toCompose(...)` opens a new-thread composer. Every realtime
+subscription returns a disposer and is also tied to `signal`. A script may
 return nothing, a disposer, or a promise of either; async mount setup is
 time-boxed to 10 seconds. Keep long-running work outside the returned promise,
 observe `signal`, and catch failures in work the host does not await.
@@ -882,7 +886,11 @@ Slot props contracts (versioned, additive-only):
   `{ id, title, icon?, component, layout?, run? }`. Activating it calls
   `run({ threadId, openPanel })` — do anything there (rpc, toast), and/or
   call `openPanel({ title?, params? })` to open a closable panel tab
-  rendering `component` with `{ threadId: string, params: JsonValue | null }`.
+  rendering `component` with
+  `{ threadId: string, params: JsonValue | null, revealMessage }`.
+  `revealMessage(messageId)` loads and centers a native user or assistant
+  message in that thread, resolving `"revealed"` only after its canonical
+  prose root mounts and `"missing"` when the message is unavailable.
   Omitting `run` opens a tab immediately with defaults. Write parameters are
   typed as the recursively JSON-safe `JsonValue` exported by both
   `@bb/plugin-sdk` and `@bb/plugin-sdk/app`; they persist with the tab across reloads (null when
@@ -961,14 +969,19 @@ openWorkspaceFile }` — register a leaf
   `plugins/inline-vis` (the sidebar's path-shaped, sandboxed worktree
   iframe preview, including relative assets and normal web loading).
 - `experimental_messageAction` → an action on chat messages: an icon button in the
-  per-message action bar (user and assistant messages) and an entry in the
-  assistant-message text-selection menu. Host-rendered chrome, no plugin
-  component — registration: `{ id, title, icon?, run }`. Activating it calls
-  `run(context)` with `{ threadId, message, selectedText?, openPanel }`:
+  per-message action bar and an entry in the text-selection menu for supported
+  user and assistant prose. Host-rendered chrome, no plugin component —
+  registration: `{ id, title, icon?, placements?, run }`. `placements` accepts
+  `"action-bar"` and/or `"selection-menu"`; omission preserves both legacy
+  placements. Activating it calls `run(context)` with
+  `{ threadId, message, selectedText?, selection?, openPanel }`:
   `message` is a narrow stable reference
   `{ id, threadId, role: "user" | "assistant", text, sourceSeqEnd }` (never
-  an internal timeline row); `selectedText` is present only for
-  selection-menu invocations and holds the exact highlighted text; and
+  an internal timeline row); `selectedText` and `selection` are present only
+  for selection-menu invocations. `selectedText` holds the exact highlighted
+  text. `selection` adds rendered-text UTF-16 offsets, up to 32 code units of
+  prefix/suffix context, and viewport line-fragment rectangles across nested
+  Markdown nodes; and
   `openPanel({ actionId, title?, params? })` opens one of the same plugin's
   registered `threadPanelAction` components in the current thread's side
   panel — same semantics and boolean return as
