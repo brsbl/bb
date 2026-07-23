@@ -198,7 +198,11 @@ describe("SideChatPanel", () => {
   it("renders ThreadChat with the ReplyingTo header and send-to-main action", () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_src", params },
+      {
+        threadId: "thr_src",
+        params,
+        experimental_revealMessage: async () => "missing",
+      },
       { rpc: {} },
     );
 
@@ -223,7 +227,11 @@ describe("SideChatPanel", () => {
     const sendToMain = vi.fn(() => ({ ok: true }));
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_src", params },
+      {
+        threadId: "thr_src",
+        params,
+        experimental_revealMessage: async () => "missing",
+      },
       { rpc: { sendToMain } },
     );
 
@@ -243,11 +251,14 @@ describe("SideChatPanel", () => {
     });
   });
 
-
   it("reports a missing thread reference for malformed params", () => {
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_src", params: { bogus: true } },
+      {
+        threadId: "thr_src",
+        params: { bogus: true },
+        experimental_revealMessage: async () => "missing",
+      },
       { rpc: {} },
     );
     expect(slot.getByRole("alert").textContent).toContain(
