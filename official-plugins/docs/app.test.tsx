@@ -781,6 +781,7 @@ describe("Docs nav panel", () => {
           path: "plans/release.md",
           title: "Release plan",
         },
+        experimental_revealMessage: async () => "missing",
       },
       {
         rpc: {

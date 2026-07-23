@@ -569,7 +569,11 @@ describe("workflow thread panel", () => {
     let stopped = false;
     const slot = renderSlot(
       app.threadPanelActions[0]!,
-      { threadId: "thr_origin", params: { runId: run.id } },
+      {
+        threadId: "thr_origin",
+        params: { runId: run.id },
+        experimental_revealMessage: async () => "missing",
+      },
       {
         rpc: {
           workflowRunView: () => ({
@@ -614,6 +618,7 @@ describe("workflow thread panel", () => {
       {
         threadId: "thr_origin",
         params: { runId: run.id, unexpected: true },
+        experimental_revealMessage: async () => "missing",
       },
       { rpc: {} },
     );
