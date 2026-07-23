@@ -281,9 +281,8 @@ interface PluginPendingInteractionRegistration {
 /** Context handed to a `sidebarFooterAction`'s `run`. */
 interface PluginSidebarFooterActionContext {
     /**
-     * Navigate to this plugin's Settings detail page
-     * (`/settings/plugins/<pluginId>`), where declarative settings and
-     * `settingsSection` slots render.
+     * Navigate to this plugin's detail page in Tools, where declarative settings
+     * and `settingsSection` slots render.
      */
     openSettings(): void;
 }
@@ -617,8 +616,12 @@ interface PluginComposerThreadRowStatus {
     icon: string;
     /** Accessible label for the status glyph. */
     label: string;
-    /** Semantic host color for the status glyph. Defaults to the neutral tone. */
-    tone?: "default" | "success";
+    /**
+     * Semantic host treatment for the status glyph. `running` automatically
+     * shimmers; terminal `success` and `error` tones are static. Defaults to the
+     * neutral tone.
+     */
+    tone?: "default" | "running" | "success" | "error";
 }
 /** An @-mention pill bound to one of the calling plugin's mention providers. */
 interface PluginComposerMention {

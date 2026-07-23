@@ -49,13 +49,13 @@ export function promptMentionIconName(
   resource: PromptMentionResource,
 ): IconName | null {
   if (resource.kind === "thread") {
-    return "MessageSquare";
+    return "UserRound";
   }
   if (resource.kind === "project") {
     return "Folder";
   }
   if (resource.kind === "section") {
-    return null;
+    return "SectionAdd";
   }
   if (resource.kind === "command") {
     return promptCommandIconName(resource);
@@ -77,9 +77,6 @@ export function promptCommandIconName(command: PromptCommandLike): IconName {
   }
   if (command.name === "goal") {
     return "Target";
-  }
-  if (command.name === "loop") {
-    return "Repeat";
   }
   return "Terminal";
 }

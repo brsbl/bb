@@ -624,14 +624,21 @@ function Row({
     queuedMessageId: string;
     queuedMessageIndex: number;
   } | null>(null);
-  const [composerTarget, setComposerTarget] = useState<HTMLDivElement | null>(
-    null,
-  );
+  const resolvedPlaceholder =
+    promptPlaceholder ??
+    getFollowUpPromptPlaceholder(threadRuntimeDisplayStatus);
+  const resolvedCompactPlaceholder =
+    promptPlaceholder ??
+    getCompactFollowUpPromptPlaceholder(threadRuntimeDisplayStatus);
   const handleChangeMessage = (
     nextMessage: string,
     nextMentions: PromptTextMention[],
   ) => {
-    if (inlineEditingQueuedMessage) {
+    setMessage(nextMessage);
+    setMentionRanges(nextMentions);
+  };
+  const handleChangeInlineMessage = useCallback(
+    (nextMessage: string, nextMentions: PromptTextMention[]) => {
       setInlineEditingQueuedMessage((current) =>
         current
           ? {
@@ -644,13 +651,10 @@ function Row({
             }
           : current,
       );
-      return;
-    }
-    setMessage(nextMessage);
-    setMentionRanges(nextMentions);
-  };
+    },
+    [],
+  );
   const dismissInlineEditor = useCallback(() => {
-    setComposerTarget(null);
     setInlineEditingQueuedMessage(null);
   }, []);
   const handleEditQueuedMessage = useCallback(
@@ -667,24 +671,6 @@ function Row({
     },
     [storyQueuedMessages],
   );
-  const inlineEditor = useMemo<QueuedMessageInlineEditor | undefined>(
-    () =>
-      inlineEditingQueuedMessage
-        ? {
-            queuedMessageId: inlineEditingQueuedMessage.queuedMessageId,
-            queuedMessageIndex: inlineEditingQueuedMessage.queuedMessageIndex,
-            ready: true,
-            onComposerTargetChange: setComposerTarget,
-            onDismiss: dismissInlineEditor,
-          }
-        : undefined,
-    [dismissInlineEditor, inlineEditingQueuedMessage],
-  );
-  const activeDraft = inlineEditingQueuedMessage?.draft ?? {
-    text: message,
-    mentions: mentionRanges,
-    attachments: [],
-  };
   const handleSubmit = useCallback(() => {
     if (!inlineEditingQueuedMessage) return;
     const input = promptDraftToInput(inlineEditingQueuedMessage.draft);
@@ -698,6 +684,63 @@ function Row({
     );
     dismissInlineEditor();
   }, [dismissInlineEditor, inlineEditingQueuedMessage]);
+  const inlineEditor = useMemo<QueuedMessageInlineEditor | undefined>(
+    () =>
+      inlineEditingQueuedMessage
+        ? {
+            queuedMessageId: inlineEditingQueuedMessage.queuedMessageId,
+            queuedMessageIndex: inlineEditingQueuedMessage.queuedMessageIndex,
+            content: (
+              <FollowUpPromptBox
+                attachments={attachmentsBase}
+                stack={null}
+                composer={{
+                  history: {
+                    currentDraft: inlineEditingQueuedMessage.draft,
+                    entries: [],
+                    onSelectEntry: noop,
+                  },
+                  isFollowUpSubmitting: false,
+                  message: inlineEditingQueuedMessage.draft.text,
+                  mentionRanges: inlineEditingQueuedMessage.draft.mentions,
+                  onChangeMessage: handleChangeInlineMessage,
+                  onModifierSubmit: handleSubmit,
+                  onSubmit: handleSubmit,
+                  compactPromptPlaceholder: resolvedCompactPlaceholder,
+                  promptPlaceholder: resolvedPlaceholder,
+                  canModifierSubmit: true,
+                  submitMode: { kind: "ready" },
+                  threadRuntimeDisplayStatus,
+                }}
+                environmentSummary={null}
+                contextWindowUsage={null}
+                execution={execution}
+                executionReadOnly
+                permission={permission}
+                permissionReadOnly
+                promptActions={promptActions}
+                typeahead={typeaheadBase}
+                zenModeResetKey={`${zenModeResetKey}:queued-message`}
+                isPrimaryComposer={false}
+                showScrollToBottomButton={false}
+              />
+            ),
+            onDismiss: dismissInlineEditor,
+          }
+        : undefined,
+    [
+      dismissInlineEditor,
+      execution,
+      handleChangeInlineMessage,
+      handleSubmit,
+      inlineEditingQueuedMessage,
+      permission,
+      resolvedCompactPlaceholder,
+      resolvedPlaceholder,
+      threadRuntimeDisplayStatus,
+      zenModeResetKey,
+    ],
+  );
   const queueElement =
     initialQueuedMessages === undefined ? null : (
       <QueuedMessagesList
@@ -730,12 +773,6 @@ function Row({
   ) : (
     stack
   );
-  const resolvedPlaceholder =
-    promptPlaceholder ??
-    getFollowUpPromptPlaceholder(threadRuntimeDisplayStatus);
-  const resolvedCompactPlaceholder =
-    promptPlaceholder ??
-    getCompactFollowUpPromptPlaceholder(threadRuntimeDisplayStatus);
   return (
     <PromptStage>
       <FollowUpPromptBox
@@ -746,28 +783,27 @@ function Row({
             ? null
             : {
                 history: {
-                  currentDraft: activeDraft,
-                  entries: inlineEditingQueuedMessage ? [] : historyEntries,
+                  currentDraft: {
+                    text: message,
+                    mentions: mentionRanges,
+                    attachments: [],
+                  },
+                  entries: historyEntries,
                   onSelectEntry: noop,
                 },
                 isFollowUpSubmitting,
-                message: activeDraft.text,
-                mentionRanges: activeDraft.mentions,
+                message,
+                mentionRanges,
                 onChangeMessage: handleChangeMessage,
-                onModifierSubmit: handleSubmit,
-                onSubmit: handleSubmit,
+                onModifierSubmit: noop,
+                onSubmit: noop,
                 compactPromptPlaceholder: resolvedCompactPlaceholder,
                 promptPlaceholder: resolvedPlaceholder,
-                canModifierSubmit: inlineEditingQueuedMessage
-                  ? true
-                  : submitMode.kind === "queue",
-                submitMode: inlineEditingQueuedMessage
-                  ? { kind: "ready" }
-                  : submitMode,
+                canModifierSubmit: submitMode.kind === "queue",
+                submitMode,
                 threadRuntimeDisplayStatus,
               }
         }
-        composerTarget={composerTarget}
         environmentSummary={environmentSummary}
         contextWindowUsage={contextWindowUsage}
         execution={execution}

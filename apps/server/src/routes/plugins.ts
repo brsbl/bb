@@ -389,25 +389,22 @@ export function registerPluginRoutes(
       return context.json(DISABLED, 422);
     }
     const file = context.req.param("file");
-    // The plugin's explicit bb.branding.logo light/dark assets: same
-    // hash-busting cache policy and live-runtime gating as the bundle assets.
-    if (file === "logo" || file === "logo-dark") {
-      const logo = plugins.getLogoAsset(context.req.param("id"), file);
-      if (!logo) {
-        return context.json({ ok: false, error: "plugin has no logo" }, 404);
-      }
-      let bytes: Buffer;
-      try {
-        bytes = await readFile(logo.path);
-      } catch {
-        return context.json({ ok: false, error: "logo file missing" }, 404);
+    // Explicit plugin branding assets: same hash-busting cache policy as the
+    // bundle assets, but identity-backed so disabled plugins remain legible.
+    if (file === "icon" || file === "logo" || file === "logo-dark") {
+      const asset = plugins.getBrandingAsset(context.req.param("id"), file);
+      if (!asset) {
+        return context.json(
+          { ok: false, error: "plugin has no requested branding asset" },
+          404,
+        );
       }
       const cacheControl =
-        context.req.query("h") === logo.hash
+        context.req.query("h") === asset.hash
           ? "public, max-age=31536000, immutable"
           : "no-store";
-      return context.body(new Uint8Array(bytes), 200, {
-        "content-type": logo.contentType,
+      return context.body(new Uint8Array(asset.bytes), 200, {
+        "content-type": asset.contentType,
         "cache-control": cacheControl,
       });
     }
@@ -623,10 +620,20 @@ export function registerPluginRoutes(
   });
 
   app.delete("/plugins/:id", async (context) => {
-    if (!gateAllowsPlugin(context.req.param("id"))) {
+    const id = context.req.param("id");
+    if (!gateAllowsPlugin(id)) {
       return context.json(DISABLED, 422);
     }
-    const removed = await plugins.remove(context.req.param("id"));
+    if (plugins.isBuiltin(id)) {
+      return context.json(
+        {
+          ok: false,
+          error: "Built-in plugins can be disabled, but not deleted.",
+        },
+        409,
+      );
+    }
+    const removed = await plugins.remove(id);
     if (!removed)
       return context.json({ ok: false, error: "unknown plugin" }, 404);
     return context.json({ ok: true });

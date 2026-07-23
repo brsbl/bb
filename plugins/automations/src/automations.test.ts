@@ -1,4 +1,12 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
@@ -21,9 +29,13 @@ import {
   computeNextScheduledTime,
   validateOnceDefinition,
 } from "./schedule-helpers.js";
-import { isWakeAgentSuppressed, mapScriptResultToRun } from "./script-runner.js";
+import {
+  isWakeAgentSuppressed,
+  mapScriptResultToRun,
+} from "./script-runner.js";
 import { sweepDueAutomations } from "./sweep.js";
 import { createAutomationService } from "./service.js";
+import { automationScriptDir } from "./script-files.js";
 
 function createTestDb(): Db {
   const db = new Database(":memory:");
@@ -84,6 +96,58 @@ function createOnceAutomation(db: Db, nextRunAt: number, id = "auto_once") {
     createdByThreadId: null,
     nextRunAt,
   });
+}
+
+function oneShotTrigger() {
+  return { triggerType: "once" as const, runAt: Date.now() + 60_000 };
+}
+
+function createAutomationServiceBb() {
+  return {
+    sdk: {
+      projects: {
+        get: async ({ projectId }: { projectId: string }) => ({
+          id: projectId,
+          kind: "standard" as const,
+          name: "Test Project",
+          gitRemoteUrl: null,
+          createdAt: 1,
+          updatedAt: 1,
+          sources: [],
+        }),
+        list: async () => [],
+      },
+      providers: {
+        list: async () =>
+          [
+            {
+              id: "codex",
+              capabilities: {
+                supportedPermissionModes: ["accept-edits", "auto", "full"],
+              },
+            },
+          ] as never,
+      },
+      threads: {
+        get: async () => {
+          throw new Error("not expected");
+        },
+        send: async () => {
+          throw new Error("not expected");
+        },
+        spawn: async () => {
+          throw new Error("not expected");
+        },
+      },
+    },
+    realtime: { publish: () => undefined },
+    log: {
+      debug: () => undefined,
+      error: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+    },
+  };
 }
 
 describe("data migrations", () => {
@@ -179,7 +243,9 @@ describe("automation data access", () => {
     });
     expect(first.advanced).toBe(true);
     expect(second.advanced).toBe(false);
-    expect(listAutomationRuns(db, { automationId: "auto_test", limit: 10 })).toHaveLength(1);
+    expect(
+      listAutomationRuns(db, { automationId: "auto_test", limit: 10 }),
+    ).toHaveLength(1);
   });
 
   it("rolls schedule state back after dispatch failure", () => {
@@ -281,7 +347,9 @@ describe("automation data access", () => {
     });
 
     expect(getAutomation(db, automation.id)?.runCount).toBe(0);
-    expect(listAutomationRuns(db, { automationId: automation.id, limit: 10 })).toHaveLength(0);
+    expect(
+      listAutomationRuns(db, { automationId: automation.id, limit: 10 }),
+    ).toHaveLength(0);
   });
 
   it("dedupes manual runs by idempotency key", () => {
@@ -339,6 +407,12 @@ describe("automation service", () => {
           },
           list: async () => [],
         },
+        providers: {
+          list: async () => [],
+        },
+        threadSections: {
+          list: async () => [],
+        },
         threads: {
           get: async () => {
             throw new Error("not expected");
@@ -385,12 +459,227 @@ describe("automation service", () => {
     ).rejects.toThrow("Project proj_missing is not available");
     expect(listAutomationsForProject(db, "proj_missing")).toHaveLength(0);
   });
+
+  it("removes a stored script directory after switching to agent execution", async () => {
+    const db = createTestDb();
+    const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-service-"));
+    const automation = createAutomation(db, {
+      id: "auto_script_to_agent",
+      projectId: "proj_test",
+      name: "Script to agent",
+      enabled: true,
+      trigger: oneShotTrigger(),
+      runMode: "script",
+      execution: {
+        mode: "script",
+        scriptFile: "old.sh",
+        timeoutMs: 120_000,
+      },
+      origin: "human",
+      createdByThreadId: null,
+      nextRunAt: Date.now() + 60_000,
+    });
+    const scriptDir = automationScriptDir(pluginDataDir, automation.id);
+    await mkdir(scriptDir, { recursive: true });
+    await writeFile(join(scriptDir, "old.sh"), "echo old\n");
+    const service = createAutomationService({
+      bb: createAutomationServiceBb(),
+      db,
+      pluginDataDir,
+      serverUrl: "http://127.0.0.1:38886",
+    });
+
+    try {
+      await service.update({
+        projectId: "proj_test",
+        automationId: automation.id,
+        execution: {
+          mode: "agent",
+          prompt: "do it",
+          providerId: "codex",
+          model: "gpt-5",
+          permissionMode: "accept-edits",
+          environment: { type: "project-default" },
+        },
+      });
+
+      await expect(access(scriptDir)).rejects.toThrow();
+    } finally {
+      await rm(pluginDataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes only a superseded stored script file after a filename change", async () => {
+    const db = createTestDb();
+    const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-service-"));
+    const automation = createAutomation(db, {
+      id: "auto_script_rename",
+      projectId: "proj_test",
+      name: "Script rename",
+      enabled: true,
+      trigger: oneShotTrigger(),
+      runMode: "script",
+      execution: {
+        mode: "script",
+        scriptFile: "old.sh",
+        timeoutMs: 120_000,
+      },
+      origin: "human",
+      createdByThreadId: null,
+      nextRunAt: Date.now() + 60_000,
+    });
+    const scriptDir = automationScriptDir(pluginDataDir, automation.id);
+    await mkdir(scriptDir, { recursive: true });
+    await writeFile(join(scriptDir, "old.sh"), "echo old\n");
+    await writeFile(join(scriptDir, "keep.txt"), "keep\n");
+    const service = createAutomationService({
+      bb: createAutomationServiceBb(),
+      db,
+      pluginDataDir,
+      serverUrl: "http://127.0.0.1:38886",
+    });
+
+    try {
+      await service.update({
+        projectId: "proj_test",
+        automationId: automation.id,
+        execution: {
+          mode: "script",
+          script: "echo new\n",
+          scriptFile: "new.sh",
+          timeoutMs: 120_000,
+        },
+      });
+
+      await expect(access(join(scriptDir, "old.sh"))).rejects.toThrow();
+      await expect(readFile(join(scriptDir, "new.sh"), "utf8")).resolves.toBe(
+        "echo new\n",
+      );
+      await expect(readFile(join(scriptDir, "keep.txt"), "utf8")).resolves.toBe(
+        "keep\n",
+      );
+    } finally {
+      await rm(pluginDataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes a newly staged filename when the database update fails", async () => {
+    const db = createTestDb();
+    const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-service-"));
+    const automation = createAutomation(db, {
+      id: "auto_script_rollback",
+      projectId: "proj_test",
+      name: "Script rollback",
+      enabled: true,
+      trigger: oneShotTrigger(),
+      runMode: "script",
+      execution: {
+        mode: "script",
+        scriptFile: "old.sh",
+        timeoutMs: 120_000,
+      },
+      origin: "human",
+      createdByThreadId: null,
+      nextRunAt: Date.now() + 60_000,
+    });
+    const scriptDir = automationScriptDir(pluginDataDir, automation.id);
+    await mkdir(scriptDir, { recursive: true });
+    await writeFile(join(scriptDir, "old.sh"), "echo old\n");
+    db.exec(`CREATE TRIGGER reject_automation_update
+      BEFORE UPDATE ON automations
+      BEGIN
+        SELECT RAISE(ABORT, 'update rejected');
+      END`);
+    const service = createAutomationService({
+      bb: createAutomationServiceBb(),
+      db,
+      pluginDataDir,
+      serverUrl: "http://127.0.0.1:38886",
+    });
+
+    try {
+      await expect(
+        service.update({
+          projectId: "proj_test",
+          automationId: automation.id,
+          execution: {
+            mode: "script",
+            script: "echo new\n",
+            scriptFile: "new.sh",
+            timeoutMs: 120_000,
+          },
+        }),
+      ).rejects.toThrow("update rejected");
+      await expect(readFile(join(scriptDir, "old.sh"), "utf8")).resolves.toBe(
+        "echo old\n",
+      );
+      await expect(access(join(scriptDir, "new.sh"))).rejects.toThrow();
+    } finally {
+      await rm(pluginDataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not overwrite the active filename when the database update fails", async () => {
+    const db = createTestDb();
+    const pluginDataDir = await mkdtemp(join(tmpdir(), "bb-auto-service-"));
+    const automation = createAutomation(db, {
+      id: "auto_script_same_name_rollback",
+      projectId: "proj_test",
+      name: "Script same-name rollback",
+      enabled: true,
+      trigger: oneShotTrigger(),
+      runMode: "script",
+      execution: {
+        mode: "script",
+        scriptFile: "old.sh",
+        timeoutMs: 120_000,
+      },
+      origin: "human",
+      createdByThreadId: null,
+      nextRunAt: Date.now() + 60_000,
+    });
+    const scriptDir = automationScriptDir(pluginDataDir, automation.id);
+    await mkdir(scriptDir, { recursive: true });
+    await writeFile(join(scriptDir, "old.sh"), "echo old\n");
+    db.exec(`CREATE TRIGGER reject_automation_update
+      BEFORE UPDATE ON automations
+      BEGIN
+        SELECT RAISE(ABORT, 'update rejected');
+      END`);
+    const service = createAutomationService({
+      bb: createAutomationServiceBb(),
+      db,
+      pluginDataDir,
+      serverUrl: "http://127.0.0.1:38886",
+    });
+
+    try {
+      await expect(
+        service.update({
+          projectId: "proj_test",
+          automationId: automation.id,
+          execution: {
+            mode: "script",
+            script: "echo replacement\n",
+            scriptFile: "old.sh",
+            timeoutMs: 120_000,
+          },
+        }),
+      ).rejects.toThrow("update rejected");
+      await expect(readFile(join(scriptDir, "old.sh"), "utf8")).resolves.toBe(
+        "echo old\n",
+      );
+      await expect(readdir(scriptDir)).resolves.toEqual(["old.sh"]);
+    } finally {
+      await rm(pluginDataDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("script wake gate", () => {
   it("suppresses only a trailing wakeAgent false object", () => {
-    expect(isWakeAgentSuppressed("hello\n{\"wakeAgent\": false}\n")).toBe(true);
-    expect(isWakeAgentSuppressed("{\"wakeAgent\": true}\n")).toBe(false);
+    expect(isWakeAgentSuppressed('hello\n{"wakeAgent": false}\n')).toBe(true);
+    expect(isWakeAgentSuppressed('{"wakeAgent": true}\n')).toBe(false);
     expect(isWakeAgentSuppressed("not json\n")).toBe(false);
   });
 
@@ -401,7 +690,7 @@ describe("script wake gate", () => {
     expect(
       mapScriptResultToRun({
         exitCode: 0,
-        output: "nothing\n{\"wakeAgent\": false}",
+        output: 'nothing\n{"wakeAgent": false}',
         timedOut: false,
       }),
     ).toMatchObject({ status: "skipped", skipReason: "wakeAgent false" });

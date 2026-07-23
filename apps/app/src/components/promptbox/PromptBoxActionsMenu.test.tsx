@@ -173,6 +173,7 @@ describe("PromptBoxActionsMenu", () => {
           {
             displayName: "Alpha Assistant",
             icon: null,
+            compactIconUrl: null,
             logoUrl: null,
             logoDarkUrl: null,
           },
@@ -182,6 +183,7 @@ describe("PromptBoxActionsMenu", () => {
           {
             displayName: "Zeta Writer",
             icon: null,
+            compactIconUrl: null,
             logoUrl: null,
             logoDarkUrl: null,
           },

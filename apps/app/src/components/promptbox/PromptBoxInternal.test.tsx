@@ -1770,6 +1770,7 @@ describe("PromptBoxInternal mention triggers", () => {
           {
             displayName: "GitHub",
             icon: null,
+            compactIconUrl: null,
             logoUrl: "/api/v1/plugins/github/assets/logo?h=abc",
             logoDarkUrl: null,
           },
@@ -2213,6 +2214,41 @@ describe("PromptBoxInternal prompt actions", () => {
           source: "command",
           origin: "user",
           label: "automation",
+          argumentHint: null,
+        },
+      },
+    ]);
+  });
+
+  it("selects a slash typeahead command as a command pill", async () => {
+    const { changes, promptBoxRef } = renderPromptBox("/re", {
+      commandSuggestions: [
+        {
+          kind: "command",
+          name: "review",
+          source: "command",
+          origin: "user",
+          description: null,
+          argumentHint: null,
+        },
+      ],
+    });
+
+    await focusPromptEnd(promptBoxRef);
+    await selectCommandSuggestion("review");
+
+    await waitFor(() => expect(latestValue(changes)).toBe("/review "));
+    expect(latestChange(changes)?.mentions).toEqual([
+      {
+        start: 0,
+        end: "/review".length,
+        resource: {
+          kind: "command",
+          trigger: "/",
+          name: "review",
+          source: "command",
+          origin: "user",
+          label: "review",
           argumentHint: null,
         },
       },

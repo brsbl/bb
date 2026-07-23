@@ -7,6 +7,7 @@ import { resolveDataDirSkillsRootPath } from "@bb/config/skill-storage-paths";
 import type { HostDaemonInjectedSkillSource } from "@bb/host-daemon-contract";
 import { z } from "zod";
 import type { ServerLogger } from "../../types.js";
+import { REGISTRY_SKILL_PROVENANCE_FILE_NAME } from "./registry-skill-provenance.js";
 
 const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
@@ -91,6 +92,13 @@ export type SkillCatalogProvenance =
 export interface ResolvedSkillCatalogEntry {
   provenance: SkillCatalogProvenance;
   runtimeSource: HostDaemonInjectedSkillSource;
+}
+
+export interface ResolveServerOwnedSkillCatalogEntriesArgs {
+  builtinSkillsRootPath: string;
+  dataDir: string;
+  logger: ServerLogger;
+  skillTreeRegistry: SkillTreeRegistry;
 }
 
 export type ProjectInjectedSkillSource = Extract<
@@ -212,6 +220,12 @@ function collectSkillTreeEntries(
   for (const entry of fs
     .readdirSync(currentPath, { withFileTypes: true })
     .sort(sortDirentsByName)) {
+    if (
+      currentPath === rootPath &&
+      entry.name === REGISTRY_SKILL_PROVENANCE_FILE_NAME
+    ) {
+      continue;
+    }
     const entryPath = path.join(currentPath, entry.name);
     const stat = fs.lstatSync(entryPath);
     if (stat.isSymbolicLink()) {
@@ -509,6 +523,36 @@ function readSkillsRoot(
   }
 
   return sources;
+}
+
+/**
+ * Resolve the two roots whose lifecycle is owned by the server process. Unlike
+ * runtime catalog resolution, this intentionally preserves both rows when a
+ * user skill shadows a built-in: the management surface describes installed
+ * resources, while runtime precedence is applied separately.
+ */
+export function resolveServerOwnedSkillCatalogEntries(
+  args: ResolveServerOwnedSkillCatalogEntriesArgs,
+): ResolvedSkillCatalogEntry[] {
+  const builtin = readSkillsRoot({
+    logger: args.logger,
+    skillTreeRegistry: args.skillTreeRegistry,
+    skillsRootPath: args.builtinSkillsRootPath,
+    sourceType: "builtin",
+  }).map((runtimeSource) => ({
+    provenance: { kind: "builtin" } as const,
+    runtimeSource,
+  }));
+  const user = readSkillsRoot({
+    logger: args.logger,
+    skillTreeRegistry: args.skillTreeRegistry,
+    skillsRootPath: resolveDataDirSkillsRootPath(args.dataDir),
+    sourceType: "data-dir",
+  }).map((runtimeSource) => ({
+    provenance: { kind: "user" } as const,
+    runtimeSource,
+  }));
+  return [...builtin, ...user];
 }
 
 interface ExcludeOverriddenBuiltinsArgs {

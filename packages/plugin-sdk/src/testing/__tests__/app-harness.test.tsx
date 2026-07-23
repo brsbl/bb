@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useEffect, useState } from "react";
-import { cleanup, fireEvent, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type {
@@ -931,6 +931,105 @@ describe("renderSlot", () => {
     fireEvent.click(slot.getByText("clear row status"));
     expect(slot.composer.threadRowStatus).toBeNull();
     expect(slot.composer.threadRowStatusCalls).toHaveLength(2);
+  });
+
+  it("normalizes thread-row statuses and preserves the last valid harness state after rejection", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const slot = renderSlot(
+      app.composerCustomizations[0]!.actions![0]!,
+      {},
+      { context: { projectId: "proj_1", threadId: "thr_1" } },
+    );
+    const setters = capturedComposerVisualSetters;
+    if (setters === null) throw new Error("composer setters were not captured");
+    const setStatus = setters.setThreadRowStatus as (status: unknown) => void;
+
+    act(() => {
+      setStatus({
+        icon: "  AiContentGenerator01  ",
+        label: "  Plugin improving draft  ",
+        tone: "default",
+      });
+    });
+    const defaultStatus = {
+      icon: "AiContentGenerator01",
+      label: "Plugin improving draft",
+      tone: "default" as const,
+    };
+    expect(slot.composer.threadRowStatus).toEqual(defaultStatus);
+    expect(slot.composer.threadRowStatusCalls).toEqual([defaultStatus]);
+
+    const runningStatus = {
+      icon: "Zap",
+      label: "Plugin running",
+      tone: "running" as const,
+    };
+    act(() => setStatus(runningStatus));
+    expect(slot.composer.threadRowStatus).toEqual(runningStatus);
+
+    const errorStatus = {
+      icon: "AlertCircle",
+      label: "Plugin failed",
+      tone: "error" as const,
+    };
+    act(() => setStatus(errorStatus));
+    expect(slot.composer.threadRowStatus).toEqual(errorStatus);
+    const acceptedStatuses = [defaultStatus, runningStatus, errorStatus];
+    expect(slot.composer.threadRowStatusCalls).toEqual(acceptedStatuses);
+
+    const invalidStatuses: Array<{
+      value: unknown;
+      warning: string;
+    }> = [
+      {
+        value: "working",
+        warning: "status must be null or a non-array object",
+      },
+      {
+        value: { icon: "AiContentGenerator01", label: "" },
+        warning: '"label" must be a non-blank string',
+      },
+      {
+        value: { icon: "AiContentGenerator01", label: { text: "Working" } },
+        warning: '"label" must be a non-blank string',
+      },
+      {
+        value: { icon: "", label: "Working" },
+        warning: '"icon" must be a non-blank string',
+      },
+      {
+        value: {
+          icon: "AiContentGenerator01",
+          label: "Working",
+          tone: null,
+        },
+        warning:
+          '"tone" must be "default", "running", "success", or "error" when set',
+      },
+    ];
+    for (const invalid of invalidStatuses) {
+      act(() => setStatus(invalid.value));
+      expect(slot.composer.threadRowStatus).toEqual(errorStatus);
+      expect(slot.composer.threadRowStatusCalls).toEqual(acceptedStatuses);
+      expect(warn).toHaveBeenLastCalledWith(
+        expect.stringContaining(invalid.warning),
+      );
+    }
+
+    const rejectionWarningCount = () =>
+      warn.mock.calls.filter(
+        ([message]) =>
+          typeof message === "string" &&
+          message.startsWith("composer.setThreadRowStatus:"),
+      ).length;
+    expect(rejectionWarningCount()).toBe(invalidStatuses.length);
+    act(() => setStatus(null));
+    expect(slot.composer.threadRowStatus).toBeNull();
+    expect(slot.composer.threadRowStatusCalls).toEqual([
+      ...acceptedStatuses,
+      null,
+    ]);
+    expect(rejectionWarningCount()).toBe(invalidStatuses.length);
   });
 
   it("ignores thread-row status changes outside a thread composer", () => {

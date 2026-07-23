@@ -7,6 +7,7 @@ import {
   createTestAppHarness,
   type TestAppHarness,
 } from "../../helpers/test-app.js";
+import { loadPluginBrandingAssets } from "../../../src/services/plugins/app-bundle.js";
 
 // Same origin trick as the app-bundle tests: the harness config's serverPort
 // puts this host on the local-app origin allowlist.
@@ -27,6 +28,7 @@ async function writeLogoPluginFixture(
     logoDark?: string;
     pluginName?: string;
     brandingIcon?: string | null;
+    experimentalBrandingIcon?: string;
   },
 ): Promise<void> {
   await mkdir(rootDir, { recursive: true });
@@ -39,9 +41,13 @@ async function writeLogoPluginFixture(
         name: options.pluginName ?? "Logo fixture",
         description: "Plugin branding fixture.",
         branding: {
-          ...(options.brandingIcon === null
+          ...(options.brandingIcon === null ||
+          options.experimentalBrandingIcon !== undefined
             ? {}
             : { icon: options.brandingIcon ?? "Zap" }),
+          ...(options.experimentalBrandingIcon === undefined
+            ? {}
+            : { experimental_icon: options.experimentalBrandingIcon }),
           ...(options.logoLight === undefined && options.logoDark === undefined
             ? {}
             : {
@@ -67,7 +73,7 @@ async function writeLogoPluginFixture(
   }
 }
 
-describe("plugin branding logos (manifest, asset route, inventory)", () => {
+describe("plugin branding assets (manifest, asset route, inventory)", () => {
   let harness: TestAppHarness;
 
   beforeEach(async () => {
@@ -78,6 +84,50 @@ describe("plugin branding logos (manifest, asset route, inventory)", () => {
   afterEach(async () => {
     await harness.pluginService.stop();
     await harness.cleanup();
+  });
+
+  it("serves branding.experimental_icon as a hashed compact SVG asset", async () => {
+    const rootDir = join(harness.config.dataDir, "fixtures", "bb-plugin-mark");
+    await writeLogoPluginFixture(rootDir, {
+      name: "bb-plugin-mark",
+      experimentalBrandingIcon: "./assets/icon.svg",
+      files: { "assets/icon.svg": SVG_LOGO },
+    });
+
+    const entry = await harness.pluginService.installPath(rootDir);
+    expect(entry.status).toBe("running");
+    expect(entry.icon).toBeNull();
+    expect(entry.experimental_iconUrl).toMatch(
+      /^\/api\/v1\/plugins\/mark\/assets\/icon\?h=[0-9a-f]{16}$/,
+    );
+
+    const icon = await harness.app.request(
+      `${BASE}${entry.experimental_iconUrl}`,
+    );
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get("content-type")).toBe("image/svg+xml");
+    expect(icon.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    expect(await icon.text()).toBe(SVG_LOGO);
+
+    const disabled = await harness.pluginService.setEnabled("mark", false);
+    expect(disabled?.experimental_iconUrl).toBe(entry.experimental_iconUrl);
+    const disabledIcon = await harness.app.request(
+      `${BASE}${disabled?.experimental_iconUrl}`,
+    );
+    expect(disabledIcon.status).toBe(200);
+  });
+
+  it("validates the exact compact icon bytes before snapshotting them", async () => {
+    const iconPath = join(harness.config.dataDir, "mutable-icon.svg");
+    await writeFile(iconPath, "<html/>");
+
+    await expect(
+      loadPluginBrandingAssets("mutable", {
+        branding: { compactIconPath: iconPath },
+      }),
+    ).rejects.toThrow(/<svg> root element/);
   });
 
   it("serves an explicit light SVG hash-cached as image/svg+xml", async () => {
@@ -228,6 +278,7 @@ describe("plugin branding logos (manifest, asset route, inventory)", () => {
     const entry = await harness.pluginService.installPath(rootDir);
     expect(entry.name).toBe("Identity Demo");
     expect(entry.icon).toBe("Brain");
+    expect(entry.experimental_iconUrl).toBeNull();
 
     const disabled = await harness.pluginService.setEnabled("ident", false);
     expect(disabled?.enabled).toBe(false);
@@ -253,7 +304,7 @@ describe("plugin branding logos (manifest, asset route, inventory)", () => {
     expect(logo.status).toBe(404);
   });
 
-  it("refreshes the logo hash on reload after the file changes", async () => {
+  it("serves immutable snapshot bytes until reload refreshes the hash", async () => {
     const rootDir = join(harness.config.dataDir, "fixtures", "bb-plugin-logoh");
     await writeLogoPluginFixture(rootDir, {
       name: "bb-plugin-logoh",
@@ -266,6 +317,16 @@ describe("plugin branding logos (manifest, asset route, inventory)", () => {
 
     const changed = `<svg xmlns="http://www.w3.org/2000/svg"><circle r="2"/></svg>`;
     await writeFile(join(rootDir, "logo.svg"), changed);
+
+    // The hashed URL identifies the bytes captured at load time. Mutating the
+    // source file cannot change a response advertised as immutable.
+    const original = await harness.app.request(`${BASE}${firstUrl}`);
+    expect(original.status).toBe(200);
+    expect(await original.text()).toBe(SVG_LOGO);
+    expect(original.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+
     await harness.pluginService.reload("logoh");
 
     const reloaded = harness.pluginService

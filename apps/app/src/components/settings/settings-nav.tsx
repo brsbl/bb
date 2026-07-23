@@ -61,14 +61,14 @@ export interface SettingsNavState {
   activePluginId: string | null;
   /** Provider id from /settings/providers/:providerId, else null. */
   activeProviderId: SettingsProviderId | null;
-  /** Selected bucket; null while a plugin page is active. */
+  /** Selected bucket; null while a provider or plugin page is active. */
   activeSection: SettingsSectionId | null;
   /** True when the :section URL segment is unknown (the view redirects). */
   hasUnknownSection: boolean;
   /** Enabled plugins that declared settings or settingsSection slots. */
   pluginEntries: PluginListItem[];
   providerEntries: typeof SETTINGS_PROVIDER_ENTRIES;
-  /** Buckets visible on this host (files/plugins hide when irrelevant). */
+  /** Buckets visible on this host. */
   sections: readonly SettingsNavSection[];
 }
 
@@ -83,11 +83,13 @@ export function useSettingsNavState(): SettingsNavState {
   const { fileOpeners, settingsSections } = usePluginSlots();
   const systemConfig = useSystemConfig();
   const pluginsEnabled = systemConfig.data?.experiments.plugins === true;
+  const toolsHubEnabled = systemConfig.data?.experiments.toolsHub === true;
   const settingsSectionPluginIds = new Set(
     settingsSections.map((section) => section.pluginId),
   );
   const pluginListQuery = usePluginList({
-    enabled: pluginsEnabled || settingsSectionPluginIds.size > 0,
+    enabled:
+      !toolsHubEnabled && (pluginsEnabled || settingsSectionPluginIds.size > 0),
   });
 
   const pluginMatch = matchPath(SETTINGS_PLUGIN_ROUTE_PATH, location.pathname);
@@ -124,16 +126,17 @@ export function useSettingsNavState(): SettingsNavState {
       return hasDaemon || fileOpeners.length > 0;
     }
     if (section.id === "plugins") {
-      return pluginsEnabled;
+      return pluginsEnabled && !toolsHubEnabled;
     }
     return true;
   });
-  const pluginEntries = (pluginListQuery.data?.plugins ?? []).filter(
-    (plugin) =>
-      plugin.enabled &&
-      (plugin.hasSettings || settingsSectionPluginIds.has(plugin.id)),
-  );
-
+  const pluginEntries = toolsHubEnabled
+    ? []
+    : (pluginListQuery.data?.plugins ?? []).filter(
+        (plugin) =>
+          plugin.enabled &&
+          (plugin.hasSettings || settingsSectionPluginIds.has(plugin.id)),
+      );
   return {
     activePluginId,
     activeProviderId,

@@ -80,12 +80,96 @@ describe("plugin manifest", () => {
     },
   );
 
-  it("requires branding with either an icon or a light logo", async () => {
-    for (const branding of [undefined, null, {}, { icon: "   " }]) {
+  it("requires branding with an icon, experimental icon, or light logo", async () => {
+    for (const branding of [
+      undefined,
+      null,
+      {},
+      { icon: "   " },
+      { experimental_icon: "   " },
+    ]) {
       await writeManifest(undefined, { ...validBb, branding });
       await expect(readPluginManifest(rootDir)).rejects.toThrow(/bb\.branding/);
     }
   });
+
+  it("resolves branding.experimental_icon as a plugin-owned compact SVG", async () => {
+    await mkdir(join(rootDir, "assets"));
+    await writeFile(join(rootDir, "assets", "icon.svg"), "<svg/>");
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: { experimental_icon: "./assets/icon.svg" },
+    });
+
+    const manifest = await readPluginManifest(rootDir);
+    expect(manifest.branding.icon).toBeUndefined();
+    expect(manifest.branding.compactIconPath).toBe(
+      join(rootDir, "assets", "icon.svg"),
+    );
+  });
+
+  it("keeps a named branding.icon as a host icon hint", async () => {
+    await writeManifest();
+    const manifest = await readPluginManifest(rootDir);
+    expect(manifest.branding.icon).toBe("Zap");
+    expect(manifest.branding.compactIconPath).toBeUndefined();
+  });
+
+  it("requires path-shaped icons to use branding.experimental_icon", async () => {
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: { icon: "./icon.svg" },
+    });
+    await expect(readPluginManifest(rootDir)).rejects.toThrow(
+      /branding\.experimental_icon/,
+    );
+  });
+
+  it("requires branding.experimental_icon to be a readable relative SVG", async () => {
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: { experimental_icon: "assets/icon.svg" },
+    });
+    await expect(readPluginManifest(rootDir)).rejects.toThrow(
+      /experimental_icon.*beginning with "\.\/"/,
+    );
+
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: { experimental_icon: "./missing.svg" },
+    });
+    await expect(readPluginManifest(rootDir)).rejects.toThrow(/missing file/);
+
+    await writeManifest(undefined, {
+      ...validBb,
+      branding: { experimental_icon: "./icon.png" },
+    });
+    await expect(readPluginManifest(rootDir)).rejects.toThrow(
+      /branding\.experimental_icon.*\.svg/,
+    );
+  });
+
+  it.each([
+    ["non-SVG XML", "<html/>", /<svg> root element/],
+    ["malformed XML", "<svg><path></svg>", /not valid SVG XML/],
+    [
+      "entity declarations",
+      '<!DOCTYPE svg [<!ENTITY mark "x">]><svg>&mark;</svg>',
+      /must not contain a doctype declaration/,
+    ],
+    ["a foreign namespace", '<x:svg xmlns:x="urn:not-svg"/>', /<svg> root/],
+  ])(
+    "rejects branding.experimental_icon with %s",
+    async (_case, icon, error) => {
+      await writeFile(join(rootDir, "icon.svg"), icon);
+      await writeManifest(undefined, {
+        ...validBb,
+        branding: { experimental_icon: "./icon.svg" },
+      });
+
+      await expect(readPluginManifest(rootDir)).rejects.toThrow(error);
+    },
+  );
 
   it("rejects a dark logo without a light logo", async () => {
     await writeManifest(undefined, {

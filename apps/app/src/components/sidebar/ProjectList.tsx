@@ -170,6 +170,7 @@ interface ProjectListActionButtonsProps {
     openInSplit(): void;
   };
   onNewChat?: () => void;
+  onOpenTools?: () => void;
   threadSearch?: SidebarThreadSearchInputController;
 }
 
@@ -804,6 +805,7 @@ export function ProjectListActionButtons({
   splitEnabled = false,
   newThreadSplit,
   onNewChat,
+  onOpenTools,
   threadSearch,
 }: ProjectListActionButtonsProps) {
   const isNewChatDisabled = !onNewChat;
@@ -887,14 +889,14 @@ export function ProjectListActionButtons({
             <Icon name="MessageSquarePlus" />
             <span className="flex min-w-0 flex-1 items-center gap-1.5">
               <span className="min-w-0 truncate text-left">New thread</span>
+              {newThreadSplitIndicator.miniMap ? (
+                <SplitPaneMiniMap
+                  slots={newThreadSplitIndicator.miniMap}
+                  label="New thread — open in split"
+                />
+              ) : null}
               <AppCommandShortcutHint shortcut={newThreadShortcut} />
             </span>
-            {newThreadSplitIndicator.miniMap ? (
-              <SplitPaneMiniMap
-                slots={newThreadSplitIndicator.miniMap}
-                label="New thread — open in split"
-              />
-            ) : null}
           </Button>
           {threadSearch ? (
             <span className="flex shrink-0 items-center gap-1">
@@ -921,6 +923,18 @@ export function ProjectListActionButtons({
           ) : null}
         </div>
       )}
+      {onOpenTools ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={PROJECT_LIST_ACTION_BUTTON_CLASS}
+          onClick={onOpenTools}
+        >
+          <Icon name="Toolbox" />
+          <span className="min-w-0 flex-1 truncate text-left">Tools</span>
+        </Button>
+      ) : null}
     </div>
   );
 }

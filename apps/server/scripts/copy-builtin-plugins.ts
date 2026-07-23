@@ -126,7 +126,8 @@ async function copyBuiltinPlugin(args: {
     ),
   );
   const logo = packageJson.bb.branding.logo;
-  for (const asset of [logo?.light, logo?.dark]) {
+  const compactIcon = packageJson.bb.branding.experimental_icon;
+  for (const asset of [compactIcon, logo?.light, logo?.dark]) {
     if (asset === undefined) continue;
     const sourcePath = path.resolve(args.sourceRoot, asset);
     const targetPath = path.resolve(targetDir, asset);

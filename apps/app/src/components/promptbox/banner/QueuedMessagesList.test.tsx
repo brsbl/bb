@@ -13,11 +13,25 @@ import type { Active, DroppableContainer } from "@dnd-kit/core";
 import {
   QueuedMessagesList,
   clampQueuedMessageDragTransform,
+  getInlineEditorSurfaceMaxHeight,
   queuedMessageCollisionDetection,
   queuedMessageSortingStrategy,
   resolveQueuedMessageDrag,
   snapGroupBoundaryDragTransform,
 } from "./QueuedMessagesList";
+
+const bottomAnchorMocks = vi.hoisted(() => ({
+  scrollElement: null as HTMLElement | null,
+}));
+
+vi.mock("@/components/ui/bottom-anchored-scroll-body", () => ({
+  useBottomAnchoredScroll: () =>
+    bottomAnchorMocks.scrollElement === null
+      ? null
+      : {
+          getScrollElement: () => bottomAnchorMocks.scrollElement,
+        },
+}));
 
 const noop = () => {};
 
@@ -103,6 +117,8 @@ function renderQueuedMessagesWithOptions(
 
 afterEach(() => {
   cleanup();
+  bottomAnchorMocks.scrollElement = null;
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -300,15 +316,14 @@ describe("QueuedMessagesList", () => {
     ).not.toBeNull();
   });
 
-  it("replaces the edited row with the real-composer target", () => {
-    const onComposerTargetChange = vi.fn();
+  it("replaces the edited row with the real inline composer", () => {
     const onDismiss = vi.fn();
     const queuedMessages = [
       makeQueuedMessage("q_one", "First queued message"),
       makeQueuedMessage("q_two", "Second queued message"),
     ];
 
-    const { container, getByRole, getByText } = render(
+    const { container, getByRole, getByText, getByTestId } = render(
       <QueuedMessagesList
         queuedMessages={queuedMessages}
         inlineEditor={{
@@ -316,8 +331,7 @@ describe("QueuedMessagesList", () => {
           // Position is resolved from the stable message id, even if a stale
           // caller index arrives while the queue is changing.
           queuedMessageIndex: 0,
-          ready: true,
-          onComposerTargetChange,
+          content: <div data-testid="inline-queue-editor">Inline editor</div>,
           onDismiss,
         }}
         sendDisabled={false}
@@ -359,7 +373,7 @@ describe("QueuedMessagesList", () => {
     ).toBe(true);
     const editingLabel = getByText(/Editing queued message/u);
     const dismissButton = getByRole("button", {
-      name: "Move editor back to the prompt box",
+      name: "Stop editing queued message",
     });
     expect(editingLabel.parentElement?.className).toContain(
       "text-subtle-foreground",
@@ -369,12 +383,10 @@ describe("QueuedMessagesList", () => {
     expect(
       dismissButton.querySelector('[data-icon="X"]')?.getAttribute("class"),
     ).toContain("size-3");
-    expect(onComposerTargetChange).toHaveBeenCalledWith(
-      container.querySelector("[data-queued-message-composer-target]"),
-    );
+    expect(getByTestId("inline-queue-editor")).toBeTruthy();
 
     fireEvent.click(
-      getByRole("button", { name: "Move editor back to the prompt box" }),
+      getByRole("button", { name: "Stop editing queued message" }),
     );
     expect(onDismiss).toHaveBeenCalledOnce();
   });
@@ -386,8 +398,7 @@ describe("QueuedMessagesList", () => {
         inlineEditor={{
           queuedMessageId: "q_missing",
           queuedMessageIndex: 0,
-          ready: true,
-          onComposerTargetChange: noop,
+          content: <div>Inline editor</div>,
           onDismiss: noop,
         }}
         sendDisabled={false}
@@ -439,8 +450,7 @@ describe("QueuedMessagesList", () => {
         inlineEditor={{
           queuedMessageId: "q_0",
           queuedMessageIndex: 0,
-          ready: true,
-          onComposerTargetChange: noop,
+          content: <div>Inline editor</div>,
           onDismiss: noop,
         }}
       />,
@@ -449,7 +459,7 @@ describe("QueuedMessagesList", () => {
       'section[aria-label="Queued messages"]',
     );
 
-    expect(surface?.style.height).toBe("320px");
+    expect(surface?.style.height).toBe("240px");
 
     rerender(<QueuedMessagesList {...sharedProps} />);
 
@@ -487,8 +497,7 @@ describe("QueuedMessagesList", () => {
         inlineEditor={{
           queuedMessageId: "q_one",
           queuedMessageIndex: 0,
-          ready: true,
-          onComposerTargetChange: noop,
+          content: <div>Inline editor</div>,
           onDismiss,
         }}
       />,
@@ -506,6 +515,350 @@ describe("QueuedMessagesList", () => {
           ?.getAttribute("data-queued-messages-mode"),
       ).toBe("collapsed");
     });
+  });
+
+  it("fits edit mode above the real composer at constrained heights and restores the drawer", async () => {
+    const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 320 });
+    bottomAnchorMocks.scrollElement = viewport;
+
+    const nativeGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute("data-queue-test-footer")) {
+          return new DOMRect(0, 0, 600, 420);
+        }
+        if (this.getAttribute("aria-label") === "Queued messages") {
+          return new DOMRect(0, 0, 600, 240);
+        }
+        return nativeGetBoundingClientRect.call(this);
+      },
+    );
+
+    const queuedMessages = [
+      makeQueuedMessage("q_one", "First queued message"),
+      makeQueuedMessage("q_two", "Second queued message"),
+    ];
+    const sharedProps = {
+      queuedMessages,
+      sendDisabled: false,
+      actionDisabled: false,
+      processingMessageId: null,
+      processingAction: null,
+      onSendImmediately: noop,
+      onReorder: noop,
+      onSetGroupBoundary: noop,
+      onEdit: noop,
+      onDelete: noop,
+    } as const;
+    const renderSurface = (editing: boolean) => (
+      <div data-queue-test-footer="">
+        <div data-app-composer="">
+          <QueuedMessagesList
+            {...sharedProps}
+            inlineEditor={
+              editing
+                ? {
+                    queuedMessageId: "q_one",
+                    queuedMessageIndex: 0,
+                    content: <div>Inline editor</div>,
+                    onDismiss: noop,
+                  }
+                : undefined
+            }
+          />
+          <div data-test-bottom-composer="">Bottom composer</div>
+        </div>
+      </div>
+    );
+    const { container, rerender } = render(renderSurface(true));
+    const surface = container.querySelector<HTMLElement>(
+      'section[aria-label="Queued messages"]',
+    );
+    const composer = container.querySelector("[data-test-bottom-composer]");
+
+    await waitFor(() => expect(surface?.style.height).toBe("140px"));
+    expect(surface?.compareDocumentPosition(composer as Node) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    rerender(renderSurface(false));
+
+    await waitFor(() => {
+      expect(surface?.style.height).toBe("123px");
+      expect(
+        container
+          .querySelector("[data-queued-messages-mode]")
+          ?.getAttribute("data-queued-messages-mode"),
+      ).toBe("drawer");
+    });
+  });
+
+  it("grows edit mode to fit the measured editor and its immediate neighbors", async () => {
+    const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    bottomAnchorMocks.scrollElement = viewport;
+
+    const nativeGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute("data-queue-test-footer")) {
+          return new DOMRect(0, 0, 600, 340);
+        }
+        if (this.getAttribute("aria-label") === "Queued messages") {
+          return new DOMRect(0, 0, 600, 240);
+        }
+        if (this.hasAttribute("data-queued-messages-scroll")) {
+          return new DOMRect(0, 32, 600, 180);
+        }
+        if (this.hasAttribute("data-queued-message-inline-editor")) {
+          return new DOMRect(0, 112, 600, 130);
+        }
+        if (this.hasAttribute("data-queued-message-row")) {
+          if (this.textContent?.includes("Previous queued message")) {
+            return new DOMRect(0, 32, 600, 80);
+          }
+          if (this.textContent?.includes("Following queued message")) {
+            return new DOMRect(0, 242, 600, 90);
+          }
+        }
+        return nativeGetBoundingClientRect.call(this);
+      },
+    );
+
+    const queuedMessages = [
+      makeQueuedMessage("q_previous", "Previous queued message"),
+      makeQueuedMessage("q_editing", "Edited queued message"),
+      makeQueuedMessage("q_following", "Following queued message"),
+    ];
+    const { container } = render(
+      <div data-queue-test-footer="">
+        <div data-app-composer="">
+          <QueuedMessagesList
+            queuedMessages={queuedMessages}
+            inlineEditor={{
+              queuedMessageId: "q_editing",
+              queuedMessageIndex: 1,
+              content: <div>Inline editor</div>,
+              onDismiss: noop,
+            }}
+            sendDisabled={false}
+            actionDisabled={false}
+            processingMessageId={null}
+            processingAction={null}
+            onSendImmediately={noop}
+            onReorder={noop}
+            onSetGroupBoundary={noop}
+            onEdit={noop}
+            onDelete={noop}
+          />
+          <div>Bottom composer</div>
+        </div>
+      </div>,
+    );
+    const surface = container.querySelector<HTMLElement>(
+      'section[aria-label="Queued messages"]',
+    );
+
+    await waitFor(() => expect(surface?.style.height).toBe("360px"));
+  });
+
+  it("realigns both neighbors as the edit surface finishes growing", async () => {
+    let notifyResize = noop;
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver);
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+    const viewport = document.createElement("div");
+    Object.defineProperty(viewport, "clientHeight", { value: 500 });
+    bottomAnchorMocks.scrollElement = viewport;
+
+    let queueViewportBottom = 180;
+    const nativeGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute("data-queue-test-footer")) {
+          return new DOMRect(0, 0, 600, 340);
+        }
+        if (this.getAttribute("aria-label") === "Queued messages") {
+          return new DOMRect(0, 0, 600, 240);
+        }
+        if (this.hasAttribute("data-queued-messages-scroll")) {
+          return new DOMRect(0, 32, 600, queueViewportBottom - 32);
+        }
+        const queueScrollTop =
+          this.closest<HTMLElement>("[data-queued-messages-scroll]")
+            ?.scrollTop ?? 0;
+        if (this.hasAttribute("data-queued-message-inline-editor")) {
+          return new DOMRect(0, 132 - queueScrollTop, 600, 180);
+        }
+        if (this.hasAttribute("data-queued-message-row")) {
+          if (this.textContent?.includes("Previous queued message")) {
+            return new DOMRect(0, 92 - queueScrollTop, 600, 40);
+          }
+          if (this.textContent?.includes("Following queued message")) {
+            return new DOMRect(0, 312 - queueScrollTop, 600, 30);
+          }
+        }
+        return nativeGetBoundingClientRect.call(this);
+      },
+    );
+
+    const queuedMessages = [
+      makeQueuedMessage("q_previous", "Previous queued message"),
+      makeQueuedMessage("q_editing", "Edited queued message"),
+      makeQueuedMessage("q_following", "Following queued message"),
+    ];
+    const { container } = render(
+      <div data-queue-test-footer="">
+        <div data-app-composer="">
+          <QueuedMessagesList
+            queuedMessages={queuedMessages}
+            inlineEditor={{
+              queuedMessageId: "q_editing",
+              queuedMessageIndex: 1,
+              content: <div>Inline editor</div>,
+              onDismiss: noop,
+            }}
+            sendDisabled={false}
+            actionDisabled={false}
+            processingMessageId={null}
+            processingAction={null}
+            onSendImmediately={noop}
+            onReorder={noop}
+            onSetGroupBoundary={noop}
+            onEdit={noop}
+            onDelete={noop}
+          />
+          <div>Bottom composer</div>
+        </div>
+      </div>,
+    );
+    const scroll = container.querySelector<HTMLElement>(
+      "[data-queued-messages-scroll]",
+    );
+    expect(scroll).not.toBeNull();
+    if (!scroll) return;
+    scroll.scrollTop = 100;
+
+    act(() => notifyResize());
+    expect(scroll.scrollTop).toBe(100);
+
+    queueViewportBottom = 300;
+    act(() => notifyResize());
+    expect(scroll.scrollTop).toBe(60);
+  });
+
+  it.each([
+    {
+      label: "first",
+      messages: [
+        makeQueuedMessage("q_editing", "Edited queued message"),
+        makeQueuedMessage("q_neighbor", "Following queued message"),
+      ],
+      editorTop: 32,
+      neighborTop: 182,
+    },
+    {
+      label: "last",
+      messages: [
+        makeQueuedMessage("q_neighbor", "Previous queued message"),
+        makeQueuedMessage("q_editing", "Edited queued message"),
+      ],
+      editorTop: 112,
+      neighborTop: 32,
+    },
+  ])(
+    "sizes a $label-item edit from only the neighbor that exists",
+    async ({ editorTop, messages, neighborTop }) => {
+      const viewport = document.createElement("div");
+      Object.defineProperty(viewport, "clientHeight", { value: 500 });
+      bottomAnchorMocks.scrollElement = viewport;
+
+      const nativeGetBoundingClientRect =
+        HTMLElement.prototype.getBoundingClientRect;
+      vi.spyOn(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+      ).mockImplementation(function (this: HTMLElement) {
+        if (this.hasAttribute("data-queue-test-footer")) {
+          return new DOMRect(0, 0, 600, 340);
+        }
+        if (this.getAttribute("aria-label") === "Queued messages") {
+          return new DOMRect(0, 0, 600, 240);
+        }
+        if (this.hasAttribute("data-queued-messages-scroll")) {
+          return new DOMRect(0, 32, 600, 180);
+        }
+        if (this.hasAttribute("data-queued-message-inline-editor")) {
+          return new DOMRect(0, editorTop, 600, 150);
+        }
+        if (this.getAttribute("data-queued-message-id") === "q_neighbor") {
+          return new DOMRect(0, neighborTop, 600, 80);
+        }
+        return nativeGetBoundingClientRect.call(this);
+      });
+
+      const { container } = render(
+        <div data-queue-test-footer="">
+          <div data-app-composer="">
+            <QueuedMessagesList
+              queuedMessages={messages}
+              inlineEditor={{
+                queuedMessageId: "q_editing",
+                queuedMessageIndex: messages.findIndex(
+                  (message) => message.id === "q_editing",
+                ),
+                content: <div>Inline editor</div>,
+                onDismiss: noop,
+              }}
+              sendDisabled={false}
+              actionDisabled={false}
+              processingMessageId={null}
+              processingAction={null}
+              onSendImmediately={noop}
+              onReorder={noop}
+              onSetGroupBoundary={noop}
+              onEdit={noop}
+              onDelete={noop}
+            />
+            <div>Bottom composer</div>
+          </div>
+        </div>,
+      );
+      const surface = container.querySelector<HTMLElement>(
+        'section[aria-label="Queued messages"]',
+      );
+
+      await waitFor(() => expect(surface?.style.height).toBe("290px"));
+    },
+  );
+
+  it("reserves the actual occupied composer and footer height", () => {
+    expect(
+      getInlineEditorSurfaceMaxHeight({
+        containerHeight: 420,
+        surfaceHeight: 240,
+        viewportHeight: 320,
+      }),
+    ).toBe(140);
+    expect(
+      getInlineEditorSurfaceMaxHeight({
+        containerHeight: 420,
+        surfaceHeight: 240,
+        viewportHeight: 200,
+      }),
+    ).toBe(44);
   });
 
   it("renders queued blockquote markdown as a compact quote preview", () => {
@@ -615,6 +968,28 @@ describe("QueuedMessagesList", () => {
     expect(container.textContent).not.toContain("1 attachment");
   });
 
+  it("keeps previews on one ellipsized line in drawer and workspace modes", () => {
+    const queuedMessages = Array.from({ length: 4 }, (_, index) =>
+      makeQueuedMessage(
+        `q_${index}`,
+        `Long queued message ${index + 1} that must truncate to the available row width`,
+      ),
+    );
+    const { container, getByRole } = renderQueuedMessages(queuedMessages);
+
+    const preview = container.querySelector('[title^="Long queued message 1"]');
+    expect(preview?.classList.contains("flex-1")).toBe(true);
+    expect(preview?.classList.contains("fade-clip-right")).toBe(false);
+    expect(preview?.firstElementChild?.classList.contains("truncate")).toBe(
+      true,
+    );
+
+    fireEvent.click(getByRole("button", { name: "Expand queued messages" }));
+    expect(preview?.firstElementChild?.classList.contains("truncate")).toBe(
+      true,
+    );
+  });
+
   it("renders prompt mentions as pills in queued previews", () => {
     const text =
       "Run /goal and open @apps/app/src/foo.ts from @thread:thr_prompt_pills";
@@ -682,9 +1057,8 @@ describe("QueuedMessagesList", () => {
     expect(container.querySelectorAll(".prompt-mention-pill")).toHaveLength(3);
     expect(container.querySelector('[data-icon="Target"]')).not.toBeNull();
     expect(container.querySelector('[data-icon="File"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-icon="MessageSquare"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-icon="UserRound"]')).not.toBeNull();
+    expect(container.querySelector('[data-icon="MessageSquare"]')).toBeNull();
     expect(container.textContent).toContain(
       "Run goal and open foo.ts from Prompt pills QA",
     );

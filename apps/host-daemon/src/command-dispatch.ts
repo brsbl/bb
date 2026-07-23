@@ -26,6 +26,11 @@ import {
 import { listHostBranches } from "./command-handlers/host-branches.js";
 import { listHostCommands } from "./command-handlers/list-commands.js";
 import {
+  deleteHostSkill,
+  listHostSkills,
+  writeHostSkill,
+} from "./command-handlers/list-skills.js";
+import {
   browseHostDirectory,
   checkHostPathsExist,
   listHostFiles,
@@ -410,6 +415,9 @@ const onlineRpcHandlers: OnlineRpcHandlerMap = {
   "host.caffeinate": async (command, options) =>
     getCaffeinateManager(options).setEnabled(command.enabled),
   "host.list_commands": listHostCommands,
+  "host.list_skills": listHostSkills,
+  "host.delete_skill": deleteHostSkill,
+  "host.write_skill": writeHostSkill,
   "host.list_branches": listHostBranches,
   "host.file_metadata": readHostFileMetadata,
   "host.read_file": readHostFile,

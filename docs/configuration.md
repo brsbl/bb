@@ -8,7 +8,7 @@ Use `bb-app config` for non-secret bb settings:
 
 ```bash
 npx bb-app config set BB_APP_URL http://<machine>.<tailnet>.ts.net:38886
-npx bb-app config set BB_INFERENCE codex/gpt-5.4-mini
+npx bb-app config set BB_INFERENCE codex/gpt-5.6-luna
 npx bb-app config set BB_TRANSCRIPTION codex/gpt-4o-mini-transcribe
 npx bb-app config list
 npx bb-app config unset BB_APP_URL
@@ -81,7 +81,7 @@ starts.
 | Key                | Command         | When to set             | Used for                                                                                                                                       |
 | ------------------ | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `BB_APP_URL`       | `bb-app config` | Optional for remote use | Human-facing app URL used for generated links and allowed browser origins. Leave empty for local-only use.                                     |
-| `BB_INFERENCE`     | `bb-app config` | Optional                | Server-side helper model in `provider/model` format. Defaults to `codex/gpt-5.4-mini`.                                                         |
+| `BB_INFERENCE`     | `bb-app config` | Optional                | Server-side helper model in `provider/model` format. Defaults to `codex/gpt-5.6-luna`.                                                         |
 | `BB_TRANSCRIPTION` | `bb-app config` | Optional                | Voice transcription model in `provider/model` format. Defaults to `codex/gpt-4o-mini-transcribe`.                                              |
 | `BB_SERVER_URL`    | `bb-app config` | Remote CLI/host use     | Server URL for standalone `bb` CLI and `host-daemon` commands on the current machine. The CLI defaults to `http://127.0.0.1:38886` when unset. |
 | `BB_LOG_LEVEL`     | `bb-app config` | Debugging               | Log level for the next bb start: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`.                                                        |
@@ -420,6 +420,16 @@ The tunnel client lives in `plugins/connect/`; the CLI command is proxied to
 the plugin, and Settings → Connect drives the plugin's rpc (including shared
 ports).
 
+## Experiments
+
+Experimental surfaces are off by default and can be changed in Settings →
+Experiments or with `bb settings experiment <key> <true|false>`. The `toolsHub`
+experiment exposes the unified Skills, Plugins, and Automations management UI.
+It is a UI-only gate: installed skills, automation execution, plugin runtimes,
+CLI commands, and backend APIs keep working while the Tools Hub is off. The
+separate `plugins` experiment still controls whether user-installed plugin code
+loads.
+
 ## Plugins
 
 User-installed plugins are gated behind the "Plugins" experiment (Settings →
@@ -444,7 +454,7 @@ Plugin state lives under the data dir:
 
 BB's official plugins (GitHub, Docs, Memory, Tasks) ship bundled inside the
 app and install from the local bundled copy — no network, no remote catalog.
-Discover them with `bb plugin search` or Settings → Plugins → Browse; users
+Discover them with `bb plugin search` or Tools → Plugins → Browse; users
 cannot add, remove, or configure the official plugin set. Installed official
 plugins are pinned to the bundled copy and update with BB app releases. Local
 path installs remain available directly through `bb plugin install ./path` or
@@ -465,18 +475,18 @@ the plugin so it can be surfaced as needing attention.
 ### Workflows plugin
 
 The builtin Workflows plugin is disabled on fresh installations. Enable it
-under Settings → Plugins or with `bb plugin enable workflows`. Its six
-settings accept base-10 integer strings through Settings → Plugins or
+under Tools → Plugins or with `bb plugin enable workflows`. Its six
+settings accept base-10 integer strings through Tools → Plugins or
 `bb plugin config workflows set <key> <value>`:
 
-| Key                    |    Default |       Allowed range | Behavior                                                       |
-| ---------------------- | ---------: | ------------------: | -------------------------------------------------------------- |
-| `maxActiveRuns`        |        `4` |            `1`–`32` | Concurrent runs across the plugin; changes apply live.         |
-| `maxConcurrentAgents`  |        `8` |            `1`–`64` | Concurrent agent calls within one run.                         |
-| `maxAgentCalls`        |      `100` |          `1`–`1000` | Total agent calls within one run.                              |
-| `totalRunTimeoutMs`    | `86400000` | `60000`–`604800000` | Maximum total run duration in milliseconds.                    |
-| `retentionDays`        |       `30` |          `1`–`3650` | Days to retain completed workflow data.                        |
-| `maxNotificationBytes` |    `16384` |     `1024`–`262144` | Maximum UTF-8 size of a completion notification.               |
+| Key                    |    Default |       Allowed range | Behavior                                               |
+| ---------------------- | ---------: | ------------------: | ------------------------------------------------------ |
+| `maxActiveRuns`        |        `4` |            `1`–`32` | Concurrent runs across the plugin; changes apply live. |
+| `maxConcurrentAgents`  |        `8` |            `1`–`64` | Concurrent agent calls within one run.                 |
+| `maxAgentCalls`        |      `100` |          `1`–`1000` | Total agent calls within one run.                      |
+| `totalRunTimeoutMs`    | `86400000` | `60000`–`604800000` | Maximum total run duration in milliseconds.            |
+| `retentionDays`        |       `30` |          `1`–`3650` | Days to retain completed workflow data.                |
+| `maxNotificationBytes` |    `16384` |     `1024`–`262144` | Maximum UTF-8 size of a completion notification.       |
 
 The five settings other than `maxActiveRuns` are snapshotted into each new run.
 Settings changes do not require a plugin reload.

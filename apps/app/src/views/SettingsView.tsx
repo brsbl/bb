@@ -201,6 +201,8 @@ export interface ExperimentsSettingsSectionProps {
   onClaudeCodeMockCliTrafficEnabledChange: (enabled: boolean) => void;
   onPluginsEnabledChange: (enabled: boolean) => void;
   pluginsEnabled: boolean;
+  onToolsHubEnabledChange: (enabled: boolean) => void;
+  toolsHubEnabled: boolean;
   onSideChatPluginEnabledChange: (enabled: boolean) => void;
   sideChatPluginEnabled: boolean;
 }
@@ -879,6 +881,7 @@ export function ProviderSettingsSection({
 
 const CLAUDE_CODE_MOCK_CLI_TRAFFIC_EXPERIMENT_LABEL = "Mock CLI Traffic";
 const PLUGINS_EXPERIMENT_LABEL = "Plugins";
+const TOOLS_HUB_EXPERIMENT_LABEL = "Tools Hub";
 const SIDE_CHAT_PLUGIN_EXPERIMENT_LABEL = "Side chat plugin";
 
 export function ExperimentsSettingsSection({
@@ -887,6 +890,8 @@ export function ExperimentsSettingsSection({
   onClaudeCodeMockCliTrafficEnabledChange,
   onPluginsEnabledChange,
   pluginsEnabled,
+  onToolsHubEnabledChange,
+  toolsHubEnabled,
   onSideChatPluginEnabledChange,
   sideChatPluginEnabled,
 }: ExperimentsSettingsSectionProps) {
@@ -906,6 +911,18 @@ export function ExperimentsSettingsSection({
             disabled={disabled}
             onCheckedChange={onClaudeCodeMockCliTrafficEnabledChange}
             aria-label={CLAUDE_CODE_MOCK_CLI_TRAFFIC_EXPERIMENT_LABEL}
+          />
+        </SettingsWithControl>
+
+        <SettingsWithControl
+          label={TOOLS_HUB_EXPERIMENT_LABEL}
+          description="Enable the unified Skills, Plugins, and Automations management hub. This changes the management UI only; installed tools and plugin runtimes keep working while it is off."
+        >
+          <Switch
+            checked={toolsHubEnabled}
+            disabled={disabled}
+            onCheckedChange={onToolsHubEnabledChange}
+            aria-label={TOOLS_HUB_EXPERIMENT_LABEL}
           />
         </SettingsWithControl>
 
@@ -1100,6 +1117,13 @@ export function SettingsView() {
           })
         }
         pluginsEnabled={experiments.plugins}
+        onToolsHubEnabledChange={(enabled) =>
+          updateExperimentsMutation.mutate({
+            ...experiments,
+            toolsHub: enabled,
+          })
+        }
+        toolsHubEnabled={experiments.toolsHub}
         onSideChatPluginEnabledChange={(enabled) =>
           updateExperimentsMutation.mutate({
             ...experiments,

@@ -15,6 +15,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const MEMORY_ENTRY: PluginCatalogSearchEntry = {
   entryId: "memory",
+  pluginId: "memory",
   displayName: "Memory",
   description: "Provider-independent durable memory for agents.",
   icon: "Brain",

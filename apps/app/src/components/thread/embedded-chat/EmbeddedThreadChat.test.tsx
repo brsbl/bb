@@ -49,7 +49,11 @@ vi.mock("@/components/promptbox/banner/QueuedMessagesList", () => ({
     queuedMessages,
   }: {
     queuedMessages: readonly unknown[];
-  }) => <div data-testid="queued-count">{queuedMessages.length}</div>,
+  }) => (
+    <div data-testid="embedded-chat-queued-messages">
+      <span data-testid="queued-count">{queuedMessages.length}</span>
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/bottom-anchored-scroll-body", () => ({
@@ -342,9 +346,20 @@ describe("EmbeddedThreadChat", () => {
     ).toBe(true);
   });
 
-  it("renders queued messages in the composer stack", () => {
+  it("keeps queued messages adjacent to the composer", () => {
     mocks.queuedMessages = [{ id: "q1" }, { id: "q2" }];
     renderEmbeddedChat();
+
+    const queue = screen.getByTestId("embedded-chat-queued-messages");
+    const composer = screen.getByTestId("embedded-chat-composer");
+    expect(queue.nextElementSibling).toBe(composer);
     expect(screen.getByTestId("queued-count").textContent).toBe("2");
+  });
+
+  it("keeps queued messages visible while a retained embedded chat is inactive", () => {
+    mocks.queuedMessages = [{ id: "q1" }];
+    renderEmbeddedChat({ isActive: false });
+
+    expect(screen.getByTestId("queued-count").textContent).toBe("1");
   });
 });

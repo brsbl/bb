@@ -8,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { StrictMode, Suspense, startTransition, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,6 +57,7 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
     permissionReadOnly,
     pluginComposerHost,
     readOnly,
+    showScrollToBottomButton,
     stack,
     suppressPluginComposerCustomizations,
     textEffects,
@@ -93,6 +95,7 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
     permission: { value?: string };
     pluginComposerHost?: PluginComposerHost | null;
     readOnly?: boolean;
+    showScrollToBottomButton?: boolean;
     typeahead: {
       command: {
         onQueryChange: (query: string | null) => void;
@@ -115,6 +118,9 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
     mocks.latestPluginComposerHost = pluginComposerHost ?? null;
     return (
       <div>
+        <span data-testid="side-chat-composer-location">
+          {showScrollToBottomButton === false ? "inline" : "bottom"}
+        </span>
         <input
           data-testid="side-chat-composer"
           data-focus-end-key={focusEndKey}
@@ -261,7 +267,7 @@ vi.mock("@/components/promptbox/banner/QueuedMessagesList", () => ({
     onEdit,
     queuedMessages,
   }: {
-    inlineEditor?: { onDismiss: () => void };
+    inlineEditor?: { content: ReactNode; onDismiss: () => void };
     onEdit: (request: {
       queuedMessageId: string;
       queuedMessageIndex: number;
@@ -284,9 +290,12 @@ vi.mock("@/components/promptbox/banner/QueuedMessagesList", () => ({
         </button>
       ))}
       {inlineEditor ? (
-        <button type="button" onClick={inlineEditor.onDismiss}>
-          Cancel side queue edit
-        </button>
+        <div data-testid="inline-queued-message-editor">
+          {inlineEditor.content}
+          <button type="button" onClick={inlineEditor.onDismiss}>
+            Cancel side queue edit
+          </button>
+        </div>
       ) : null}
     </div>
   ),
@@ -368,7 +377,7 @@ vi.mock("@/components/thread/timeline", () => ({
   useThreadTimelineController: () => ({
     activePromptMode: null,
     activeThinking: null,
-    activeWorkflow: null,
+    activeWorkflows: [],
     activeBackgroundCommands: [],
     contextWindowUsage: undefined,
     goal: null,
@@ -977,12 +986,15 @@ describe("SideChatTabContent", () => {
         {buildSideChatElement({ onSetThreadId, threadId: "thr_side" })}
       </Suspense>,
     );
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Transition side draft" }),
+      inlineEditor.getByRole("button", { name: "Transition side draft" }),
     );
 
     expect(screen.queryByText("Suspended side chat")).toBeNull();
-    expect(screen.getByTestId("side-chat-composer")).toHaveProperty(
+    expect(inlineEditor.getByTestId("side-chat-composer")).toHaveProperty(
       "value",
       "Queued side message",
     );
@@ -1022,39 +1034,48 @@ describe("SideChatTabContent", () => {
       }),
     ];
     renderSideChat({ threadId: "thr_side" });
+    expect(screen.getByTestId("side-chat-composer-location").textContent).toBe(
+      "bottom",
+    );
     fireEvent.change(screen.getByTestId("side-chat-composer"), {
       target: { value: "Untouched bottom side draft" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Edit side queue 1" }));
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
 
-    expect(screen.getByTestId("side-chat-composer")).toHaveProperty(
+    expect(
+      inlineEditor.getByTestId("side-chat-composer-location").textContent,
+    ).toBe("inline");
+    expect(inlineEditor.getByTestId("side-chat-composer")).toHaveProperty(
       "value",
       "Queued side message",
     );
-    expect(screen.getByTestId("side-chat-selected-model").textContent).toBe(
-      "queued-model",
-    );
-    expect(screen.getByTestId("side-chat-selected-reasoning").textContent).toBe(
-      "high",
-    );
     expect(
-      screen.getByTestId("side-chat-selected-service-tier").textContent,
+      inlineEditor.getByTestId("side-chat-selected-model").textContent,
+    ).toBe("queued-model");
+    expect(
+      inlineEditor.getByTestId("side-chat-selected-reasoning").textContent,
+    ).toBe("high");
+    expect(
+      inlineEditor.getByTestId("side-chat-selected-service-tier").textContent,
     ).toBe("fast");
     expect(
-      screen.getByTestId("side-chat-selected-permission").textContent,
+      inlineEditor.getByTestId("side-chat-selected-permission").textContent,
     ).toBe("full");
     expect(
-      screen.getByTestId("side-chat-execution-read-only").textContent,
+      inlineEditor.getByTestId("side-chat-execution-read-only").textContent,
     ).toBe("true");
     expect(
-      screen.getByTestId("side-chat-permission-read-only").textContent,
+      inlineEditor.getByTestId("side-chat-permission-read-only").textContent,
     ).toBe("true");
-    expect(screen.getByTestId("side-chat-attachment-count").textContent).toBe(
-      "1",
-    );
+    expect(
+      inlineEditor.getByTestId("side-chat-attachment-count").textContent,
+    ).toBe("1");
     expect(
       JSON.parse(
-        screen.getByTestId("side-chat-plugin-scope").textContent ?? "",
+        inlineEditor.getByTestId("side-chat-plugin-scope").textContent ?? "",
       ),
     ).toEqual({
       kind: "queued-message",
@@ -1065,14 +1086,27 @@ describe("SideChatTabContent", () => {
       "thr_parent",
     );
 
-    fireEvent.change(screen.getByTestId("side-chat-composer"), {
+    const bottomComposer = screen
+      .getAllByTestId("side-chat-composer")
+      .find(
+        (element) =>
+          element.closest('[data-testid="inline-queued-message-editor"]') ===
+          null,
+      );
+    expect(bottomComposer).toHaveProperty(
+      "value",
+      "Untouched bottom side draft",
+    );
+    fireEvent.change(inlineEditor.getByTestId("side-chat-composer"), {
       target: { value: "Edited side queue" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plugin replace" }));
-    expect(screen.getByTestId("side-chat-attachment-count").textContent).toBe(
-      "1",
+    fireEvent.click(
+      inlineEditor.getByRole("button", { name: "Plugin replace" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(
+      inlineEditor.getByTestId("side-chat-attachment-count").textContent,
+    ).toBe("1");
+    fireEvent.click(inlineEditor.getByRole("button", { name: "Send" }));
 
     await waitFor(() =>
       expect(mocks.updateQueuedMessageMutateAsync).toHaveBeenCalledWith({
@@ -1096,6 +1130,9 @@ describe("SideChatTabContent", () => {
         "value",
         "Untouched bottom side draft",
       ),
+    );
+    expect(screen.getByTestId("side-chat-composer-location").textContent).toBe(
+      "bottom",
     );
     expect(mocks.sendThreadMessageMutateAsync).not.toHaveBeenCalled();
   });
@@ -1173,11 +1210,15 @@ describe("SideChatTabContent", () => {
     mocks.queuedMessages = [makeQueuedMessage()];
     renderSideChat({ threadId: "thr_side" });
     fireEvent.click(screen.getByRole("button", { name: "Edit side queue 1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Attach" }));
+    let inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
+    fireEvent.click(inlineEditor.getByRole("button", { name: "Attach" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Cancel side queue edit" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Edit side queue 1" }));
+    inlineEditor = within(screen.getByTestId("inline-queued-message-editor"));
 
     upload.resolve({
       mimeType: "text/plain",
@@ -1190,9 +1231,9 @@ describe("SideChatTabContent", () => {
     await waitFor(() =>
       expect(mocks.uploadPromptAttachmentMutateAsync).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByTestId("side-chat-attachment-count").textContent).toBe(
-      "0",
-    );
+    expect(
+      inlineEditor.getByTestId("side-chat-attachment-count").textContent,
+    ).toBe("0");
     fireEvent.click(
       screen.getByRole("button", { name: "Cancel side queue edit" }),
     );

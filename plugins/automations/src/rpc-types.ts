@@ -32,7 +32,9 @@ export const workspaceArgsSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("managed-worktree"),
       baseBranch: z.discriminatedUnion("kind", [
-        z.object({ kind: z.literal("named"), name: z.string().min(1) }).strict(),
+        z
+          .object({ kind: z.literal("named"), name: z.string().min(1) })
+          .strict(),
         z.object({ kind: z.literal("default") }).strict(),
       ]),
     })
@@ -159,7 +161,10 @@ function requireExactlyOneScriptSource(
   exec: z.infer<typeof automationExecutionSchema>,
   ctx: z.RefinementCtx,
 ): void {
-  if (exec.mode === "script" && (exec.script != null) === (exec.scriptFile != null)) {
+  if (
+    exec.mode === "script" &&
+    (exec.script != null) === (exec.scriptFile != null)
+  ) {
     ctx.addIssue({
       code: "custom",
       message: "provide exactly one of script | scriptFile",
@@ -170,6 +175,38 @@ function requireExactlyOneScriptSource(
 
 export const automationExecutionRequestSchema =
   automationExecutionSchema.superRefine(requireExactlyOneScriptSource);
+
+export const agentExecutionTargetSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("target-thread"),
+      threadId: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("environment"),
+      environment: agentEnvironmentSchema,
+    })
+    .strict(),
+]);
+export type AgentExecutionTarget = z.infer<typeof agentExecutionTargetSchema>;
+
+export const agentExecutionUpdateSchema = z
+  .object({
+    prompt: z.string().min(1).max(AUTOMATION_PROMPT_MAX_LENGTH).optional(),
+    permissionMode: permissionModeSchema.optional(),
+    target: agentExecutionTargetSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.prompt !== undefined ||
+      value.permissionMode !== undefined ||
+      value.target !== undefined,
+    { message: "at least one agent execution field is required" },
+  );
+export type AgentExecutionUpdate = z.infer<typeof agentExecutionUpdateSchema>;
 
 export const automationResponseSchema = z
   .object({
@@ -218,7 +255,9 @@ export const projectAutomationInputSchema = z
     automationId: z.string().min(1),
   })
   .strict();
-export type ProjectAutomationInput = z.infer<typeof projectAutomationInputSchema>;
+export type ProjectAutomationInput = z.infer<
+  typeof projectAutomationInputSchema
+>;
 
 export const listAutomationsInputSchema = z
   .object({ projectId: z.string().min(1) })
@@ -248,14 +287,22 @@ export const updateAutomationInputSchema = z
     name: z.string().min(1).max(AUTOMATION_NAME_MAX_LENGTH).optional(),
     trigger: automationTriggerSchema.optional(),
     execution: automationExecutionRequestSchema.optional(),
+    agent: agentExecutionUpdateSchema.optional(),
   })
   .strict()
   .refine(
     (value) =>
       value.name !== undefined ||
       value.trigger !== undefined ||
-      value.execution !== undefined,
+      value.execution !== undefined ||
+      value.agent !== undefined,
     { message: "at least one field is required" },
+  )
+  .refine(
+    (value) => value.execution === undefined || value.agent === undefined,
+    {
+      message: "execution and agent updates cannot be combined",
+    },
   );
 export type UpdateAutomationInput = z.infer<typeof updateAutomationInputSchema>;
 
@@ -287,7 +334,9 @@ export type ResolvedAutomationRunsInput = z.output<
 >;
 
 export const automationListResponseSchema = z.array(automationResponseSchema);
-export type AutomationListResponse = z.infer<typeof automationListResponseSchema>;
+export type AutomationListResponse = z.infer<
+  typeof automationListResponseSchema
+>;
 
 export const automationRunListResponseSchema = z
   .object({

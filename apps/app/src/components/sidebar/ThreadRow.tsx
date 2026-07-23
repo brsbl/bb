@@ -39,6 +39,7 @@ import {
   isRuntimeBusyThread,
   isUnreadDoneThread,
   getThreadListIndicatorLabel,
+  hasThreadListWorkingActivity,
   NO_COLLAPSED_CHILD_ACTIVITY,
   resolveThreadListIndicator,
   type CollapsedChildActivity,
@@ -54,6 +55,7 @@ import {
   SIDEBAR_ROW_INTERACTIVE_STATE_CLASS,
   SIDEBAR_ROW_SELECTED_STATE_CLASS,
   SIDEBAR_MORE_ACTION_TRIGGER_CLASS,
+  SIDEBAR_PLUGIN_WORKING_STATUS_COLOR_CLASS,
   SIDEBAR_SUCCESS_STATUS_COLOR_CLASS,
   SIDEBAR_SUCCESS_STATUS_DOT_CLASS,
   SIDEBAR_WORKING_STATUS_COLOR_CLASS,
@@ -160,9 +162,17 @@ function PluginThreadRowStatusIndicator({
       className={cn(
         "pointer-events-none shrink-0",
         COARSE_POINTER_ICON_SIZE_CLASS,
-        status.tone === "success"
-          ? SIDEBAR_SUCCESS_STATUS_COLOR_CLASS
-          : "text-muted-foreground",
+        status.tone === "running"
+          ? [
+              "animate-shine-icon",
+              "animate-shine-icon-status",
+              SIDEBAR_PLUGIN_WORKING_STATUS_COLOR_CLASS,
+            ]
+          : status.tone === "success"
+            ? SIDEBAR_SUCCESS_STATUS_COLOR_CLASS
+            : status.tone === "error"
+              ? "text-destructive"
+              : "text-muted-foreground",
       )}
       aria-label={status.label}
     />
@@ -388,16 +398,38 @@ type ThreadTrailingIndicatorProps = ThreadStatusGlyphProps & {
   pluginStatus: PluginComposerThreadRowStatus | null;
 };
 
-function ThreadTrailingIndicator({
-  pluginStatus,
-  ...statusProps
-}: ThreadTrailingIndicatorProps) {
+interface ThreadTrailingIndicatorResolution {
+  accessibleLabel: string | null;
+  indicatorKind: ReturnType<typeof resolveThreadListIndicator>;
+  pluginStatusIsVisible: boolean;
+}
+
+function resolveThreadTrailingIndicatorStatus(
+  statusProps: ThreadStatusGlyphProps,
+  pluginStatus: PluginComposerThreadRowStatus | null,
+): ThreadTrailingIndicatorResolution {
   const indicatorKind = resolveThreadListIndicator(statusProps);
   const pluginStatusIsVisible =
     pluginStatus !== null &&
     indicatorKind !== "runtime" &&
     indicatorKind !== "unread-error" &&
     indicatorKind !== "waiting-for-input";
+
+  return {
+    accessibleLabel: pluginStatusIsVisible
+      ? pluginStatus.label
+      : getThreadListIndicatorLabel(indicatorKind),
+    indicatorKind,
+    pluginStatusIsVisible,
+  };
+}
+
+function ThreadTrailingIndicator({
+  pluginStatus,
+  ...statusProps
+}: ThreadTrailingIndicatorProps) {
+  const { indicatorKind, pluginStatusIsVisible } =
+    resolveThreadTrailingIndicatorStatus(statusProps, pluginStatus);
 
   if (indicatorKind === "none" && !pluginStatusIsVisible) {
     return null;
@@ -411,7 +443,7 @@ function ThreadTrailingIndicator({
         COARSE_POINTER_GLYPH_BOX_CLASS,
       )}
     >
-      {pluginStatusIsVisible ? (
+      {pluginStatusIsVisible && pluginStatus ? (
         <PluginThreadRowStatusIndicator status={pluginStatus} />
       ) : (
         <ThreadStatusGlyph {...statusProps} />
@@ -520,9 +552,18 @@ function ThreadRowComponent({
     isRuntimeActive: trailingRuntimeBusy,
     isWorkflowActive: trailingIsWorkflowActive,
   };
-  const trailingIndicatorKind = resolveThreadListIndicator(
+  const trailingIndicatorResolution = resolveThreadTrailingIndicatorStatus(
     trailingIndicatorState,
+    pluginThreadRowStatus,
   );
+  const trailingIndicatorKind = trailingIndicatorResolution.indicatorKind;
+  const splitIndicatorIsWorking = hasThreadListWorkingActivity(
+    trailingIndicatorState,
+    pluginThreadRowStatus?.tone === "running",
+  );
+  const splitIndicatorLabel = trailingIndicatorResolution.accessibleLabel
+    ? `${labelTitle} — open in split; ${trailingIndicatorResolution.accessibleLabel}`
+    : `${labelTitle} — open in split`;
   const linkLabel = hasComposerDraft
     ? `Open ${labelTitle} (unsubmitted draft)`
     : `Open ${labelTitle}`;
@@ -598,15 +639,10 @@ function ThreadRowComponent({
         ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-0.5">
-        {splitIndicator.miniMap ? (
-          <SplitPaneMiniMap
-            slots={splitIndicator.miniMap}
-            label={`${labelTitle} — open in split`}
-          />
-        ) : null}
         {shortcut &&
         trailingIndicatorKind === "none" &&
-        pluginThreadRowStatus === null ? (
+        pluginThreadRowStatus === null &&
+        splitIndicator.miniMap === null ? (
           <kbd aria-hidden="true" className={APP_COMMAND_SHORTCUT_HINT_CLASS}>
             {shortcut.label}
           </kbd>
@@ -632,13 +668,29 @@ function ThreadRowComponent({
                   "absolute inset-0 flex items-center justify-center",
                 )}
               >
-                <ThreadTrailingIndicator
-                  {...trailingIndicatorState}
-                  hideIdleDraftLabel={
-                    !hasHiddenChildren && trailingIndicatorKind === "draft"
-                  }
-                  pluginStatus={pluginThreadRowStatus}
-                />
+                {splitIndicator.miniMap ? (
+                  <span
+                    data-sidebar-thread-trailing-indicator=""
+                    className={cn(
+                      SIDEBAR_ROW_GLYPH_SLOT_CLASS,
+                      COARSE_POINTER_GLYPH_BOX_CLASS,
+                    )}
+                  >
+                    <SplitPaneMiniMap
+                      slots={splitIndicator.miniMap}
+                      label={splitIndicatorLabel}
+                      isWorking={splitIndicatorIsWorking}
+                    />
+                  </span>
+                ) : (
+                  <ThreadTrailingIndicator
+                    {...trailingIndicatorState}
+                    hideIdleDraftLabel={
+                      !hasHiddenChildren && trailingIndicatorKind === "draft"
+                    }
+                    pluginStatus={pluginThreadRowStatus}
+                  />
+                )}
               </span>
               <div
                 data-sidebar-hover-actions-open={

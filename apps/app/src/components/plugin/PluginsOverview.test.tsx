@@ -1,0 +1,459 @@
+// @vitest-environment jsdom
+
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import type { SystemConfigResponse } from "@bb/server-contract";
+import {
+  defaultAppSettings,
+  defaultAppTheme,
+  defaultExperiments,
+} from "@bb/domain";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createQueryClientTestHarness } from "@/test/queryClientTestHarness";
+import { PluginsOverview } from "./PluginsOverview";
+
+function responseJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function systemConfig(pluginsEnabled: boolean): SystemConfigResponse {
+  return {
+    generalSettings: defaultAppSettings,
+    keybindings: [],
+    defaultKeybindings: [],
+    keybindingOverrides: [],
+    experiments: { ...defaultExperiments, plugins: pluginsEnabled },
+    appearance: defaultAppTheme,
+    customThemes: [],
+    pluginThemes: [],
+    featureFlags: { placeholder: false },
+    hostDaemonPort: null,
+    primaryHostId: null,
+    primaryHostPlatform: null,
+    voiceTranscriptionEnabled: false,
+    dataDir: "/tmp/bb-test",
+  };
+}
+
+const AUTOMATIONS_PLUGIN = {
+  id: "automations",
+  source: "builtin:automations",
+  rootDir: "/plugins/automations",
+  version: "0.1.0",
+  enabled: true,
+  status: "running",
+  statusDetail: null,
+  description: "Schedule recurring and one-shot agent or script work.",
+  name: "Automations",
+  icon: "Clock",
+  logoUrl: null,
+  logoDarkUrl: null,
+  hasSettings: false,
+  provenance: "builtin",
+  isOrphanedBuiltin: false,
+  sourceDisplay: "builtin · automations",
+  updateState: {},
+  handlerStats: { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 },
+  services: [],
+  schedules: [],
+  cliCommand: null,
+  app: { hasApp: true, bundle: null },
+};
+
+const GITHUB_CATALOG_ENTRY = {
+  entryId: "github",
+  pluginId: "github",
+  displayName: "GitHub",
+  description: "Browse GitHub issues and pull requests in BB.",
+  icon: "Github",
+  category: "Developer tools",
+  source: "github-release:ymichael/bb/bb-plugin-github-{version}.tgz@^0.1.0",
+  installed: false,
+  compatible: true,
+  incompatibleReason: null,
+};
+
+function installFetch(
+  pluginsEnabled = true,
+  plugins: readonly unknown[] = [AUTOMATIONS_PLUGIN],
+) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const rawUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const url = new URL(rawUrl, "http://localhost");
+      if (url.pathname === "/api/v1/system/config") {
+        return responseJson(systemConfig(pluginsEnabled));
+      }
+      if (url.pathname === "/api/v1/plugins") {
+        return responseJson({
+          enabled: pluginsEnabled,
+          plugins,
+        });
+      }
+      if (url.pathname === "/api/v1/plugin-catalog") {
+        return responseJson({ catalog: { pluginCount: 4 } });
+      }
+      if (url.pathname === "/api/v1/plugin-catalog/search") {
+        return responseJson({ results: [GITHUB_CATALOG_ENTRY] });
+      }
+      if (url.pathname === "/api/v1/plugin-catalog/install") {
+        return responseJson({
+          ok: true,
+          plugin: {
+            ...AUTOMATIONS_PLUGIN,
+            id: "github",
+            source: GITHUB_CATALOG_ENTRY.source,
+            rootDir: "/official-plugins/github",
+            name: GITHUB_CATALOG_ENTRY.displayName,
+            description: GITHUB_CATALOG_ENTRY.description,
+            icon: GITHUB_CATALOG_ENTRY.icon,
+            provenance: "catalog",
+            catalogEntryId: GITHUB_CATALOG_ENTRY.entryId,
+            sourceDisplay: "BB Official · GitHub",
+          },
+        });
+      }
+      return responseJson({ error: "not found" }, 404);
+    }),
+  );
+}
+
+function LocationPath() {
+  return <span data-testid="location-path">{useLocation().pathname}</span>;
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("PluginsOverview", () => {
+  it("renders Installed and Browse as real collection projections", async () => {
+    installFetch();
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins"]}>
+        <QueryClientWrapper>
+          <PluginsOverview />
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Automations")).toBeTruthy();
+    const installedTab = screen.getByRole("tab", {
+      name: "Installed, 1 plugin",
+    });
+    expect(installedTab.className).toContain("cursor-pointer");
+    expect(screen.getByRole("tab", { name: "Browse" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New plugin" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "New plugin options" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /Marketplaces/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Browse" }));
+    expect(await screen.findByText("GitHub")).toBeTruthy();
+    expect(screen.getByText("BB Official plugins")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New plugin" })).toBeTruthy();
+  });
+
+  it("opens installed resources on the canonical Tools detail route", async () => {
+    installFetch();
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins"]}>
+        <QueryClientWrapper>
+          <Routes>
+            <Route path="/tools/plugins" element={<PluginsOverview />} />
+            <Route path="*" element={<LocationPath />} />
+          </Routes>
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Automations plugin details",
+      }),
+    );
+    expect(screen.getByTestId("location-path").textContent).toBe(
+      "/tools/plugins/automations",
+    );
+  });
+
+  it("opens the canonical detail returned by a Browse install", async () => {
+    installFetch();
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins?view=browse"]}>
+        <QueryClientWrapper>
+          <Routes>
+            <Route path="/tools/plugins" element={<PluginsOverview />} />
+            <Route path="*" element={<LocationPath />} />
+          </Routes>
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Install GitHub" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Install GitHub?" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install GitHub" }));
+
+    expect((await screen.findByTestId("location-path")).textContent).toBe(
+      "/tools/plugins/github",
+    );
+  });
+
+  it("paginates the installed plugin projection", async () => {
+    const plugins = Array.from({ length: 12 }, (_, index) => {
+      const ordinal = String(index + 1).padStart(2, "0");
+      return {
+        ...AUTOMATIONS_PLUGIN,
+        id: `plugin-${ordinal}`,
+        source: `builtin:plugin-${ordinal}`,
+        name: `Plugin ${ordinal}`,
+      };
+    });
+    installFetch(true, plugins);
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins"]}>
+        <QueryClientWrapper>
+          <PluginsOverview />
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Plugin 01")).toBeTruthy();
+    expect(screen.getByText("1–10 of 12")).toBeTruthy();
+    expect(screen.queryByText("Plugin 11")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("11–12 of 12")).toBeTruthy();
+    expect(screen.getByText("Plugin 11")).toBeTruthy();
+    expect(screen.queryByText("Plugin 01")).toBeNull();
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Search installed plugins" }),
+      { target: { value: "Plugin 01" } },
+    );
+
+    expect(screen.getByText("Plugin 01")).toBeTruthy();
+    expect(
+      screen.queryByRole("navigation", { name: "Results pagination" }),
+    ).toBeNull();
+  });
+
+  it("fits installed plugin rows to the available height and keeps pagination outside the scroller", async () => {
+    const plugins = Array.from({ length: 30 }, (_, index) => {
+      const ordinal = String(index + 1).padStart(2, "0");
+      return {
+        ...AUTOMATIONS_PLUGIN,
+        id: `plugin-${ordinal}`,
+        source: `builtin:plugin-${ordinal}`,
+        name: `Plugin ${ordinal}`,
+      };
+    });
+    let viewportHeight = 760;
+    const clientHeightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientHeight",
+    );
+    const resizeCallbacks = new Set<ResizeObserverCallback>();
+
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return this.id === "plugins-installed-results" ? viewportHeight : 0;
+      },
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRect(this: HTMLElement) {
+        const height = this.hasAttribute("data-resource-list-panel")
+          ? viewportHeight
+          : this.hasAttribute("data-resource-row")
+            ? 50
+            : 0;
+        return new DOMRect(0, 0, 800, height);
+      },
+    );
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserverMock {
+        constructor(private readonly callback: ResizeObserverCallback) {
+          resizeCallbacks.add(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {
+          resizeCallbacks.delete(this.callback);
+        }
+      },
+    );
+
+    try {
+      installFetch(true, plugins);
+      const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+      render(
+        <MemoryRouter initialEntries={["/tools/plugins"]}>
+          <QueryClientWrapper>
+            <PluginsOverview />
+          </QueryClientWrapper>
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("1–15 of 30")).toBeTruthy();
+      });
+      const viewport = document.getElementById("plugins-installed-results");
+      const footer = document.querySelector(
+        "[data-resource-collection-footer]",
+      );
+      const collectionContent = document.querySelector(
+        "[data-resource-collection-content]",
+      );
+      const listPanel = document.querySelector("[data-resource-list-panel]");
+      expect(viewport?.contains(footer)).toBe(false);
+      expect(collectionContent).toBeNull();
+      expect(listPanel?.classList.contains("flex-1")).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(screen.getByText("16–30 of 30")).toBeTruthy();
+
+      viewportHeight = 410;
+      act(() => {
+        for (const callback of resizeCallbacks) {
+          callback([], {} as ResizeObserver);
+        }
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("9–16 of 30")).toBeTruthy();
+      });
+      expect(screen.getByText("Page 2 of 4")).toBeTruthy();
+    } finally {
+      if (clientHeightDescriptor === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
+      } else {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "clientHeight",
+          clientHeightDescriptor,
+        );
+      }
+    }
+  });
+
+  it("sorts built-ins first and alphabetically within provenance groups", async () => {
+    installFetch(true, [
+      {
+        ...AUTOMATIONS_PLUGIN,
+        id: "local-zulu",
+        name: "Local Zulu",
+        provenance: "direct",
+      },
+      { ...AUTOMATIONS_PLUGIN, id: "built-zulu", name: "Built Zulu" },
+      {
+        ...AUTOMATIONS_PLUGIN,
+        id: "local-alpha",
+        name: "Local Alpha",
+        provenance: "direct",
+      },
+      { ...AUTOMATIONS_PLUGIN, id: "built-alpha", name: "Built Alpha" },
+    ]);
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins"]}>
+        <QueryClientWrapper>
+          <PluginsOverview />
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Built Alpha");
+    const rows = [...document.querySelectorAll('[data-testid^="plugin-row-"]')];
+    expect(rows.map((row) => row.getAttribute("data-testid"))).toEqual([
+      "plugin-row-built-alpha",
+      "plugin-row-built-zulu",
+      "plugin-row-local-alpha",
+      "plugin-row-local-zulu",
+    ]);
+    const builtInPills = screen.getAllByText("Built-in");
+    expect(builtInPills).toHaveLength(2);
+    expect(builtInPills[0]?.parentElement?.className).toContain("rounded-md");
+    expect(builtInPills[0]?.parentElement?.className).toContain(
+      "bg-surface-recessed/45",
+    );
+    expect(builtInPills[0]?.parentElement?.className).toContain(
+      "text-subtle-foreground",
+    );
+    expect(builtInPills[0]?.parentElement?.className).toContain("font-medium");
+    expect(builtInPills[0]?.parentElement?.className).toContain("px-1.5");
+    expect(builtInPills[0]?.parentElement?.className).toContain("py-0");
+  });
+
+  it("uses the same passive provenance tag for built-in and BB Official plugins", async () => {
+    installFetch(true, [
+      AUTOMATIONS_PLUGIN,
+      {
+        ...AUTOMATIONS_PLUGIN,
+        id: "github",
+        name: "GitHub",
+        source: GITHUB_CATALOG_ENTRY.source,
+        provenance: "catalog",
+        catalogEntryId: GITHUB_CATALOG_ENTRY.entryId,
+        sourceDisplay: "BB Official · GitHub",
+      },
+    ]);
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins"]}>
+        <QueryClientWrapper>
+          <PluginsOverview />
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    const builtIn = (await screen.findByText("Built-in")).parentElement;
+    const official = screen.getByText("BB Official").parentElement;
+    expect(official?.className).toBe(builtIn?.className);
+  });
+
+  it("keeps installed plugins visible when plugin installation is off", async () => {
+    installFetch(false);
+    const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
+    render(
+      <MemoryRouter initialEntries={["/tools/plugins?view=browse"]}>
+        <QueryClientWrapper>
+          <PluginsOverview />
+        </QueryClientWrapper>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Automations")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Browse" })).toBeNull();
+    expect(screen.getByText(/Browsing and installation are off/)).toBeTruthy();
+  });
+});

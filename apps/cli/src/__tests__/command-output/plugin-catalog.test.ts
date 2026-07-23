@@ -11,6 +11,7 @@ import { registerPluginCommands } from "../../commands/plugin.js";
 
 const searchResult = {
   entryId: "linear",
+  pluginId: "linear",
   displayName: "Linear",
   description: "Linear issue tools",
   icon: null,
@@ -35,6 +36,7 @@ const installedPlugin = {
   description: "Linear issue tools",
   name: "Linear",
   icon: null,
+  experimental_iconUrl: null,
   status: "running",
   statusDetail: null,
   handlerStats: { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 },

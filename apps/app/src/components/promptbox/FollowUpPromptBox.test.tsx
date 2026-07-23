@@ -359,10 +359,7 @@ describe("FollowUpPromptBox", () => {
     expect(queuedMessages.previousElementSibling).toBe(pluginHeaderRoot);
   });
 
-  it("moves one stateful composer between the bottom and inline targets without remounting", () => {
-    const target = document.createElement("div");
-    target.setAttribute("data-test-composer-target", "");
-    document.body.append(target);
+  it("keeps the bottom composer mounted when its stack changes", () => {
     const props = createFollowUpPromptBoxProps({ kind: "ready" });
 
     const { container, rerender } = render(<FollowUpPromptBox {...props} />);
@@ -378,36 +375,26 @@ describe("FollowUpPromptBox", () => {
         ?.querySelector('[data-testid="prompt-box"]'),
     ).toBe(promptBox);
 
-    rerender(<FollowUpPromptBox {...props} composerTarget={target} />);
+    rerender(
+      <FollowUpPromptBox
+        {...props}
+        stack={<div data-testid="new-stack-item">Queue</div>}
+      />,
+    );
 
-    expect(target.querySelector('[data-testid="prompt-box"]')).toBe(promptBox);
+    expect(screen.getByTestId("new-stack-item")).toBeTruthy();
     expect(screen.getAllByTestId("prompt-box")).toHaveLength(1);
     expect(screen.getByLabelText("Follow-up prompt")).toBe(input);
     expect(input.value).toBe("Uncommitted editor state");
-    expect(document.activeElement).toBe(input);
-    expect(input.selectionStart).toBe(input.value.length);
-
     fireEvent.click(screen.getByText("Submit"));
     expect(props.composer?.onSubmit).toHaveBeenCalledOnce();
-
-    rerender(<FollowUpPromptBox {...props} composerTarget={null} />);
-
-    expect(
-      container
-        .querySelector("[data-follow-up-composer-anchor]")
-        ?.querySelector('[data-testid="prompt-box"]'),
-    ).toBe(promptBox);
-    expect(screen.getByLabelText("Follow-up prompt")).toBe(input);
-    expect(input.value).toBe("Uncommitted editor state");
-
-    target.remove();
   });
 
   it.each([
     ["main-thread", true],
     ["side-chat", false],
   ] as const)(
-    "moves queued-message banners immediately before the %s inline composer",
+    "renders queued-message banners before the %s inline composer",
     (_kind, isPrimaryComposer) => {
       setPluginSlotRegistrations("queued-tools", {
         homepageSections: [],
@@ -434,8 +421,6 @@ describe("FollowUpPromptBox", () => {
         fileOpeners: [],
         messageDirectives: [],
       });
-      const target = document.createElement("div");
-      document.body.append(target);
       const draft = { text: "Queued draft", mentions: [], attachments: [] };
       const scope = {
         kind: "queued-message" as const,
@@ -443,10 +428,9 @@ describe("FollowUpPromptBox", () => {
         queuedMessageId: "queued_1",
       };
       const props = createFollowUpPromptBoxProps({ kind: "ready" });
-      const { container } = render(
+      render(
         <FollowUpPromptBox
           {...props}
-          composerTarget={target}
           isPrimaryComposer={isPrimaryComposer}
           pluginComposerHost={{
             scope,
@@ -462,15 +446,11 @@ describe("FollowUpPromptBox", () => {
 
       const banner = screen.getByTestId("queued-plugin-banner");
       const promptBox = screen.getByTestId("prompt-box");
-      const bannerRoot = banner.closest("[data-bb-plugin-root]");
-      const composerRoot = promptBox.closest("[data-follow-up-composer]");
-      expect(target.contains(banner)).toBe(true);
-      expect(target.contains(promptBox)).toBe(true);
-      expect(composerRoot?.previousElementSibling).toBe(bannerRoot);
-      expect(container.contains(banner)).toBe(false);
+      expect(
+        banner.compareDocumentPosition(promptBox) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
       expect(screen.getAllByTestId("queued-plugin-banner")).toHaveLength(1);
-
-      target.remove();
     },
   );
 

@@ -57,6 +57,10 @@ message agents, or inspect projects, providers, and environments.
   inspect or change these server-backed values from agents. Pass
   `bb settings usage --machine <id-or-name>` to read provider limits from a
   specific connected machine instead of the primary machine.
+- The default-off `toolsHub` experiment exposes the unified Skills, Plugins,
+  and Automations management UI. Change it with
+  `bb settings experiment toolsHub <true|false>`. It does not load or unload
+  tools; the separate `plugins` experiment controls user plugin runtime loading.
 
 ## Agent Instructions
 
@@ -72,6 +76,21 @@ message agents, or inspect projects, providers, and environments.
   parent-directory walk); an empty file is ignored. Run
   `bb guide agent-configuration` for details (it also covers project
   `.bb/skills/`).
+
+## Skills
+
+- Use `bb skill list` to inspect installed and discovered skills. It defaults to
+  `BB_PROJECT_ID`, then the personal project; pass `--project` or
+  `--environment` to select another workspace.
+- Copy the opaque ID from `bb skill list`, then use `bb skill show <skill-id>`
+  or `bb skill files <skill-id>` to read that exact skill.
+- `bb skill show <skill-id> --json` returns the revision. Pass that revision,
+  plus `--file`, to `bb skill update <skill-id>`. Use update or delete only when
+  the list says editable.
+- Use `bb skill search [query]` for live skills.sh results. Inspect metadata and
+  the bounded file preview with `bb skill registry detail <registry-skill-id>`.
+  Install with `bb skill install <registry-skill-id>`; never infer an install
+  source from a display name.
 
 ## Spawning Threads
 
@@ -110,12 +129,12 @@ isolated|reuse`, or anchor with `--source-seq-end`. Permission mode inherits
   the resolved host plus `hostId`, `hostName`, `port`, and `url` per row.
   `bb connect servers` lists every bb on the paired account (handle,
   name, url, live) so callers can discover siblings; `--json` includes
-  `selfHandle` for deduping this server. When you start a local server the user should open
-  remotely, expose the port and give them the share URL. Remote access is owned
-  by the builtin `connect` plugin: `bb plugin disable connect` cuts it off
-  entirely; with bb connect still enabled, `bb plugin enable connect` restores
-  the command. Settings → Connect shows the current URL, QR code, shared ports,
-  re-pair form, and disconnect control.
+  `selfHandle` for deduping this server. When you start a local server the user
+  should open remotely, expose the port and give them the share URL. Remote
+  access is owned by the builtin `connect` plugin: `bb plugin disable connect`
+  cuts it off entirely; with bb connect still enabled, `bb plugin enable
+  connect` restores the command. Plugins → Connect shows the current URL, QR
+  code, shared ports, re-pair form, and disconnect control.
 - Add remote execution machines from Settings → Machines. Its one-line
   installer stores the bb connect machine credential locally and configures
   both the daemon protocol and agent-launched `bb` CLI to traverse the account
@@ -409,9 +428,21 @@ add <key-or-comment-id> --file <path>` (task key = task-level; comment ID
 - Use `bb automation list`, `bb automation show <id>`, and
   `bb automation runs <id>` to inspect; `--output <run-id>` prints a script
   run's captured stdout.
+- Partially update an existing agent automation in place by omitting
+  `--provider` and `--model` and using `bb automation update <id> --project <id>
+--prompt "..."`, `--permission-mode accept-edits|auto|full`, or exactly one
+  target option:
+  `--target-thread <id>`, `--environment <id-or-path>`, or
+  `--new-environment worktree [--base-branch <branch>]`. Omitted execution
+  fields are preserved; target options are mutually exclusive.
 - Use `bb automation pause <id>` / `bb automation resume <id>` to toggle,
   `bb automation run <id>` to trigger now, and `bb automation delete <id> --yes`
   to remove.
+- Use `bb automation update <id> --project <id>` with `--name` or schedule
+  flags for metadata changes. To change what runs, provide a complete
+  replacement execution: `--prompt` + `--provider` + `--model` for an agent,
+  or `--script`/`--script-file` for a script. Script replacements also accept
+  `--interpreter`, `--timeout`, and `--env-json '{"KEY":"value"}'`.
 - Use `bb plugin list` if `bb automation ...` is unavailable; the builtin
   automations plugin should be installed and running.
 
@@ -427,11 +458,26 @@ add <key-or-comment-id> --file <path>` (task key = task-level; comment ID
 - Treat the returned path and added/updated/unchanged counts as verification.
   Do not inspect the completed file with `cat`, `sed`, `env`, or similar tools.
 
+## Ask User Question
+
+- The builtin `ask-user-question` plugin gives providers that lack a native
+  one an `AskUserQuestion` tool — multiple-choice questions answered in a
+  composer form. It is disabled on fresh installations; enable it under
+  Tools → Plugins or with `bb plugin enable ask-user-question`.
+- It contributes no CLI command. Once enabled the tool appears in the agent's
+  own tool list, and only for providers without a native equivalent: Claude
+  Code threads keep using Claude's built-in `AskUserQuestion`, so the plugin
+  withholds its copy there.
+- Answering is UI-only. `bb thread interactions list <thread-id>` shows the
+  request as kind `plugin`, but `bb thread interactions answer` resolves
+  provider questions only, so a pending plugin question cannot be answered
+  from the CLI.
+
 ## Workflows
 
 - The builtin `workflows` plugin runs durable provider-independent JavaScript
   orchestration and is disabled on fresh installations. Enable it under
-  Settings → Plugins or with `bb plugin enable workflows` before using its
+  Tools → Plugins or with `bb plugin enable workflows` before using its
   command.
 - Author and check sources with `bb workflows validate (--script <javascript>|
 --source <javascript>|--file <path>|--name <name>)`; start a background run
@@ -566,7 +612,7 @@ them by mixing ink into canvas), the `--primary` accent, the secondary text tier
   - `bb plugin run <id> [args...]` — explicit form of a plugin's CLI command.
   - `bb plugin new <name> [--app]` — scaffold a plugin (`--app` adds a frontend
     entry plus a typecheck-only `tsconfig.json`; scaffold sets
-    `engines.bbPluginSdk` to `^0.4.0`); `bb plugin build [path]` —
+    `engines.bbPluginSdk` to `^0.4.1`); `bb plugin build [path]` —
     compile the plugin into `dist/`: the backend bundle (`server.js` +
     `server.meta.json` stamped with SDK/identity metadata; preferred by
     git/npm installs over source) and, when `bb.app` is declared, `app.js` +
@@ -583,7 +629,7 @@ them by mixing ink into canvas), the `--primary` accent, the secondary text tier
     useBbNavigate, useComposer for scoped text editing / quote / mention /
     focus access); components are vendored shadcn source the
     plugin owns. Installed
-    plugins and their settings also appear under Settings → Plugins.
+    plugins and their settings also appear under Tools → Plugins.
 - Plugins can add top-level `bb` subcommands (e.g. `bb linear issues`). Run
   them directly — unknown `bb` commands are resolved against installed plugins
   and proxied to the server. Core command names always win. In agent threads,

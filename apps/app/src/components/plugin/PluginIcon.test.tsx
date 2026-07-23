@@ -22,6 +22,7 @@ it("uses branding.icon instead of the image logo or contribution hint", () => {
         {
           displayName: "Docs",
           icon: "FileText",
+          compactIconUrl: null,
           logoUrl: "/api/v1/plugins/docs/assets/logo?h=abc",
           logoDarkUrl: "/api/v1/plugins/docs/assets/logo-dark?h=def",
         },
@@ -43,6 +44,7 @@ it("uses the contribution hint when branding.icon is omitted", () => {
         {
           displayName: "GitHub",
           icon: null,
+          compactIconUrl: null,
           logoUrl: "/api/v1/plugins/github/assets/logo?h=abc",
           logoDarkUrl: null,
         },
@@ -63,6 +65,7 @@ it("uses Zap compactly when a logo-only plugin has no contribution hint", () => 
         {
           displayName: "GitHub",
           icon: null,
+          compactIconUrl: null,
           logoUrl: "/api/v1/plugins/github/assets/logo?h=abc",
           logoDarkUrl: null,
         },
@@ -73,4 +76,30 @@ it("uses Zap compactly when a logo-only plugin has no contribution hint", () => 
   const view = render(<PluginIcon pluginId="github" icon={null} />);
   expect(view.container.querySelector("[data-icon=Zap]")).toBeTruthy();
   expect(view.container.querySelector("img")).toBeNull();
+});
+
+it("uses a plugin-owned compact SVG before named icon hints", () => {
+  const compactIconUrl = "/api/v1/plugins/omega/assets/icon?h=abc";
+  setPluginLogoUrls(
+    new Map([
+      [
+        "omega",
+        {
+          displayName: "Omegacode",
+          icon: "Workflow",
+          compactIconUrl,
+          logoUrl: null,
+          logoDarkUrl: null,
+        },
+      ],
+    ]),
+  );
+
+  const view = render(<PluginIcon pluginId="omega" icon="Layers" />);
+  const asset = view.container.querySelector(
+    `[data-plugin-icon-asset="${compactIconUrl}"]`,
+  );
+  expect(asset).toBeTruthy();
+  expect(asset?.getAttribute("style")).toContain(compactIconUrl);
+  expect(view.container.querySelector("[data-icon]")).toBeNull();
 });

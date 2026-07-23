@@ -8,6 +8,7 @@ import {
 import plugin from "./server.js";
 import {
   automationListResponseSchema,
+  automationsOverviewResponseSchema,
   automationResponseSchema,
   automationRunListResponseSchema,
   automationRunRpcResponseSchema,
@@ -17,6 +18,7 @@ const PROJECT_ID = "proj_test";
 const MISSING_PROJECT_ID = "proj_missing";
 const DELETED_PROJECT_ID = "proj_deleted";
 const THREAD_ID = "thr_target";
+const SECTION_ID = "sec_reviews";
 
 const rpcMethods = [
   "automations_overview",
@@ -54,6 +56,18 @@ async function bootAutomationsPlugin(
           return [project()];
         },
       },
+      threadSections: {
+        async list() {
+          return [
+            {
+              id: SECTION_ID,
+              name: "Reviews",
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          ];
+        },
+      },
       hosts: {
         async list() {
           return [{ id: "host_test", status: "connected" }];
@@ -75,6 +89,7 @@ async function bootAutomationsPlugin(
             id: threadId,
             archivedAt: null,
             deletedAt: null,
+            sectionId: threadId === THREAD_ID ? SECTION_ID : null,
             status: "idle",
           };
         },
@@ -118,7 +133,9 @@ async function createAgentAutomation(
   harness: FakePluginHost["harness"],
   options: {
     name?: string;
-    trigger?: ReturnType<typeof oneShotTrigger> | { triggerType: "schedule"; cron: string; timezone: string };
+    trigger?:
+      | ReturnType<typeof oneShotTrigger>
+      | { triggerType: "schedule"; cron: string; timezone: string };
     targetThreadId?: string;
   } = {},
 ) {
@@ -158,9 +175,9 @@ describe("automations server plugin harness", () => {
 
     expect([...harness.registrations.rpcMethods].sort()).toEqual(rpcMethods);
     expect(harness.registrations.cli?.name).toBe("automation");
-    expect(harness.registrations.services.map((service) => service.name)).toEqual([
-      "automation-sweep",
-    ]);
+    expect(
+      harness.registrations.services.map((service) => service.name),
+    ).toEqual(["automation-sweep"]);
     expect(harness.registrations.threadEventHandlers).toMatchObject({
       "thread.idle": 1,
       "thread.failed": 1,
@@ -175,11 +192,23 @@ describe("automations server plugin harness", () => {
     const host = await bootAutomationsPlugin();
     const { harness } = host;
 
-    const created = await createAgentAutomation(harness, { name: "RPC agent" });
+    const created = await createAgentAutomation(harness, {
+      name: "RPC agent",
+      targetThreadId: THREAD_ID,
+    });
     const listed = automationListResponseSchema.parse(
       await harness.callRpc("automations_list", { projectId: PROJECT_ID }),
     );
     expect(listed.map((automation) => automation.id)).toContain(created.id);
+    const overview = automationsOverviewResponseSchema.parse(
+      await harness.callRpc("automations_overview"),
+    );
+    expect(overview.automations).toContainEqual(
+      expect.objectContaining({
+        automation: expect.objectContaining({ id: created.id }),
+        project: { id: PROJECT_ID, name: "Test Project" },
+      }),
+    );
 
     const found = automationResponseSchema.parse(
       await harness.callRpc("automations_get", {
@@ -275,8 +304,94 @@ describe("automations server plugin harness", () => {
         await harness.callRpc("automations_list", { projectId: PROJECT_ID }),
       )[0]?.id,
     ).toBe(created.id);
+    const editable = automationResponseSchema.parse(
+      await harness.callRpc("automations_get", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+      }),
+    );
+    expect(editable.execution).toMatchObject({
+      mode: "script",
+      script: "echo ok",
+    });
+    expect(editable.execution).not.toHaveProperty("scriptFile");
 
-    const errorResult = await harness.runCli(["create", "--project", PROJECT_ID]);
+    const agentUpdateResult = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--prompt",
+      "triage the inbox",
+      "--provider",
+      "codex",
+      "--model",
+      "gpt-5",
+      "--permission-mode",
+      "accept-edits",
+      "--target-thread",
+      THREAD_ID,
+      "--json",
+    ]);
+    expect(agentUpdateResult.exitCode).toBe(0);
+    const agentUpdated = automationResponseSchema.parse(
+      JSON.parse(agentUpdateResult.stdout ?? ""),
+    );
+    expect(agentUpdated.execution).toEqual({
+      mode: "agent",
+      prompt: "triage the inbox",
+      providerId: "codex",
+      model: "gpt-5",
+      permissionMode: "accept-edits",
+      environment: { type: "project-default" },
+      targetThreadId: THREAD_ID,
+    });
+
+    const scriptUpdateResult = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--script",
+      "echo updated",
+      "--interpreter",
+      "bash",
+      "--timeout",
+      "12000",
+      "--env-json",
+      '{"CHANNEL":"qa"}',
+      "--json",
+    ]);
+    expect(scriptUpdateResult.exitCode).toBe(0);
+    const scriptUpdated = automationResponseSchema.parse(
+      JSON.parse(scriptUpdateResult.stdout ?? ""),
+    );
+    expect(scriptUpdated.execution).toEqual({
+      mode: "script",
+      scriptFile: "script.sh",
+      interpreter: "bash",
+      timeoutMs: 12_000,
+      env: { CHANNEL: "qa" },
+    });
+    const updatedEditable = automationResponseSchema.parse(
+      await harness.callRpc("automations_get", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+      }),
+    );
+    expect(updatedEditable.execution).toEqual({
+      mode: "script",
+      script: "echo updated",
+      interpreter: "bash",
+      timeoutMs: 12_000,
+      env: { CHANNEL: "qa" },
+    });
+
+    const errorResult = await harness.runCli([
+      "create",
+      "--project",
+      PROJECT_ID,
+    ]);
     expect(errorResult.exitCode).toBe(1);
     expect(errorResult.stderr).toContain("Provide an execution mode");
 
@@ -349,6 +464,240 @@ describe("automations server plugin harness", () => {
     expect(result.stderr).toContain(
       "Permission mode auto is not supported by provider codex",
     );
+    await harness.dispose();
+  });
+
+  it("updates agent execution in place through the CLI without resetting omitted fields", async () => {
+    const { harness } = await bootAutomationsPlugin();
+    const created = await createAgentAutomation(harness, {
+      name: "Keep this identity",
+      trigger: { triggerType: "schedule", cron: "0 9 * * *", timezone: "UTC" },
+    });
+
+    const environmentUpdate = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--prompt",
+      "use the new workspace",
+      "--permission-mode",
+      "auto",
+      "--environment",
+      "/tmp/design-doctrine",
+      "--json",
+    ]);
+    expect(environmentUpdate.exitCode).toBe(0);
+    const environmentTargeted = automationResponseSchema.parse(
+      JSON.parse(environmentUpdate.stdout ?? ""),
+    );
+    expect(environmentTargeted).toMatchObject({
+      id: created.id,
+      name: "Keep this identity",
+      trigger: { triggerType: "schedule", cron: "0 9 * * *", timezone: "UTC" },
+      execution: {
+        mode: "agent",
+        prompt: "use the new workspace",
+        providerId: "codex",
+        model: "gpt-5",
+        permissionMode: "auto",
+        environment: {
+          type: "host",
+          hostId: "host_test",
+          workspace: { type: "unmanaged", path: "/tmp/design-doctrine" },
+        },
+      },
+    });
+    expect(environmentTargeted.execution).not.toHaveProperty("targetThreadId");
+
+    const threadTargetUpdate = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--target-thread",
+      THREAD_ID,
+      "--json",
+    ]);
+    expect(threadTargetUpdate.exitCode).toBe(0);
+    const threadTargeted = automationResponseSchema.parse(
+      JSON.parse(threadTargetUpdate.stdout ?? ""),
+    );
+    expect(threadTargeted.execution).toMatchObject({
+      mode: "agent",
+      targetThreadId: THREAD_ID,
+      environment: {
+        type: "host",
+        hostId: "host_test",
+        workspace: { type: "unmanaged", path: "/tmp/design-doctrine" },
+      },
+    });
+
+    const worktreeUpdate = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--new-environment",
+      "worktree",
+      "--base-branch",
+      "release",
+      "--json",
+    ]);
+    expect(worktreeUpdate.exitCode).toBe(0);
+    const worktreeTargeted = automationResponseSchema.parse(
+      JSON.parse(worktreeUpdate.stdout ?? ""),
+    );
+    expect(worktreeTargeted.execution).toMatchObject({
+      mode: "agent",
+      providerId: "codex",
+      model: "gpt-5",
+      prompt: "use the new workspace",
+      permissionMode: "auto",
+      environment: {
+        type: "host",
+        hostId: "host_test",
+        workspace: {
+          type: "managed-worktree",
+          baseBranch: { kind: "named", name: "release" },
+        },
+      },
+    });
+    expect(worktreeTargeted.execution).not.toHaveProperty("targetThreadId");
+    expect(
+      automationListResponseSchema.parse(
+        await harness.callRpc("automations_list", { projectId: PROJECT_ID }),
+      ),
+    ).toHaveLength(1);
+
+    await harness.dispose();
+  });
+
+  it("rejects conflicting targets and invalid permission modes before updating", async () => {
+    const { harness } = await bootAutomationsPlugin();
+    const created = await createAgentAutomation(harness);
+
+    const conflictingTargets = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--target-thread",
+      THREAD_ID,
+      "--environment",
+      "/tmp/design-doctrine",
+    ]);
+    expect(conflictingTargets.exitCode).toBe(1);
+    expect(conflictingTargets.stderr).toContain(
+      "Cannot combine target options",
+    );
+
+    const invalidPermissionMode = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--permission-mode",
+      "write",
+    ]);
+    expect(invalidPermissionMode.exitCode).toBe(1);
+    expect(invalidPermissionMode.stderr).toContain(
+      "Expected accept-edits, auto, or full",
+    );
+
+    await harness.dispose();
+  });
+
+  it("patches agent execution through RPC while preserving its environment", async () => {
+    const { harness } = await bootAutomationsPlugin();
+    const created = await createAgentAutomation(harness);
+
+    const updated = automationResponseSchema.parse(
+      await harness.callRpc("automations_update", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+        agent: {
+          prompt: "updated by RPC",
+          permissionMode: "full",
+          target: { type: "target-thread", threadId: THREAD_ID },
+        },
+      }),
+    );
+    expect(updated).toMatchObject({
+      id: created.id,
+      execution: {
+        mode: "agent",
+        prompt: "updated by RPC",
+        providerId: "codex",
+        model: "gpt-5",
+        permissionMode: "full",
+        environment: { type: "project-default" },
+        targetThreadId: THREAD_ID,
+      },
+    });
+
+    await expect(
+      harness.callRpc("automations_update", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+        agent: { permissionMode: "write" },
+      }),
+    ).rejects.toThrow();
+
+    await harness.dispose();
+  });
+
+  it("rejects unsupported partial permission updates through RPC and CLI", async () => {
+    const { harness } = await bootAutomationsPlugin(["accept-edits", "full"]);
+    const created = await createAgentAutomation(harness);
+
+    await expect(
+      harness.callRpc("automations_update", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+        execution: {
+          ...agentExecution(),
+          permissionMode: "auto",
+        },
+      }),
+    ).rejects.toThrow(
+      "Permission mode auto is not supported by provider codex.",
+    );
+
+    await expect(
+      harness.callRpc("automations_update", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+        agent: { permissionMode: "auto" },
+      }),
+    ).rejects.toThrow(
+      "Permission mode auto is not supported by provider codex.",
+    );
+
+    const cliResult = await harness.runCli([
+      "update",
+      created.id,
+      "--project",
+      PROJECT_ID,
+      "--permission-mode",
+      "auto",
+    ]);
+    expect(cliResult.exitCode).toBe(1);
+    expect(cliResult.stderr).toContain(
+      "Permission mode auto is not supported by provider codex.",
+    );
+
+    const unchanged = automationResponseSchema.parse(
+      await harness.callRpc("automations_get", {
+        projectId: PROJECT_ID,
+        automationId: created.id,
+      }),
+    );
+    expect(unchanged.execution).toMatchObject({
+      mode: "agent",
+      permissionMode: "accept-edits",
+    });
+
     await harness.dispose();
   });
 
@@ -434,7 +783,10 @@ describe("automations server plugin harness", () => {
       threadId: "thr_spawned",
     });
     expect(signalKinds(host)).toEqual(
-      expect.arrayContaining(["automations-changed", "automation-runs-changed"]),
+      expect.arrayContaining([
+        "automations-changed",
+        "automation-runs-changed",
+      ]),
     );
 
     await harness.dispose();

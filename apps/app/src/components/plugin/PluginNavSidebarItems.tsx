@@ -2,14 +2,18 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@bb/shared-ui/button";
 import { PluginIcon } from "@/components/plugin/PluginIcon";
 import { PROJECT_LIST_ACTION_BUTTON_CLASS } from "@/components/sidebar/ProjectList";
-import { getPluginPanelRoutePath } from "@/lib/route-paths";
+import {
+  AUTOMATIONS_PLUGIN_ID,
+  AUTOMATIONS_PLUGIN_PANEL_PATH,
+  getPluginPanelRoutePath,
+} from "@/lib/route-paths";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { cn } from "@bb/shared-ui/lib/utils";
 import type { PluginNavPanelSlot } from "@/lib/plugin-slots";
 import { usePaneContentSplitDrag } from "@/components/sidebar/usePaneContentSplitDrag";
 import { usePaneContentSplitIndicator } from "@/components/sidebar/paneContentSplitIndicator";
 import { SplitPaneMiniMap } from "@/components/sidebar/SplitPaneMiniMap";
-import { COARSE_POINTER_ROW_ACTION_SIZE_CLASS } from "@bb/shared-ui/coarse-pointer-sizing";
+import { useToolsHubExperiment } from "@/components/tools/tools-experiment-context";
 
 /**
  * Sidebar entries for plugin `navPanel` slots (plugin design §5.2): one row
@@ -23,10 +27,20 @@ export function PluginNavSidebarItems(props: {
   splitEnabled?: boolean;
 }) {
   const { navPanels } = usePluginSlots();
+  const toolsHubEnabled = useToolsHubExperiment();
+  const visibleNavPanels = toolsHubEnabled
+    ? navPanels.filter(
+        (panel) =>
+          !(
+            panel.pluginId === AUTOMATIONS_PLUGIN_ID &&
+            panel.path === AUTOMATIONS_PLUGIN_PANEL_PATH
+          ),
+      )
+    : navPanels;
   // Router hooks live in the inner component so hosts without a Router
   // (isolated sidebar tests/stories) can render the empty state.
-  if (navPanels.length === 0) return null;
-  return <PluginNavSidebarItemList {...props} navPanels={navPanels} />;
+  if (visibleNavPanels.length === 0) return null;
+  return <PluginNavSidebarItemList {...props} navPanels={visibleNavPanels} />;
 }
 
 function PluginNavSidebarItemList({
@@ -112,19 +126,15 @@ function PluginNavSidebarItem({
       }}
     >
       <PluginIcon pluginId={panel.pluginId} icon={panel.icon} />
-      <span className="min-w-0 flex-1 truncate text-left">{panel.title}</span>
-      {splitIndicator.miniMap ? (
-        <span className="flex shrink-0 items-center gap-0.5">
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+        <span className="min-w-0 truncate">{panel.title}</span>
+        {splitIndicator.miniMap ? (
           <SplitPaneMiniMap
             slots={splitIndicator.miniMap}
             label={`${panel.title} — open in split`}
           />
-          <span
-            aria-hidden="true"
-            className={COARSE_POINTER_ROW_ACTION_SIZE_CLASS}
-          />
-        </span>
-      ) : null}
+        ) : null}
+      </span>
     </Button>
   );
 }

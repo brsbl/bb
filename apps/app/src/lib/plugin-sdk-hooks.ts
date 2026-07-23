@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useQuery, type QueryKey } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { PromptTextMention } from "@bb/domain";
 import type {
   BbContext,
@@ -21,6 +21,7 @@ import type {
   PluginRpcClient,
   PluginSettingsState,
 } from "@bb/plugin-sdk";
+import { normalizeComposerThreadRowStatus } from "@bb/plugin-sdk/internal/composer-customization-validation";
 import {
   PluginSlotOwnershipContext,
   usePluginId,
@@ -43,6 +44,11 @@ import {
   isPromptDraftEmpty,
 } from "@/lib/prompt-draft";
 import {
+  AUTOMATIONS_PLUGIN_ID,
+  AUTOMATIONS_PLUGIN_PANEL_PATH,
+  getAutomationDetailRoutePath,
+  getAutomationEditRoutePath,
+  getAutomationsRoutePath,
   getPluginPanelRoutePath,
   getProjectComposeRoutePath,
   getRootComposeRoutePath,
@@ -51,6 +57,7 @@ import {
 import { useRouteState } from "@/hooks/useRouteState";
 import { useServerConnectionState } from "@/hooks/useServerConnectionState";
 import { wsManager } from "@/lib/ws";
+import { useToolsHubExperiment } from "@/components/tools/tools-experiment-context";
 
 /**
  * Host implementations of the `@bb/plugin-sdk/app` hooks (plugin design
@@ -64,6 +71,28 @@ type FetchLike = (
   input: string,
   init?: RequestInit,
 ) => Promise<Pick<Response, "ok" | "status" | "json">>;
+
+export function getAutomationPluginPanelRoutePath(subPath: string): string {
+  const parts = subPath.split("/").filter((part) => part.length > 0);
+  if (parts.length === 0) return getAutomationsRoutePath();
+  if (parts.length === 1 && parts[0] === "browse") {
+    return `${getAutomationsRoutePath()}?view=browse`;
+  }
+  if (parts.length !== 2 && !(parts.length === 3 && parts[2] === "edit")) {
+    return getAutomationsRoutePath();
+  }
+  const [projectId, automationId, mode] = parts;
+  if (projectId === undefined || automationId === undefined) {
+    return getAutomationsRoutePath();
+  }
+  return mode === "edit"
+    ? getAutomationEditRoutePath({ projectId, automationId })
+    : getAutomationDetailRoutePath({ projectId, automationId });
+}
+
+export function isAutomationEditRoutePath(pathname: string): boolean {
+  return /^\/tools\/automations\/[^/]+\/[^/]+\/edit$/.test(pathname);
+}
 
 function serializePluginRpcInput(value: unknown): string {
   const ancestors = new Set<object>();
@@ -269,6 +298,8 @@ export function useBbContext(): BbContext {
 
 export function useBbNavigate(): BbNavigate {
   const pluginId = usePluginId();
+  const toolsHubEnabled = useToolsHubExperiment();
+  const location = useLocation();
   const openThreadPanel = usePluginThreadPanelOpenHandler();
   const navigate = useNavigate();
   const toThread = useCallback(
@@ -295,31 +326,41 @@ export function useBbNavigate(): BbNavigate {
   );
   const toPluginPanel = useCallback(
     (path: string, options?: { subPath?: string; replace?: boolean }) => {
-      void navigate(
-        getPluginPanelRoutePath({
-          pluginId,
-          path,
-          ...(options?.subPath !== undefined
-            ? { subPath: options.subPath }
-            : {}),
-        }),
-        options?.replace ? { replace: true } : undefined,
-      );
+      const route =
+        toolsHubEnabled &&
+        pluginId === AUTOMATIONS_PLUGIN_ID &&
+        path === AUTOMATIONS_PLUGIN_PANEL_PATH
+          ? getAutomationPluginPanelRoutePath(options?.subPath ?? "")
+          : getPluginPanelRoutePath({
+              pluginId,
+              path,
+              ...(options?.subPath !== undefined
+                ? { subPath: options.subPath }
+                : {}),
+            });
+      void navigate(route, options?.replace ? { replace: true } : undefined);
     },
-    [navigate, pluginId],
+    [navigate, pluginId, toolsHubEnabled],
   );
   const toCompose = useCallback(
     (options?: { initialPrompt?: string; focusPrompt?: boolean }) => {
+      const replacesAutomationEditRoute =
+        pluginId === AUTOMATIONS_PLUGIN_ID &&
+        isAutomationEditRoutePath(location.pathname);
       // RootComposeView reads `focusPrompt`/`initialPrompt` off the location
       // state to seed and focus the composer (single-use, cleared after read).
       void navigate(getRootComposeRoutePath(), {
+        ...(replacesAutomationEditRoute ? { replace: true } : {}),
         state: {
           focusPrompt: options?.focusPrompt ?? false,
           initialPrompt: options?.initialPrompt ?? "",
+          ...(replacesAutomationEditRoute
+            ? { replaceInitialPrompt: true }
+            : {}),
         },
       });
     },
-    [navigate],
+    [location.pathname, navigate, pluginId],
   );
   const experimental_openThreadPanel = useCallback<
     BbNavigate["experimental_openThreadPanel"]
@@ -700,11 +741,16 @@ export function useComposer(): PluginComposerApi {
       ) {
         return;
       }
-      if (status !== null) registerVisualStateOwner();
+      const normalizedStatus = normalizeComposerThreadRowStatus(
+        status,
+        (reason) => console.warn(`bb plugin "${pluginId}": ${reason}`),
+      );
+      if (normalizedStatus === undefined) return;
+      if (normalizedStatus !== null) registerVisualStateOwner();
       setPluginThreadRowStatus(
         threadRowStatusThreadId,
         pluginId,
-        status,
+        normalizedStatus,
         visualStateOwner,
       );
     },

@@ -6,6 +6,26 @@ usage yet. Before renaming one to its stable name (a breaking rename — the
 plugin SDK is pre-1.0, so minor bumps are breaking), audit it against the
 questions listed with it, then remove it from this file in the same change.
 
+## Plugin manifest
+
+### `bb.branding.experimental_icon`
+
+An optional plugin-relative compact SVG path beginning with `./`, such as
+`./assets/icon.svg`. BB validates and hash-serves the SVG, then renders it as a
+`currentColor` CSS mask across compact plugin chrome. The existing
+`bb.branding.icon` field remains the stable host icon-name hint. Plugin
+inventory exposes the resolved asset as `experimental_iconUrl`.
+
+Audit before stabilizing:
+
+- Do real third-party icons remain legible at every compact size and theme?
+- Is a CSS mask sufficient, or do any valid icons need multicolor rendering?
+- Should stabilization rename both manifest `experimental_icon` and inventory
+  `experimental_iconUrl`, or replace the named and asset fields with a
+  discriminated icon source?
+- Does requiring a `./` plugin-relative path remain clear once more manifest
+  assets exist?
+
 ## `@bb/plugin-sdk/app`
 
 ### `app.experimental_contentScripts`

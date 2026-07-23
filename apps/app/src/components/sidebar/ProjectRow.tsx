@@ -106,6 +106,7 @@ import {
   getSidebarThreadRowPaddingLeft,
 } from "./sidebarRowClasses";
 import {
+  SIDEBAR_DRAG_OVERLAY_DROP_ANIMATION,
   useSidebarSortable,
   type SidebarSortableDragBindings,
 } from "./sortableMotion";
@@ -1398,13 +1399,6 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
     );
     const topLevelActionsOpen =
       isTopLevelActionsOpen || externalHeaderActions?.actionsOpen === true;
-    const showRollupGlyph =
-      isCollapsed &&
-      (section.activity.pending ||
-        section.activity.working ||
-        section.activity.hasUnsubmittedDraft ||
-        section.activity.unread ||
-        section.activity.unreadError);
     const topLevelActionControls = (
       <>
         {externalHeaderActions?.actions}
@@ -1466,53 +1460,23 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
         ) : null}
       </>
     );
-    const topLevelActions = (
+    const topLevelActions = hasTopLevelActions ? (
       <span
+        data-sidebar-hover-actions-open={
+          topLevelActionsOpen ? "true" : undefined
+        }
+        data-sidebar-hover-actions-mobile={
+          SIDEBAR_HOVER_ACTIONS_MOBILE_ALWAYS_VALUE
+        }
         className={cn(
+          SIDEBAR_HOVER_ACTIONS_CLASS,
           "relative z-10 inline-flex shrink-0 items-center",
-          showRollupGlyph &&
-            !hasTopLevelActions &&
-            COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
+          SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
         )}
       >
-        {showRollupGlyph ? (
-          <span
-            data-sidebar-hover-actions-open={
-              topLevelActionsOpen ? "true" : undefined
-            }
-            className={cn(
-              hasTopLevelActions && SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-              "pointer-events-none absolute inset-0 flex items-center justify-end text-subtle-foreground",
-              hasTopLevelActions && "max-md:pointer-coarse:hidden",
-            )}
-          >
-            <CollapsedThreadStatusGlyph activity={section.activity} />
-          </span>
-        ) : null}
-        {showRollupGlyph && hasTopLevelActions ? (
-          <span className="hidden shrink-0 items-center justify-center text-subtle-foreground max-md:pointer-coarse:inline-flex">
-            <CollapsedThreadStatusGlyph activity={section.activity} />
-          </span>
-        ) : null}
-        {hasTopLevelActions ? (
-          <span
-            data-sidebar-hover-actions-open={
-              topLevelActionsOpen ? "true" : undefined
-            }
-            data-sidebar-hover-actions-mobile={
-              SIDEBAR_HOVER_ACTIONS_MOBILE_ALWAYS_VALUE
-            }
-            className={cn(
-              SIDEBAR_HOVER_ACTIONS_CLASS,
-              "relative z-10 inline-flex shrink-0 items-center",
-              SIDEBAR_HOVER_ACTIONS_GAP_CLASS,
-            )}
-          >
-            {topLevelActionControls}
-          </span>
-        ) : null}
+        {topLevelActionControls}
       </span>
-    );
+    ) : null;
 
     return (
       <TopLevelSidebarSection
@@ -1525,6 +1489,7 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
           isCollapsed,
           onToggleCollapsed: handleToggleCollapsed,
         }}
+        collapsedActivity={section.activity}
         consumeClickSuppression={consumeClickSuppression}
         dragBindings={dragBindings}
         isDropTargetActive={isDropTargetActive}
@@ -2124,17 +2089,13 @@ export const ChronologicalSectionThreadSections = memo(
         <SectionThreadDndProvider value={renderedSectionDnd}>
           {orderedSections}
           {createPortal(
-            // The overlay only renders thread content. Its default drop side
-            // effect hides the active DOM node, so enabling it for a section
-            // drag would make that section flash invisible on mouse-up.
+            // The overlay only renders thread content, so a section drag has
+            // nothing to fly home and skips the drop animation entirely.
             <DragOverlay
               className="cursor-grabbing"
               dropAnimation={
                 sectionDnd.activeThread
-                  ? {
-                      duration: 180,
-                      easing: "cubic-bezier(0.2, 0, 0, 1)",
-                    }
+                  ? SIDEBAR_DRAG_OVERLAY_DROP_ANIMATION
                   : null
               }
             >
@@ -2197,13 +2158,6 @@ function ProjectRowComponent({
     }
     return getCollapsedChildActivity(projectThreads, draftThreadIds);
   }, [draftThreadIds, isCollapsed, projectThreads, threadListState.status]);
-  const showProjectRollupGlyph =
-    isCollapsed &&
-    (projectActivity.pending ||
-      projectActivity.working ||
-      projectActivity.hasUnsubmittedDraft ||
-      projectActivity.unread ||
-      projectActivity.unreadError);
   const projectActions = (
     <>
       {headerActions ? (
@@ -2236,22 +2190,6 @@ function ProjectRowComponent({
         </NavLink>
       ) : null}
       <span className="relative z-10 inline-flex shrink-0 items-center">
-        {showProjectRollupGlyph ? (
-          <span
-            data-sidebar-hover-actions-open={isActionsOpen ? "true" : undefined}
-            className={cn(
-              SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-              "pointer-events-none absolute inset-0 flex items-center justify-end text-subtle-foreground max-md:pointer-coarse:hidden",
-            )}
-          >
-            <CollapsedThreadStatusGlyph activity={projectActivity} />
-          </span>
-        ) : null}
-        {showProjectRollupGlyph ? (
-          <span className="hidden shrink-0 items-center justify-center text-subtle-foreground max-md:pointer-coarse:inline-flex">
-            <CollapsedThreadStatusGlyph activity={projectActivity} />
-          </span>
-        ) : null}
         <span
           data-sidebar-hover-actions-open={isActionsOpen ? "true" : undefined}
           data-sidebar-hover-actions-mobile={
@@ -2312,6 +2250,7 @@ function ProjectRowComponent({
             isCollapsed,
             onToggleCollapsed: handleProjectRowToggle,
           }}
+          collapsedActivity={projectActivity}
           consumeClickSuppression={consumeProjectClickSuppression}
           dragBindings={projectDragBindings}
           sectionRef={projectRowRef}

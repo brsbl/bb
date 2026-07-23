@@ -1,5 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
-import { callPluginRpc, fetchPluginSdkSettings } from "./plugin-sdk-hooks";
+import {
+  callPluginRpc,
+  fetchPluginSdkSettings,
+  getAutomationPluginPanelRoutePath,
+  isAutomationEditRoutePath,
+} from "./plugin-sdk-hooks";
+
+describe("getAutomationPluginPanelRoutePath", () => {
+  it.each([
+    ["", "/tools/automations"],
+    ["browse", "/tools/automations?view=browse"],
+    ["proj_1/auto_1", "/tools/automations/proj_1/auto_1"],
+    ["proj_1/auto_1/edit", "/tools/automations/proj_1/auto_1/edit"],
+    ["unsupported/path/shape/extra", "/tools/automations"],
+  ])("maps %j to the canonical Tools route", (subPath, expected) => {
+    expect(getAutomationPluginPanelRoutePath(subPath)).toBe(expected);
+  });
+});
+
+describe("isAutomationEditRoutePath", () => {
+  it("recognizes only canonical automation edit routes", () => {
+    expect(
+      isAutomationEditRoutePath(
+        "/tools/automations/proj_standard/auto_standard/edit",
+      ),
+    ).toBe(true);
+    expect(
+      isAutomationEditRoutePath(
+        "/tools/automations/proj_standard/auto_standard",
+      ),
+    ).toBe(false);
+    expect(isAutomationEditRoutePath("/plugins/automations/edit")).toBe(false);
+  });
+});
 
 type FetchLike = Parameters<typeof callPluginRpc>[0];
 

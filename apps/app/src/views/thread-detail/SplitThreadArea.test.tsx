@@ -29,6 +29,10 @@ import {
   resetPluginSlotStoreForTest,
   setPluginSlotRegistrations,
 } from "@/lib/plugin-slots";
+import {
+  usePluginComposerHost,
+  type PluginComposerHost,
+} from "@/components/plugin/plugin-composer-host";
 import { PaneContext, usePaneSecondaryPanelRegistration } from "./PaneContext";
 import { SplitThreadArea } from "./SplitThreadArea";
 import { applyThreadOpenToLayout } from "./splitThreadNavigation";
@@ -53,6 +57,17 @@ const commandPresentationState = vi.hoisted(
     shortcut: ShortcutPresentationFixture | null;
   } => ({ isModifierHeld: false, shortcut: null }),
 );
+
+function HostedComposerScopeProbe({ threadId }: { threadId: string }) {
+  const composerHost = usePluginComposerHost();
+  return (
+    <div data-testid={`hosted-composer-scope-${threadId}`}>
+      {composerHost?.scope.kind === "thread"
+        ? composerHost.scope.threadId
+        : "missing"}
+    </div>
+  );
+}
 
 vi.mock("@/hooks/useThreadSplitsEnabled", () => ({
   useThreadSplitsEnabled: () => experimentState.enabled,
@@ -107,14 +122,28 @@ vi.mock("react-resizable-panels", async () => {
   const Panel = ({ children }: { children?: ReactNode }) => (
     <div data-testid="workspace-panel">{children}</div>
   );
-  const PanelResizeHandle = () => (
-    <div data-testid="workspace-panel-resize-handle" />
+  const PanelResizeHandle = ({
+    className,
+    id,
+  }: {
+    className?: string;
+    id?: string;
+  }) => (
+    <div
+      id={id}
+      className={className}
+      data-testid="workspace-panel-resize-handle"
+    />
   );
   return { Panel, PanelGroup, PanelResizeHandle };
 });
 
 vi.mock("@/components/ui/sidebar.js", () => ({
   useIsSidebarShowing: () => sidebarState.showing,
+}));
+
+vi.mock("@/views/RootComposeView", () => ({
+  RootComposeView: () => <div data-testid="root-compose-view" />,
 }));
 
 // Lightweight stand-in for the heavyweight thread view. It surfaces the pane's
@@ -130,16 +159,32 @@ vi.mock("./ThreadDetailView", () => ({
   }) => {
     const pane = useContext(PaneContext);
     const [isPanelOpen, setIsPanelOpen] = useState(threadId === "thr-a");
+    const composerHost = useMemo<PluginComposerHost>(() => {
+      const draft = { attachments: [], mentions: [], text: "" };
+      return {
+        scope: { kind: "thread", threadId },
+        draft,
+        textEffectKey: `test-draft-${threadId}`,
+        getCurrent: () => draft,
+        setDraft: () => undefined,
+        focus: () => undefined,
+      };
+    }, [threadId]);
     const panelModel = useMemo(
       () => ({
         collapsedRail: null,
+        composerHost,
         contentKey: threadId,
         isMainCollapsed: false,
         isOpen: isPanelOpen,
-        panel: <div data-testid={`hosted-panel-${threadId}`} />,
+        panel: (
+          <div data-testid={`hosted-panel-${threadId}`}>
+            <HostedComposerScopeProbe threadId={threadId} />
+          </div>
+        ),
         onToggle: () => setIsPanelOpen((open) => !open),
       }),
-      [isPanelOpen, threadId],
+      [composerHost, isPanelOpen, threadId],
     );
     usePaneSecondaryPanelRegistration(
       pane?.secondaryPanelHost ?? null,
@@ -244,6 +289,8 @@ const docsContent: PaneContent = {
   panelPath: "docs",
   subPath: "",
 };
+
+const newThreadContent: PaneContent = { kind: "new-thread" };
 
 function pluginContent(panelPath: string): PaneContent {
   return {
@@ -674,6 +721,77 @@ describe("SplitThreadArea", () => {
     expect(store.get(maximizedPaneIdAtom)).toBe("pane-1");
   });
 
+  it("uses a subtle scrim over unfocused pane content behind a hairline divider", () => {
+    renderSplitArea({
+      path: threadPath("thr-a"),
+      layout: twoPaneLayout("pane-1"),
+    });
+
+    const activePane = document.querySelector<HTMLElement>(
+      '[data-split-pane-id="pane-1"]',
+    );
+    const inactivePane = document.querySelector<HTMLElement>(
+      '[data-split-pane-id="pane-2"]',
+    );
+    const activeScrim = activePane?.querySelector<HTMLElement>(
+      ':scope > [aria-hidden="true"]',
+    );
+    const inactiveScrim = inactivePane?.querySelector<HTMLElement>(
+      ':scope > [aria-hidden="true"]',
+    );
+    expect(activeScrim?.classList).toContain("bg-transparent");
+    expect(inactiveScrim?.classList).toContain("pointer-events-none");
+    expect(inactiveScrim?.classList).toContain("bg-background/30");
+    expect(inactiveScrim?.classList).not.toContain("bg-background/20");
+    expect(inactiveScrim?.classList).not.toContain("bg-background/40");
+
+    const separator = screen.getByRole("separator");
+    expect(separator.classList).toContain("w-px");
+    expect(separator.classList).toContain("bg-border-seam-vertical");
+    expect(separator.classList).not.toContain("w-1.5");
+    expect(separator.firstElementChild?.classList).toContain("-inset-x-1.5");
+  });
+
+  it("uses only the pane-wide scrim to distinguish an inactive new-thread split", async () => {
+    renderSplitArea({
+      path: "/",
+      layout: {
+        root: {
+          type: "split",
+          dir: "row",
+          sizes: [0.5, 0.5],
+          children: [
+            {
+              type: "pane",
+              paneId: "pane-1",
+              content: threadContent("thr-a"),
+            },
+            {
+              type: "pane",
+              paneId: "pane-2",
+              content: newThreadContent,
+            },
+          ],
+        },
+        focusedPaneId: "pane-2",
+      },
+      routeContent: newThreadContent,
+    });
+
+    const newThreadPane = document.querySelector<HTMLElement>(
+      '[data-split-pane-id="pane-2"]',
+    );
+    const newThreadHeader = newThreadPane?.querySelector("header");
+    expect(newThreadHeader?.classList).not.toContain("bg-surface-raised");
+    expect(newThreadHeader?.classList).not.toContain("opacity-50");
+
+    fireEvent.pointerDown(screen.getByTestId("pane-thr-a"));
+    await waitFor(() => {
+      expect(newThreadHeader?.classList).not.toContain("bg-surface-raised");
+      expect(newThreadHeader?.classList).not.toContain("opacity-50");
+    });
+  });
+
   it("keeps drag updates local and persists the resized pair once on release", () => {
     const store = renderSplitArea({
       path: threadPath("thr-a"),
@@ -804,6 +922,9 @@ describe("SplitThreadArea", () => {
       screen.queryAllByTestId("split-workspace-panel-toggle"),
     ).toHaveLength(1);
     expect(screen.getByTestId("hosted-panel-thr-a")).toBeTruthy();
+    expect(screen.getByTestId("hosted-composer-scope-thr-a").textContent).toBe(
+      "thr-a",
+    );
     expect(screen.queryByTestId("hosted-panel-thr-b")).toBeNull();
     expect(toggle.querySelector("button")?.getAttribute("aria-pressed")).toBe(
       "true",
@@ -813,6 +934,9 @@ describe("SplitThreadArea", () => {
     // the panel's content without closing the window-level panel.
     fireEvent.pointerDown(screen.getByTestId("pane-thr-b"));
     await screen.findByTestId("hosted-panel-thr-b");
+    expect(screen.getByTestId("hosted-composer-scope-thr-b").textContent).toBe(
+      "thr-b",
+    );
     expect(screen.queryByTestId("hosted-panel-thr-a")).toBeNull();
     expect(
       screen
@@ -866,6 +990,12 @@ describe("SplitThreadArea", () => {
     // the empty state; the toggle stays put and stays pressed.
     fireEvent.pointerDown(pluginPane);
     await screen.findByTestId("split-workspace-empty-panel-state");
+    const emptyPanelHandle = document.getElementById(
+      "split-workspace-empty-secondary-panel-handle",
+    );
+    expect(emptyPanelHandle?.classList).toContain("w-px");
+    expect(emptyPanelHandle?.classList).toContain("bg-border-seam-vertical");
+    expect(emptyPanelHandle?.classList).not.toContain("w-1.5");
     expect(
       screen
         .getByTestId("split-workspace-panel-toggle")

@@ -21,7 +21,12 @@ import {
   type PluginNavPanelSlot,
   type PluginRegistrationSet,
 } from "@/lib/plugin-slots";
-import { PLUGIN_PANEL_ROUTE_PATH } from "@/lib/route-paths";
+import {
+  AUTOMATIONS_PLUGIN_ID,
+  AUTOMATIONS_PLUGIN_PANEL_PATH,
+  PLUGIN_PANEL_ROUTE_PATH,
+} from "@/lib/route-paths";
+import { ToolsHubExperimentProvider } from "@/components/tools/tools-experiment-context";
 import { PluginPanelView } from "@/views/PluginPanelView";
 import {
   PluginPanelHeaderActions,
@@ -968,6 +973,110 @@ describe("useComposer", () => {
     expect(getPluginThreadRowStatus("thr_effect")).toBeNull();
   });
 
+  it("normalizes thread-row statuses and preserves the last valid host state after rejection", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const capturedComposerApis: PluginComposerApi[] = [];
+    registerComposerProbe("status-validation", (composer) => {
+      capturedComposerApis.push(composer);
+    });
+    render(
+      <MemoryRouter initialEntries={["/threads/thr_status_validation"]}>
+        <ComposerCustomizationMount />
+        <ThreadDraftViewer threadId="thr_status_validation" />
+      </MemoryRouter>,
+    );
+    const composerApi = capturedComposerApis.at(-1);
+    if (composerApi === undefined)
+      throw new Error("composer API was not captured");
+    const setStatus = composerApi.setThreadRowStatus as (
+      status: unknown,
+    ) => void;
+
+    act(() =>
+      setStatus({
+        icon: "  AiContentGenerator01  ",
+        label: "  Plugin improving draft  ",
+        tone: "success",
+      }),
+    );
+    const successStatus = {
+      icon: "AiContentGenerator01",
+      label: "Plugin improving draft",
+      tone: "success" as const,
+    };
+    expect(getPluginThreadRowStatus("thr_status_validation")).toEqual(
+      successStatus,
+    );
+
+    act(() =>
+      setStatus({
+        icon: "Zap",
+        label: "Plugin running",
+        tone: "running",
+      }),
+    );
+    expect(getPluginThreadRowStatus("thr_status_validation")).toEqual({
+      icon: "Zap",
+      label: "Plugin running",
+      tone: "running",
+    });
+
+    const errorStatus = {
+      icon: "AlertCircle",
+      label: "Plugin failed",
+      tone: "error" as const,
+    };
+    act(() => setStatus(errorStatus));
+    expect(getPluginThreadRowStatus("thr_status_validation")).toEqual(
+      errorStatus,
+    );
+
+    const invalidStatuses: Array<{
+      value: unknown;
+      warning: string;
+    }> = [
+      {
+        value: [],
+        warning: "status must be null or a non-array object",
+      },
+      {
+        value: { icon: "AiContentGenerator01", label: "   " },
+        warning: '"label" must be a non-blank string',
+      },
+      {
+        value: { icon: "AiContentGenerator01", label: 42 },
+        warning: '"label" must be a non-blank string',
+      },
+      {
+        value: { icon: "   ", label: "Working" },
+        warning: '"icon" must be a non-blank string',
+      },
+      {
+        value: {
+          icon: "AiContentGenerator01",
+          label: "Working",
+          tone: "warning",
+        },
+        warning:
+          '"tone" must be "default", "running", "success", or "error" when set',
+      },
+    ];
+    for (const invalid of invalidStatuses) {
+      act(() => setStatus(invalid.value));
+      expect(getPluginThreadRowStatus("thr_status_validation")).toEqual(
+        errorStatus,
+      );
+      expect(warn).toHaveBeenLastCalledWith(
+        expect.stringContaining(invalid.warning),
+      );
+    }
+
+    expect(warn).toHaveBeenCalledTimes(invalidStatuses.length);
+    act(() => setStatus(null));
+    expect(getPluginThreadRowStatus("thr_status_validation")).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(invalidStatuses.length);
+  });
+
   it("keeps a same-plugin hook owner's visual state when its sibling unmounts", () => {
     const captured = new Map<
       string,
@@ -1329,6 +1438,49 @@ describe("PluginNavSidebarItems + PluginPanelView", () => {
     return <div>board panel body</div>;
   }
 
+  function registerAutomationsPanel() {
+    setPluginSlotRegistrations(
+      AUTOMATIONS_PLUGIN_ID,
+      registrationSet({
+        navPanels: [
+          {
+            id: AUTOMATIONS_PLUGIN_PANEL_PATH,
+            title: "Automations",
+            icon: "Calendar",
+            path: AUTOMATIONS_PLUGIN_PANEL_PATH,
+            component: Board,
+          },
+        ],
+      }),
+    );
+  }
+
+  it("preserves the Automations plugin panel while Tools Hub is disabled", () => {
+    registerAutomationsPanel();
+
+    render(
+      <MemoryRouter>
+        <PluginNavSidebarItems />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "Automations" })).toBeDefined();
+  });
+
+  it("replaces the Automations plugin panel while Tools Hub is enabled", () => {
+    registerAutomationsPanel();
+
+    render(
+      <ToolsHubExperimentProvider enabled>
+        <MemoryRouter>
+          <PluginNavSidebarItems />
+        </MemoryRouter>
+      </ToolsHubExperimentProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Automations" })).toBeNull();
+  });
+
   it("renders a sidebar entry that routes to the plugin panel", () => {
     setPluginSlotRegistrations(
       "demo",
@@ -1411,9 +1563,11 @@ describe("PluginNavSidebarItems + PluginPanelView", () => {
       </Provider>,
     );
 
-    expect(
-      screen.getByRole("img", { name: "Demo board — open in split" }),
-    ).not.toBeNull();
+    const splitMap = screen.getByRole("img", {
+      name: "Demo board — open in split",
+    });
+    const label = screen.getByText("Demo board");
+    expect(label.nextElementSibling).toBe(splitMap);
   });
 
   it("keeps the sidebar entry active on nested plugin panel routes", () => {

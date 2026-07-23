@@ -23,7 +23,7 @@ agent task instructions; blank text contributes nothing.
 
 The builtin Workflows plugin runs durable provider-independent JavaScript
 orchestration. It is disabled on fresh installations; enable `workflows` under
-Settings → Plugins or run `bb plugin enable workflows` before using:
+Tools → Plugins or run `bb plugin enable workflows` before using:
 
   bb workflows validate (--script '<javascript>'|--source '<javascript>'|
                         --file <path>|--name <name>)
@@ -192,7 +192,7 @@ added/updated/unchanged counts.
 BB Official plugins
 
 BB's official plugins — GitHub, Docs, Memory, and Tasks — ship bundled inside
-the app itself. They appear in Settings → Plugins → Browse and install with
+the app itself. They appear in Tools → Plugins → Browse and install with
 one click from the local bundled copy: no network, no download, no separate
 release. Install from the CLI by bare name (`bb plugin install github`,
 `bb plugin install docs`, `bb plugin install memory`, or
@@ -237,7 +237,7 @@ Frontend entries (app.tsx) default-export `definePluginApp` from
 `@bb/plugin-sdk/app` and register UI slots: homepageSection (root compose),
 settingsSection (per-plugin settings page below the host-rendered settings
 form; no props in V1, optional host-rendered title; builtin slot entries work
-with the Plugins experiment off while the Settings → Plugins management
+with the Plugins experiment off while the Tools → Plugins management
 bucket stays experiment-gated),
 navPanel (own sidebar entry + /plugins/<id>/<path>/* route; the remainder
 arrives as the component's subPath prop for panel-internal deep links; the
@@ -283,7 +283,7 @@ bundles from the plugin's node_modules (`npm install` for authors; BB installs
 release packages with their declared production dependencies). A crashing slot collapses to a
 "plugin <id> crashed" chip without
 touching the rest of the app. Installed plugins and their declared settings
-(same data as `bb plugin config`) also appear under Settings → Plugins.
+(same data as `bb plugin config`) also appear under Tools → Plugins.
 
 Plugin CLI commands: a plugin can register one top-level subcommand (for
 example `bb github …`). Unknown `bb` commands are looked up against installed
@@ -305,13 +305,13 @@ The loop: `bb plugin new <name>` scaffolds `./bb-plugin-<name>` (add --app
 for a frontend entry); `bb plugin install .` registers it; `bb plugin dev`
 watches and reloads on every save. The manifest is package.json: required
 `bb.name` and `bb.description` human identity, required `bb.branding` with at
-least `icon` or `logo.light`, `bb.server`
+least `icon`, `experimental_icon`, or `logo.light`, `bb.server`
 (backend entry, loaded as TypeScript — no build step), optional `bb.app`
 (frontend entry), optional `bb.skills` (static skill directories auto-imported
 into agent threads unless filtered by `bb.agents.configure`; default
 `skills/`), `engines.bb` (supported bb range),
 and optional `engines.bbPluginSdk` (supported plugin SDK range; scaffold
-writes `"^0.4.0"` for SDK 0.4.0). The plugin id is the package name minus
+writes `"^0.4.1"` for SDK 0.4.1). The plugin id is the package name minus
 `bb-plugin-`.
 
 Plugins can contribute palettes with `bb.themes`: an array of
@@ -320,14 +320,21 @@ file. Loaded plugin palettes appear in Settings → Appearance and `bb theme
 list`; their selectable id is `plugin:<plugin-id>:<theme-id>`. Disabling or
 removing the owning plugin makes bb fall back to the default palette.
 
-Branding is explicit: `bb.branding.logo.light` points to the plugin's rich
-identity artwork and optional `bb.branding.logo.dark` is preferred in dark
-mode. Paths must be plugin-relative `.svg`, `.png`, or `.webp` files. Root logo
-files are not auto-detected, and a dark logo requires a light logo.
-`bb.branding.icon` is the compact host icon-name identity. Compact chrome uses
-it first, then a contribution's distinct local icon hint, then Zap. Roomy
-Settings rows and cards use the image logo where available. At least the icon
-or light logo is required. BB rejects nulls, empty strings, missing/escaping
+Branding is explicit. Normally declare `bb.branding.icon` as the plugin's
+canonical BB icon name. For an experimental plugin-owned compact glyph, set
+`bb.branding.experimental_icon` to a plugin-relative SVG such as
+`./assets/icon.svg`. BB hash-serves the SVG and renders it as a mask that
+inherits the surrounding text color. Compact chrome prefers that asset, then a
+named manifest icon, a contribution's local icon hint, and finally Zap. Roomy
+surfaces reuse the same icon when no logo override is declared.
+
+Add `bb.branding.logo.light` only for intentionally different rich/full-size
+identity artwork; optional `bb.branding.logo.dark` is preferred in dark mode.
+Logo paths must be plugin-relative `.svg`, `.png`, or `.webp` files. Root logo
+files are not auto-detected, and a dark logo requires a light logo. Logo-only
+manifests remain supported for compatibility, so at least a named icon,
+experimental icon, or light logo is required. Do not duplicate the same
+artwork across fields. BB rejects nulls, empty strings, missing or escaping
 assets, and unsupported extensions. Reload the plugin to pick up branding
 changes.
 

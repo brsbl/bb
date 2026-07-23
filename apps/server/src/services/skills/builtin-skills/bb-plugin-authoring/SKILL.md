@@ -30,7 +30,7 @@ The manifest is `package.json`:
   "name": "bb-plugin-hello",
   "version": "0.1.0",
   "type": "module",
-  "engines": { "bb": ">=0.9", "bbPluginSdk": "^0.4.0" },
+  "engines": { "bb": ">=0.9", "bbPluginSdk": "^0.4.1" },
   "bb": {
     "name": "Hello",
     "description": "A friendly example plugin.",
@@ -61,26 +61,32 @@ The manifest is `package.json`:
 - `bb.name` and `bb.description` (required) — non-empty human-facing plugin
   identity. The top-level package `name` remains the package identity and
   source of the plugin id.
-- `bb.branding` (required) — declare at least `icon` or `logo.light`. `icon`
-  is the compact host icon-name identity. `logo.light` is the rich/full-size
-  identity artwork; optional `logo.dark` is preferred in dark mode. Logo paths
-  are explicit plugin-relative `.svg`, `.png`, or `.webp` files: nulls, empty
-  strings, missing/escaping files, unsupported extensions, and a dark logo
-  without a light logo fail the manifest. There is no root logo auto-detection.
-  BB uses the logo where space permits, such as roomy Settings rows and cards.
-  Compact sidebar, menu, action, mention, and panel-title surfaces use the
-  manifest icon, then a contribution's distinct local `icon` hint, then the
-  generic Zap icon. Branding changes are picked up on `bb plugin reload`.
-  Inline icons must use `currentColor` for their stroke/fill and take their
-  color from semantic text-token classes; never hardcode gray or palette
-  values. An SVG loaded
-  through `<img>` cannot inherit `currentColor`, so omit the logo and use a
-  named `branding.icon` hint when a monochrome glyph should match the surrounding
-  bb chrome. Reserve logo assets for intentionally branded artwork (and provide
-  a dark variant when needed).
+- `bb.branding` (required) — normally declare `bb.branding.icon` as the
+  plugin's canonical BB icon name, such as `Zap`. For an experimental
+  plugin-owned compact glyph, set `bb.branding.experimental_icon` to a
+  plugin-relative SVG path such as `./assets/icon.svg`. BB validates and
+  hash-serves the SVG, then renders it as a CSS mask so its shape inherits the
+  surrounding text color; SVG colors are ignored. BB reuses this icon on roomy
+  surfaces when no logo override is declared. Add `logo.light` only for
+  intentionally different rich/full-size identity artwork; optional
+  `logo.dark` is preferred in dark mode. Logo paths are explicit
+  plugin-relative `.svg`, `.png`, or `.webp` files: nulls, empty strings,
+  missing/escaping files, unsupported extensions, and a dark logo without a
+  light logo fail the manifest. There is no root logo auto-detection. Logo-only
+  manifests remain supported for compatibility, so at least a named icon,
+  experimental icon, or light logo is required. BB uses a declared logo where
+  space permits, such as roomy Settings rows and cards.
+  Compact sidebar, menu, action, mention, and panel-title surfaces prefer the
+  plugin-owned icon asset, then a named manifest icon, then a contribution's
+  local `icon` hint, then Zap. Branding changes are picked up on
+  `bb plugin reload`. Named inline icons use `currentColor`; compact SVG assets
+  should contain only the intended transparent glyph shape. Do not duplicate
+  the same artwork across `icon`, `experimental_icon`, and `logo`; reserve
+  logos for intentionally different branded artwork and provide a dark variant
+  when needed.
 - `engines.bb` — optional semver range checked against the bb app version.
 - `engines.bbPluginSdk` — optional semver range for the plugin SDK surface
-  (currently `0.4.0`; the scaffold writes `"^0.4.0"`). Absent means a legacy
+  (currently `0.4.1`; the scaffold writes `"^0.4.1"`). Absent means a legacy
   manifest. Managed (`git:`/`npm:`) installs **refuse** a mismatch against
   the running SDK; path installs surface it as `incompatible` at load.
   Compatible updates (`bb plugin outdated` / `bb plugin update`) only select
@@ -173,7 +179,7 @@ are additive, so registering multiple listeners is supported.
 ### bb.settings
 
 `bb.settings.define(descriptors)` declares plain-data descriptors (rendered
-in Settings → Plugins and editable via `bb plugin config <id> set <key>
+in Tools → Plugins and editable via `bb plugin config <id> set <key>
 <value>`). Four descriptor types:
 
 ```ts
@@ -860,8 +866,8 @@ Slot props contracts (versioned, additive-only):
 
 - `homepageSection` → `{ projectId: string | null }` (project in view on
   the compose surface). Registration: `{ id, title, component }`.
-- `settingsSection` → `{}` (deliberately no props in V1). Rendered on
-  `/settings/plugins/<pluginId>` below the host-rendered declarative settings
+- `settingsSection` → `{}` (deliberately no props in V1). Rendered on the
+  plugin detail page below the host-rendered declarative settings
   form for running, needs-configuration, and degraded plugins. Registration:
   `{ id, title?, description?, component }`; `title` is an optional host-rendered
   section heading and `description` is optional supporting copy rendered with
@@ -871,7 +877,7 @@ Slot props contracts (versioned, additive-only):
   settings sidebar when they declare settings descriptors OR register
   settings sections. Slot-derived sidebar entries work for builtin plugin
   frontends even when the user-installed Plugins experiment is off; the
-  Settings → Plugins management bucket remains experiment-gated.
+  Tools → Plugins management surface remains experiment-gated.
 - `navPanel` → `{ subPath: string }` — owns the whole route at
   `/plugins/<pluginId>/<path>/*` and gets its own sidebar entry. `subPath`
   is the route remainder after the panel root (`""` at the root), so deep
@@ -930,8 +936,8 @@ Slot props contracts (versioned, additive-only):
   the chrome so icons stay consistent. Registration:
   `{ id, title, icon, run }`. Activating it calls
   `run({ openSettings })` — use `openSettings()` to open this plugin's
-  Settings detail page (`/settings/plugins/<pluginId>`), or do anything else
-  (rpc, toast). Errors from `run` (sync or async) are contained and logged,
+  detail page in Tools, or do anything else (rpc, toast). Errors from `run`
+  (sync or async) are contained and logged,
   never breaking the sidebar. `title` is the tooltip + accessible label;
   `icon` is a BB icon-name hint (unknown names fall back to a generic bolt).
 - `fileOpener` → `{ path: string, source }` — register as a viewer/editor
@@ -1048,7 +1054,14 @@ Hooks:
 - `useSettings()` → `{ values, isLoading }` — effective non-secret values
   (secret settings are excluded; read them server-side only).
 - `useBbContext()` → `{ projectId, threadId }` from the current route.
-- `useBbNavigate()` → `{ toThread(id), toProject(id), toPluginPanel(path, { subPath?, replace? }?), toCompose({ initialPrompt?, focusPrompt? }?), experimental_openThreadPanel({ actionId, title?, params? }) }`. `toCompose` opens the root compose screen; pass `initialPrompt` to seed the composer draft and `focusPrompt: true` to focus it (the "Create via chat" pattern — drop the user into chat with a prefilled prompt). `experimental_openThreadPanel` opens one of the current plugin's registered `threadPanelAction` tabs in the current thread surface and returns whether the host accepted it; it returns false on surfaces without a thread side panel.
+- `useBbNavigate()` → `{ toThread(id), toProject(id), toPluginPanel(path,
+{ subPath?, replace? }?), toCompose({ initialPrompt?, focusPrompt? }?),
+experimental_openThreadPanel({ actionId, title?, params? }) }`.
+  `toCompose` opens the root compose screen; pass `initialPrompt` to seed the
+  composer draft and `focusPrompt: true` to focus it. The experimental panel
+  opener opens one of the current plugin's registered `threadPanelAction` tabs
+  in the current thread surface and returns whether the host accepted it; it
+  returns false on surfaces without a thread side panel.
 - `useComposer()` → programmatic access to the chat composer draft (the
   same one the built-in "Add to chat" affordances write to):
   `text` is the current plain text; `setText(next)` replaces it;
@@ -1064,7 +1077,9 @@ Hooks:
   the editor read-only and busy and auto-releases when the customization
   unmounts or changes scope; `setThreadRowStatus({ icon, label, tone? })`
   replaces the bound thread-row draft glyph (`null` clears it; new-thread
-  calls are no-ops);
+  calls are no-ops): use `tone: "running"` while work is active for an
+  automatically shimmering icon, then replace it with a static
+  `tone: "success"` or `tone: "error"` terminal icon;
   `insertMention({ provider, id, label })` inserts an @-mention pill bound
   to one of YOUR `bb.ui.registerMentionProvider` providers, resolved to
   fresh context at send time; `focus()` focuses the caret; `scope` reports
@@ -1274,9 +1289,13 @@ const slot = renderSlot(
 );
 await slot.findByText("…"); // Testing Library queries
 await slot.behavior.setRealtimeConnectionState("connected");
+await slot.behavior.experimental_setComposerScope(
+  { kind: "queued-message", threadId: "t1", queuedMessageId: "q1" },
+  "queued draft",
+);
 slot.inspection.rpcCalls;
 slot.inspection.navigateCalls;
-slot.inspection.composer.quotes; // recorded hook activity
+slot.inspection.composer; // text, visuals, quotes, mentions, and focus activity
 slot.lifecycle.unmount();
 await contentScripts.lifecycle.dispose();
 ```

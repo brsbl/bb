@@ -13,6 +13,7 @@ import { UpdatePluginDialog } from "./UpdatePluginDialog";
 function plugin(updateState: Partial<PluginUpdateState>): PluginListItem {
   return {
     id: "linear",
+    rootDir: "/plugins/linear",
     version: "1.6.2",
     enabled: true,
     status: "running",
@@ -21,11 +22,18 @@ function plugin(updateState: Partial<PluginUpdateState>): PluginListItem {
     source: "npm:@example/linear@^1.6.0",
     name: "Linear",
     icon: null,
+    compactIconUrl: null,
     logoUrl: null,
     logoDarkUrl: null,
     hasSettings: false,
+    handlerStats: { count: 0, totalMs: 0, maxMs: 0, errorCount: 0 },
+    services: [],
+    schedules: [],
+    cliCommand: null,
+    app: { hasApp: false, bundle: null },
     provenance: "catalog",
     isOrphanedBuiltin: false,
+    catalogEntryId: "linear",
     sourceDisplay: "npm · @bb-plugins/linear · tracks compatible",
     updateState: { ...EMPTY_PLUGIN_UPDATE_STATE, ...updateState },
   };

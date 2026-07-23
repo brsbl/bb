@@ -138,12 +138,10 @@ export function PromptMentionPill({
     resource,
     serializedText,
   });
+  const iconClassName = "size-3.5 shrink-0 self-center text-muted-foreground";
   const labelNode = (
     <>
-      <PromptMentionIcon
-        resource={resource}
-        className="size-3.5 shrink-0 self-center text-muted-foreground"
-      />
+      <PromptMentionIcon resource={resource} className={iconClassName} />
       <span className="truncate">{resource.label}</span>
     </>
   );

@@ -55,6 +55,7 @@ describe("built-in sidebar section renderer", () => {
 
     expect(screen.getByText("Pinned content")).not.toBeNull();
     expect(screen.getByText("Threads content")).not.toBeNull();
+    expect(result.container.querySelector('[data-icon="Pin"]')).toBeNull();
   });
 
   it("surfaces shared activity when Threads is collapsed", () => {
@@ -80,6 +81,6 @@ describe("built-in sidebar section renderer", () => {
     );
 
     expect(screen.queryByText("Threads content")).toBeNull();
-    expect(screen.getByLabelText("Goal active")).not.toBeNull();
+    expect(screen.getAllByLabelText("Goal active")).not.toHaveLength(0);
   });
 });

@@ -2,6 +2,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import semver from "semver";
 import { derivePluginId, pluginPackageJsonSchema } from "@bb/domain";
+import { assertValidPluginCompactIconSvg } from "@bb/plugin-build";
 
 export interface PluginManifest {
   /** Sanitized plugin id derived from the package name. */
@@ -15,7 +16,10 @@ export interface PluginManifest {
   description: string;
   /** Explicit plugin branding, resolved to absolute asset paths. */
   branding: {
+    /** Stable host icon-name hint. */
     icon?: string;
+    /** Plugin-owned compact SVG declared through branding.experimental_icon. */
+    compactIconPath?: string;
     logo?: {
       lightPath: string;
       darkPath?: string;
@@ -136,7 +140,15 @@ export async function readPluginManifest(
                 ),
               }),
         };
+  const brandingCompactIconPath =
+    bb.branding.experimental_icon !== undefined
+      ? resolveBrandingAsset(
+          bb.branding.experimental_icon,
+          "bb.branding.experimental_icon",
+        )
+      : undefined;
   for (const [label, assetPath] of [
+    ["bb.branding.experimental_icon", brandingCompactIconPath],
     ["bb.branding.logo.light", brandingLogo?.lightPath],
     ["bb.branding.logo.dark", brandingLogo?.darkPath],
   ] as const) {
@@ -158,6 +170,9 @@ export async function readPluginManifest(
       throw new Error(
         `manifest ${label} escapes the plugin directory through a symlink`,
       );
+    }
+    if (label === "bb.branding.experimental_icon") {
+      assertValidPluginCompactIconSvg(await readFile(realAsset), label);
     }
   }
   const themeIds = new Set<string>();
@@ -195,6 +210,9 @@ export async function readPluginManifest(
     description: bb.description,
     branding: {
       ...(bb.branding.icon === undefined ? {} : { icon: bb.branding.icon }),
+      ...(brandingCompactIconPath === undefined
+        ? {}
+        : { compactIconPath: brandingCompactIconPath }),
       ...(brandingLogo === undefined ? {} : { logo: brandingLogo }),
     },
     bbEngineRange: engines?.bb,

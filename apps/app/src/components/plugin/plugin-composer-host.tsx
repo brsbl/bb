@@ -14,9 +14,10 @@ import { isComposerDraftEmpty } from "@bb/plugin-sdk/internal/composer-view";
 import type { PromptDraftState } from "@/lib/prompt-draft";
 
 /**
- * Binds plugin composer hooks to an active composer whose scope cannot be
- * derived from the current route, such as a root-project selection or inline
- * queued-message editor.
+ * Binds plugin composer hooks to the exact composer owned by a pane. This is
+ * authoritative even when the route points at another split pane and also
+ * carries host-only state such as root-project selection or an inline queued
+ * message editor.
  */
 export interface PluginComposerHost {
   scope: PluginComposerScope;

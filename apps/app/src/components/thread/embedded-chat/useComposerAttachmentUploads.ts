@@ -9,21 +9,35 @@ interface UseComposerAttachmentUploadsArgs {
   addDraftAttachment: (attachment: PromptDraftAttachment) => void;
   inlineEditingQueuedMessage: InlineQueuedMessageEditState | null;
   inlineEditingQueuedMessageRef: React.RefObject<InlineQueuedMessageEditState | null>;
-  commitInlineQueuedMessage: (next: InlineQueuedMessageEditState | null) => void;
+  commitInlineQueuedMessage: (
+    next: InlineQueuedMessageEditState | null,
+  ) => void;
 }
 
 export interface UseComposerAttachmentUploadsResult {
-  attachmentError: string | null;
-  setAttachmentError: (error: string | null) => void;
-  handleAttachFiles: (files: File[]) => Promise<void>;
-  isAttaching: boolean;
+  bottomAttachmentError: string | null;
+  setBottomAttachmentError: (error: string | null) => void;
+  handleAttachBottomFiles: (files: File[]) => Promise<void>;
+  isAttachingBottomFiles: boolean;
+  inlineAttachmentError: string | null;
+  setInlineAttachmentError: (error: string | null) => void;
+  handleAttachInlineFiles: (files: File[]) => Promise<void>;
+  isAttachingInlineFiles: boolean;
+}
+
+interface AttachmentOperationState {
+  error: string | null;
+  pendingCount: number;
+}
+
+interface InlineAttachmentOperationState extends AttachmentOperationState {
+  editSessionId: number | null;
 }
 
 /**
- * Uploads dropped/picked files and appends them to whichever draft owns the
- * composer at upload time: the bottom draft, or — captured per invocation so a
- * dismissed edit session can't receive a late upload — the inline queued-message
- * edit draft.
+ * Uploads dropped/picked files for either independently mounted composer. The
+ * inline owner is captured per invocation so a dismissed edit session cannot
+ * receive a late upload.
  */
 export function useComposerAttachmentUploads({
   projectId,
@@ -33,42 +47,89 @@ export function useComposerAttachmentUploads({
   commitInlineQueuedMessage,
 }: UseComposerAttachmentUploadsArgs): UseComposerAttachmentUploadsResult {
   const uploadPromptAttachment = useUploadPromptAttachment();
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [bottomOperation, setBottomOperation] =
+    useState<AttachmentOperationState>({ error: null, pendingCount: 0 });
+  const [inlineOperation, setInlineOperation] =
+    useState<InlineAttachmentOperationState>({
+      editSessionId: null,
+      error: null,
+      pendingCount: 0,
+    });
 
-  const handleAttachFiles = useCallback(
+  const setBottomAttachmentError = useCallback((error: string | null) => {
+    setBottomOperation((current) => ({ ...current, error }));
+  }, []);
+  const setInlineAttachmentError = useCallback(
+    (error: string | null) => {
+      const editSessionId = inlineEditingQueuedMessage?.editSessionId ?? null;
+      setInlineOperation((current) => ({
+        editSessionId,
+        error,
+        pendingCount:
+          current.editSessionId === editSessionId ? current.pendingCount : 0,
+      }));
+    },
+    [inlineEditingQueuedMessage?.editSessionId],
+  );
+
+  const handleAttachBottomFiles = useCallback(
     async (files: File[]) => {
-      if (files.length === 0) {
-        return;
-      }
-
-      const attachmentOwner = inlineEditingQueuedMessage
-        ? {
-            kind: "queued" as const,
-            editSessionId: inlineEditingQueuedMessage.editSessionId,
-            ownerThreadId: inlineEditingQueuedMessage.ownerThreadId,
-            queuedMessageId: inlineEditingQueuedMessage.queuedMessageId,
-          }
-        : {
-            addAttachment: addDraftAttachment,
-            kind: "bottom" as const,
-          };
-      setAttachmentError(null);
+      if (files.length === 0) return;
+      setBottomOperation((current) => ({
+        error: null,
+        pendingCount: current.pendingCount + 1,
+      }));
       const failedFiles: string[] = [];
-      for (const file of files) {
-        try {
-          const uploaded = await uploadPromptAttachment.mutateAsync({
-            projectId,
-            file,
-          });
-          if (attachmentOwner.kind === "bottom") {
-            attachmentOwner.addAttachment(uploaded);
-          } else {
+      try {
+        for (const file of files) {
+          try {
+            const uploaded = await uploadPromptAttachment.mutateAsync({
+              projectId,
+              file,
+            });
+            addDraftAttachment(uploaded);
+          } catch {
+            failedFiles.push(file.name);
+          }
+        }
+      } finally {
+        setBottomOperation((current) => ({
+          error:
+            failedFiles.length > 0
+              ? `Failed to attach: ${failedFiles.join(", ")}`
+              : current.error,
+          pendingCount: Math.max(0, current.pendingCount - 1),
+        }));
+      }
+    },
+    [addDraftAttachment, projectId, uploadPromptAttachment],
+  );
+  const handleAttachInlineFiles = useCallback(
+    async (files: File[]) => {
+      if (!inlineEditingQueuedMessage || files.length === 0) return;
+      const { editSessionId, ownerThreadId, queuedMessageId } =
+        inlineEditingQueuedMessage;
+      setInlineOperation((current) => ({
+        editSessionId,
+        error: null,
+        pendingCount:
+          current.editSessionId === editSessionId
+            ? current.pendingCount + 1
+            : 1,
+      }));
+      const failedFiles: string[] = [];
+      try {
+        for (const file of files) {
+          try {
+            const uploaded = await uploadPromptAttachment.mutateAsync({
+              projectId,
+              file,
+            });
             const current = inlineEditingQueuedMessageRef.current;
             if (
-              current &&
-              current.editSessionId === attachmentOwner.editSessionId &&
-              current.ownerThreadId === attachmentOwner.ownerThreadId &&
-              current.queuedMessageId === attachmentOwner.queuedMessageId &&
+              current?.editSessionId === editSessionId &&
+              current.ownerThreadId === ownerThreadId &&
+              current.queuedMessageId === queuedMessageId &&
               !current.draft.attachments.some(
                 (existing) => existing.path === uploaded.path,
               )
@@ -81,17 +142,28 @@ export function useComposerAttachmentUploads({
                 },
               });
             }
+          } catch {
+            failedFiles.push(file.name);
           }
-        } catch {
-          failedFiles.push(file.name);
         }
-      }
-      if (failedFiles.length > 0) {
-        setAttachmentError(`Failed to attach: ${failedFiles.join(", ")}`);
+      } finally {
+        setInlineOperation((current) =>
+          current.editSessionId === editSessionId
+            ? {
+                editSessionId,
+                error:
+                  failedFiles.length > 0 &&
+                  inlineEditingQueuedMessageRef.current?.editSessionId ===
+                    editSessionId
+                    ? `Failed to attach: ${failedFiles.join(", ")}`
+                    : current.error,
+                pendingCount: Math.max(0, current.pendingCount - 1),
+              }
+            : current,
+        );
       }
     },
     [
-      addDraftAttachment,
       commitInlineQueuedMessage,
       inlineEditingQueuedMessage,
       inlineEditingQueuedMessageRef,
@@ -100,10 +172,22 @@ export function useComposerAttachmentUploads({
     ],
   );
 
+  const currentInlineEditSessionId =
+    inlineEditingQueuedMessage?.editSessionId ?? null;
+  const isCurrentInlineOperation =
+    inlineOperation.editSessionId === currentInlineEditSessionId;
+
   return {
-    attachmentError,
-    setAttachmentError,
-    handleAttachFiles,
-    isAttaching: uploadPromptAttachment.isPending,
+    bottomAttachmentError: bottomOperation.error,
+    setBottomAttachmentError,
+    handleAttachBottomFiles,
+    isAttachingBottomFiles: bottomOperation.pendingCount > 0,
+    inlineAttachmentError: isCurrentInlineOperation
+      ? inlineOperation.error
+      : null,
+    setInlineAttachmentError,
+    handleAttachInlineFiles,
+    isAttachingInlineFiles:
+      isCurrentInlineOperation && inlineOperation.pendingCount > 0,
   };
 }

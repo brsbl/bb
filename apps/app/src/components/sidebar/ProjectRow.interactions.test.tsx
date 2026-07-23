@@ -149,11 +149,45 @@ function renderProjectRow(
   return { ...result, onToggleEnvironmentCollapsed, onToggleProjectCollapsed };
 }
 
+function expectCollapsedActivityAtSidebarEdge(label: string) {
+  const edgeSlot = screen
+    .getAllByLabelText(label)
+    .map((indicator) =>
+      indicator.closest("[data-sidebar-collapsed-activity-edge]"),
+    )
+    .find((slot) => slot !== null);
+
+  expect(edgeSlot).toBeInstanceOf(HTMLElement);
+}
+
 describe("ProjectRow interactions", () => {
   afterEach(() => {
     cleanup();
     mockDraftThreadIds.current = new Set();
     vi.clearAllMocks();
+  });
+
+  it("places the project disclosure after its label and keeps root threads flush", () => {
+    const result = renderProjectRow(vi.fn(), {
+      status: "ready",
+      threads: [makeThread()],
+    });
+
+    const disclosure = screen.getByRole("button", {
+      name: "Collapse Test project section",
+    });
+    const label = screen.getByTitle("Test project");
+    const threadLink = result.container.querySelector(
+      '[data-sidebar-thread-id="thr_test"]',
+    );
+
+    expect(
+      label.compareDocumentPosition(disclosure) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      (threadLink?.parentElement as HTMLElement | null)?.style.paddingLeft,
+    ).toBe("8px");
   });
 
   it("shows generic runtime activity before a named workflow rollup", () => {
@@ -292,7 +326,8 @@ describe("ProjectRow interactions", () => {
     );
 
     expect(screen.queryByText("Test thread")).toBeNull();
-    expect(screen.getByLabelText("Thread working")).not.toBeNull();
+    expect(screen.getAllByLabelText("Thread working")).not.toHaveLength(0);
+    expectCollapsedActivityAtSidebarEdge("Thread working");
     expect(screen.queryByLabelText("Plan mode active")).toBeNull();
     expect(screen.queryByLabelText("Goal active")).toBeNull();
   });
@@ -344,8 +379,8 @@ describe("ProjectRow interactions", () => {
     );
 
     expect(
-      screen.getByLabelText("Thread working with unsubmitted draft"),
-    ).not.toBeNull();
+      screen.getAllByLabelText("Thread working with unsubmitted draft"),
+    ).not.toHaveLength(0);
     expect(screen.queryByLabelText("Plan mode active")).toBeNull();
   });
 
@@ -373,6 +408,7 @@ describe("ProjectRow interactions", () => {
 
     expect(screen.queryByText("Test thread")).toBeNull();
     expect(screen.getAllByLabelText("Goal active")).not.toHaveLength(0);
+    expectCollapsedActivityAtSidebarEdge("Goal active");
   });
 
   it("shows an idle draft before unread success for a collapsed project", () => {

@@ -16,9 +16,12 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
+import type { TimelineWorkflowWorkRow } from "@bb/server-contract";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { workflowRow } from "@/test/fixtures/thread-timeline-rows";
 import { THREAD_HANDOFF_CREATE_SEED_LOCATION_STATE_KEY } from "@/lib/thread-handoff-request";
 import { BbHttpError } from "@/lib/sdk";
 import type { PluginComposerHost } from "@/components/plugin/plugin-composer-host";
@@ -47,7 +50,7 @@ const mocks = vi.hoisted(() => ({
     restoreIfEmpty: vi.fn(),
     setDraft: vi.fn(),
     setTextAndMentions: vi.fn(),
-    storageKey: "thread:thr_1",
+    storageKey: "bb.promptbox.contents-proj_1-thr_1-3",
     text: "",
   },
   queuedMessages: [] as ThreadQueuedMessage[],
@@ -82,6 +85,7 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
     permission,
     permissionReadOnly,
     pluginComposerHost,
+    showScrollToBottomButton,
     stack,
     textEffects,
   }: {
@@ -110,12 +114,15 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
     permission: { value?: string };
     permissionReadOnly?: boolean;
     pluginComposerHost?: PluginComposerHost | null;
+    showScrollToBottomButton?: boolean;
     stack: ReactNode;
     textEffects?: readonly {
       effect: { className: string };
     }[];
   }) => (
     <div data-testid="follow-up-prompt-box">
+      <div data-testid="prompt-stack">{stack}</div>
+      <div data-testid="composer-boundary" />
       <div data-testid="submit-mode">
         {composer?.submitMode.kind}:{composer?.submitMode.reason ?? ""}
       </div>
@@ -137,12 +144,17 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
           ? textEffects.map(({ effect }) => effect.className).join(",")
           : "none"}
       </div>
+      <div data-testid="composer-location">
+        {showScrollToBottomButton === false ? "inline" : "bottom"}
+      </div>
       <div data-testid="plugin-composer-scope">
         {pluginComposerHost
           ? `${pluginComposerHost.scope.kind}:${
               pluginComposerHost.scope.kind === "queued-message"
                 ? pluginComposerHost.scope.queuedMessageId
-                : ""
+                : pluginComposerHost.scope.kind === "thread"
+                  ? pluginComposerHost.scope.threadId
+                  : (pluginComposerHost.scope.projectId ?? "null")
             }`
           : "route"}
       </div>
@@ -214,7 +226,6 @@ vi.mock("@/components/promptbox/FollowUpPromptBox", () => ({
           {execution.footerAction.label}
         </button>
       ) : null}
-      {stack}
     </div>
   ),
 }));
@@ -229,14 +240,14 @@ vi.mock("@/components/promptbox/banner/QueuedMessagesList", () => ({
     queuedMessages,
     onEdit,
   }: {
-    inlineEditor?: { onDismiss: () => void };
+    inlineEditor?: { content: ReactNode; onDismiss: () => void };
     queuedMessages: readonly ThreadQueuedMessage[];
     onEdit: (request: {
       queuedMessageId: string;
       queuedMessageIndex: number;
     }) => void;
   }) => (
-    <div>
+    <div data-testid="queued-message-list">
       <div data-testid="queued-message-count">{queuedMessages.length}</div>
       {queuedMessages.map((message, index) => (
         <button
@@ -253,9 +264,12 @@ vi.mock("@/components/promptbox/banner/QueuedMessagesList", () => ({
         </button>
       ))}
       {inlineEditor ? (
-        <button type="button" onClick={inlineEditor.onDismiss}>
-          Cancel queued edit
-        </button>
+        <div data-testid="inline-queued-message-editor">
+          {inlineEditor.content}
+          <button type="button" onClick={inlineEditor.onDismiss}>
+            Cancel queued edit
+          </button>
+        </div>
       ) : null}
     </div>
   ),
@@ -318,7 +332,24 @@ vi.mock("@/components/promptbox/banner/ThreadTodoCard", () => ({
 }));
 
 vi.mock("@/components/promptbox/banner/ThreadWorkflowCard", () => ({
-  ThreadWorkflowCard: () => null,
+  ThreadWorkflowCard: ({
+    workflow,
+    isExpanded,
+    onToggle,
+  }: {
+    workflow: TimelineWorkflowWorkRow;
+    isExpanded: boolean;
+    onToggle: () => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="workflow-card"
+      data-expanded={isExpanded}
+      onClick={onToggle}
+    >
+      {workflow.workflowName}
+    </button>
+  ),
 }));
 
 vi.mock(
@@ -590,6 +621,7 @@ function makePluginPendingInteraction(): PendingInteraction {
 
 interface RenderPromptAreaOptions {
   activePromptMode?: ThreadTimelineActivePromptMode | null;
+  activeWorkflows?: TimelineWorkflowWorkRow[];
   goal?: ThreadTimelineGoal | null;
   modelFallback?: ThreadTimelineModelFallback | null;
   pendingInteractions?: readonly PendingInteraction[];
@@ -599,6 +631,7 @@ interface RenderPromptAreaOptions {
 
 function buildPromptAreaElement({
   activePromptMode = null,
+  activeWorkflows = [],
   goal = null,
   modelFallback = null,
   pendingInteractions = [],
@@ -609,7 +642,7 @@ function buildPromptAreaElement({
     <ThreadDetailPromptArea
       activeBackgroundCommands={[]}
       activePromptMode={activePromptMode}
-      activeWorkflow={null}
+      activeWorkflows={activeWorkflows}
       canUseGitUi={false}
       childThreadsSection={null}
       composerFocusRequestNonce={0}
@@ -658,9 +691,9 @@ beforeEach(() => {
   mocks.pluginComposerHost = null;
   mocks.promptDraft.text = "";
   mocks.promptDraft.getCurrent.mockImplementation(() => ({
-    text: mocks.promptDraft.text,
-    mentions: mocks.promptDraft.mentions,
     attachments: mocks.promptDraft.attachments,
+    mentions: mocks.promptDraft.mentions,
+    text: mocks.promptDraft.text,
   }));
   mocks.queuedMessages = [];
   mocks.updateQueuedMessageMutateAsync.mockResolvedValue(undefined);
@@ -677,6 +710,18 @@ afterEach(() => {
 });
 
 describe("ThreadDetailPromptArea", () => {
+  it("keeps the queued drawer adjacent to the bottom composer", () => {
+    mocks.queuedMessages = [makeQueuedMessage()];
+
+    renderPromptArea();
+
+    const stack = screen.getByTestId("prompt-stack");
+    const queue = screen.getByTestId("queued-message-list");
+    const composer = screen.getByTestId("composer-boundary");
+    expect(stack.lastElementChild).toBe(queue);
+    expect(stack.nextElementSibling).toBe(composer);
+  });
+
   it("uses the real thread cache keys immediately", () => {
     mocks.queuedMessages = [makeQueuedMessage()];
 
@@ -704,6 +749,20 @@ describe("ThreadDetailPromptArea", () => {
     expect(screen.getByTestId("queued-message-count").textContent).toBe("1");
   });
 
+  it("binds the normal plugin composer host to the rendered pane thread", () => {
+    renderPromptArea({ thread: makeThread({ id: "thr_nonfocused" }) });
+
+    expect(screen.getByTestId("plugin-composer-scope").textContent).toBe(
+      "thread:thr_nonfocused",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Simulate plugin replacement" }),
+    );
+    expect(mocks.promptDraft.setDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Plugin-enhanced queued message" }),
+    );
+  });
+
   it("updates an inline-edited queue item without touching the bottom draft", async () => {
     mocks.defaultExecutionOptions = {
       model: "gpt-5",
@@ -716,23 +775,44 @@ describe("ThreadDetailPromptArea", () => {
     mocks.queuedMessages = [makeQueuedMessage()];
 
     renderPromptArea();
+    expect(screen.getByTestId("composer-location").textContent).toBe("bottom");
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
 
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
     expect(screen.getByTestId("queued-message-count").textContent).toBe("1");
     expect(
       (
-        screen.getByRole("textbox", {
+        inlineEditor.getByRole("textbox", {
           name: "Composer message",
         }) as HTMLTextAreaElement
       ).value,
     ).toBe("Already queued");
+    const bottomComposer = screen
+      .getAllByRole("textbox", { name: "Composer message" })
+      .find(
+        (element) =>
+          element.closest('[data-testid="inline-queued-message-editor"]') ===
+          null,
+      ) as HTMLInputElement;
+    expect(bottomComposer.value).toBe("Keep this bottom draft");
+    fireEvent.change(bottomComposer, {
+      target: { value: "Still-usable bottom draft" },
+    });
+    expect(mocks.promptDraft.setTextAndMentions).toHaveBeenCalledWith(
+      "Still-usable bottom draft",
+      [],
+    );
     fireEvent.change(
-      screen.getByRole("textbox", { name: "Composer message" }),
+      inlineEditor.getByRole("textbox", { name: "Composer message" }),
       { target: { value: "Edited queued message" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    fireEvent.click(
+      inlineEditor.getByRole("button", { name: "Submit composer" }),
+    );
 
     await waitFor(() => {
       expect(mocks.updateQueuedMessageMutateAsync).toHaveBeenCalledWith({
@@ -754,6 +834,7 @@ describe("ThreadDetailPromptArea", () => {
         ).value,
       ).toBe("Keep this bottom draft");
     });
+    expect(screen.getByTestId("composer-location").textContent).toBe("bottom");
   });
 
   it("exposes the inline queued draft to plugins without dropping attachments", async () => {
@@ -775,25 +856,32 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
 
-    expect(screen.getByTestId("plugin-composer-scope").textContent).toBe(
+    expect(inlineEditor.getByTestId("plugin-composer-scope").textContent).toBe(
       "queued-message:qmsg_1",
     );
-    expect(screen.getByTestId("attachment-count").textContent).toBe("1");
+    expect(inlineEditor.getByTestId("attachment-count").textContent).toBe("1");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Simulate plugin replacement" }),
+      inlineEditor.getByRole("button", {
+        name: "Simulate plugin replacement",
+      }),
     );
     expect(
       (
-        screen.getByRole("textbox", {
+        inlineEditor.getByRole("textbox", {
           name: "Composer message",
         }) as HTMLInputElement
       ).value,
     ).toBe("Plugin-enhanced queued message");
-    expect(screen.getByTestId("attachment-count").textContent).toBe("1");
+    expect(inlineEditor.getByTestId("attachment-count").textContent).toBe("1");
 
-    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    fireEvent.click(
+      inlineEditor.getByRole("button", { name: "Submit composer" }),
+    );
     await waitFor(() => {
       expect(mocks.updateQueuedMessageMutateAsync).toHaveBeenCalledWith({
         expectedUpdatedAt: 1,
@@ -823,13 +911,18 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Simulate chained plugin updates" }),
+      inlineEditor.getByRole("button", {
+        name: "Simulate chained plugin updates",
+      }),
     );
 
     expect(
       (
-        screen.getByRole("textbox", {
+        inlineEditor.getByRole("textbox", {
           name: "Composer message",
         }) as HTMLInputElement
       ).value,
@@ -846,8 +939,11 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    let inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Capture plugin host" }),
+      inlineEditor.getByRole("button", { name: "Capture plugin host" }),
     );
     const firstHost = mocks.pluginComposerHost!;
     act(() => {
@@ -855,16 +951,19 @@ describe("ThreadDetailPromptArea", () => {
         className: "queued-test-effect",
       });
     });
-    expect(screen.getByTestId("composer-text-effect").textContent).toBe(
+    expect(inlineEditor.getByTestId("composer-text-effect").textContent).toBe(
       "queued-test-effect",
     );
 
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 2" }),
     );
-    expect(screen.getByTestId("composer-text-effect").textContent).toBe("none");
+    inlineEditor = within(screen.getByTestId("inline-queued-message-editor"));
+    expect(inlineEditor.getByTestId("composer-text-effect").textContent).toBe(
+      "none",
+    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Capture plugin host" }),
+      inlineEditor.getByRole("button", { name: "Capture plugin host" }),
     );
     const secondHost = mocks.pluginComposerHost!;
     expect(secondHost.textEffectKey).not.toBe(firstHost.textEffectKey);
@@ -874,13 +973,15 @@ describe("ThreadDetailPromptArea", () => {
         className: "stale-queued-test-effect",
       });
     });
-    expect(screen.getByTestId("composer-text-effect").textContent).toBe("none");
+    expect(inlineEditor.getByTestId("composer-text-effect").textContent).toBe(
+      "none",
+    );
     act(() => {
       setComposerTextEffect(secondHost.textEffectKey, "composer-effect-test", {
         className: "queued-test-effect",
       });
     });
-    expect(screen.getByTestId("composer-text-effect").textContent).toBe(
+    expect(inlineEditor.getByTestId("composer-text-effect").textContent).toBe(
       "queued-test-effect",
     );
 
@@ -914,8 +1015,11 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    let inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Capture plugin host" }),
+      inlineEditor.getByRole("button", { name: "Capture plugin host" }),
     );
     const staleHost = mocks.pluginComposerHost;
     expect(staleHost?.scope).toMatchObject({
@@ -926,7 +1030,8 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 2" }),
     );
-    expect(screen.getByTestId("plugin-composer-scope").textContent).toBe(
+    inlineEditor = within(screen.getByTestId("inline-queued-message-editor"));
+    expect(inlineEditor.getByTestId("plugin-composer-scope").textContent).toBe(
       "queued-message:qmsg_2",
     );
 
@@ -938,7 +1043,7 @@ describe("ThreadDetailPromptArea", () => {
     });
     expect(
       (
-        screen.getByRole("textbox", {
+        inlineEditor.getByRole("textbox", {
           name: "Composer message",
         }) as HTMLInputElement
       ).value,
@@ -966,19 +1071,30 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    const inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
 
-    expect(screen.getByTestId("selected-model").textContent).toBe(
+    expect(inlineEditor.getByTestId("selected-model").textContent).toBe(
       "queued-model",
     );
-    expect(screen.getByTestId("selected-reasoning").textContent).toBe("high");
-    expect(screen.getByTestId("selected-service-tier").textContent).toBe(
+    expect(inlineEditor.getByTestId("selected-reasoning").textContent).toBe(
+      "high",
+    );
+    expect(inlineEditor.getByTestId("selected-service-tier").textContent).toBe(
       "fast",
     );
-    expect(screen.getByTestId("selected-permission").textContent).toBe("full");
-    expect(screen.getByTestId("execution-read-only").textContent).toBe("true");
-    expect(screen.getByTestId("permission-read-only").textContent).toBe("true");
+    expect(inlineEditor.getByTestId("selected-permission").textContent).toBe(
+      "full",
+    );
+    expect(inlineEditor.getByTestId("execution-read-only").textContent).toBe(
+      "true",
+    );
+    expect(inlineEditor.getByTestId("permission-read-only").textContent).toBe(
+      "true",
+    );
     expect(
-      screen.queryByRole("button", { name: "Handoff to new thread" }),
+      inlineEditor.queryByRole("button", { name: "Handoff to new thread" }),
     ).toBeNull();
   });
 
@@ -1035,11 +1151,15 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Attach file" }));
+    let inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
+    fireEvent.click(inlineEditor.getByRole("button", { name: "Attach file" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel queued edit" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
+    inlineEditor = within(screen.getByTestId("inline-queued-message-editor"));
 
     upload.resolve({
       mimeType: "text/plain",
@@ -1052,7 +1172,7 @@ describe("ThreadDetailPromptArea", () => {
     await waitFor(() =>
       expect(mocks.uploadPromptAttachmentMutateAsync).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByTestId("attachment-count").textContent).toBe("0");
+    expect(inlineEditor.getByTestId("attachment-count").textContent).toBe("0");
     expect(mocks.promptDraft.addAttachment).not.toHaveBeenCalled();
   });
 
@@ -1084,7 +1204,11 @@ describe("ThreadDetailPromptArea", () => {
     await waitFor(() =>
       expect(mocks.promptDraft.addAttachment).toHaveBeenCalledWith(uploaded),
     );
-    expect(screen.getByTestId("attachment-count").textContent).toBe("0");
+    expect(
+      within(screen.getByTestId("inline-queued-message-editor")).getByTestId(
+        "attachment-count",
+      ).textContent,
+    ).toBe("0");
   });
 
   it("dismisses a missing queued message but keeps a stale edit recoverable", async () => {
@@ -1101,7 +1225,12 @@ describe("ThreadDetailPromptArea", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit queued message 1" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    let inlineEditor = within(
+      screen.getByTestId("inline-queued-message-editor"),
+    );
+    fireEvent.click(
+      inlineEditor.getByRole("button", { name: "Submit composer" }),
+    );
 
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith("Queued message changed"),
@@ -1118,7 +1247,10 @@ describe("ThreadDetailPromptArea", () => {
         message: "Queued message not found",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Submit composer" }));
+    inlineEditor = within(screen.getByTestId("inline-queued-message-editor"));
+    fireEvent.click(
+      inlineEditor.getByRole("button", { name: "Submit composer" }),
+    );
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Cancel queued edit" }),
@@ -1143,6 +1275,39 @@ describe("ThreadDetailPromptArea", () => {
     expect(screen.getByTestId("submit-mode").textContent).toBe(
       "blocked:loading-pending-interactions",
     );
+  });
+
+  it("gives every concurrently running workflow its own independently expandable card", () => {
+    renderPromptArea({
+      activeWorkflows: [
+        workflowRow({
+          id: "row-wf-late",
+          status: "pending",
+          taskStatus: "running",
+          workflowName: "rfn-visual-identity",
+        }),
+        workflowRow({
+          id: "row-wf-early",
+          status: "pending",
+          taskStatus: "running",
+          workflowName: "rfn-pass-a-balance",
+        }),
+      ],
+    });
+
+    const cards = screen.getAllByTestId("workflow-card");
+    expect(cards.map((card) => card.textContent)).toEqual([
+      "rfn-visual-identity",
+      "rfn-pass-a-balance",
+    ]);
+
+    // Expanding one workflow must not expand its concurrent sibling.
+    fireEvent.click(cards[1]!);
+    expect(
+      screen
+        .getAllByTestId("workflow-card")
+        .map((card) => card.getAttribute("data-expanded")),
+    ).toEqual(["false", "true"]);
   });
 
   it("keeps Goal above a pending interaction", () => {

@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -53,6 +54,7 @@ import { Icon } from "@bb/shared-ui/icon";
 import { PromptStackCard } from "@/components/promptbox/banner/PromptStackCard";
 import { useScrollOverflowState } from "@/components/thread/timeline/useScrollOverflowState";
 import { OverflowFade } from "@/components/ui/overflow-fade";
+import { useBottomAnchoredScroll } from "@/components/ui/bottom-anchored-scroll-body";
 import {
   Tooltip,
   TooltipContent,
@@ -88,10 +90,9 @@ export interface QueuedMessageEditRequest {
 }
 
 export interface QueuedMessageInlineEditor {
+  content: ReactNode;
   queuedMessageId: string;
   queuedMessageIndex: number;
-  ready: boolean;
-  onComposerTargetChange: (target: HTMLDivElement | null) => void;
   onDismiss: () => void;
 }
 
@@ -139,31 +140,45 @@ const WORKSPACE_MIN_HEIGHT = 240;
 const WORKSPACE_MAX_HEIGHT = 360;
 const WORKSPACE_CHROME_HEIGHT = 56;
 const WORKSPACE_ROW_HEIGHT = 40;
-const INLINE_EDITOR_CHROME_HEIGHT = 200;
 const SURFACE_DRAG_THRESHOLD = 72;
 type QueueSurfaceMode = "collapsed" | "drawer" | "workspace";
 
 function getWorkspaceHeight({
-  inlineEditing,
   messageCount,
 }: {
-  inlineEditing: boolean;
   messageCount: number;
 }): number {
-  const estimatedHeight = inlineEditing
-    ? INLINE_EDITOR_CHROME_HEIGHT +
-      Math.max(0, messageCount - 1) * WORKSPACE_ROW_HEIGHT
-    : WORKSPACE_CHROME_HEIGHT +
-      Math.max(1, messageCount) * WORKSPACE_ROW_HEIGHT;
+  const estimatedHeight =
+    WORKSPACE_CHROME_HEIGHT + Math.max(1, messageCount) * WORKSPACE_ROW_HEIGHT;
   return clamp(estimatedHeight, WORKSPACE_MIN_HEIGHT, WORKSPACE_MAX_HEIGHT);
+}
+
+export function getInlineEditorSurfaceMaxHeight({
+  containerHeight,
+  surfaceHeight,
+  viewportHeight,
+}: {
+  containerHeight: number;
+  surfaceHeight: number;
+  viewportHeight: number;
+}): number {
+  // Measure everything that is not the queue — the real composer, prompt
+  // stack gaps, footer padding, and safe-area chrome — so edit mode adapts to
+  // the composer's occupied height instead of guessing at a bottom offset.
+  const occupiedHeightOutsideQueue = Math.max(
+    0,
+    containerHeight - surfaceHeight,
+  );
+  return Math.max(
+    COLLAPSED_HEIGHT,
+    Math.floor(viewportHeight - occupiedHeightOutsideQueue),
+  );
 }
 
 function queuedMarkdownPreviewClass(compact: boolean): string {
   return cn(
-    "min-w-0",
-    compact
-      ? "line-clamp-1 !text-xs !leading-4"
-      : "line-clamp-2 !text-sm !leading-5",
+    "block min-w-0 truncate",
+    compact ? "!text-xs !leading-4" : "!text-sm !leading-5",
   );
 }
 
@@ -562,12 +577,10 @@ function buildQueuedMessagePreviewText(
 
 function QueuedMessagePreview({
   compact,
-  hasAttachments,
   queuedMessage,
   resolveMentionLink,
 }: {
   compact: boolean;
-  hasAttachments: boolean;
   queuedMessage: ThreadQueuedMessage;
   resolveMentionLink?: PromptMentionLinkResolver;
 }) {
@@ -585,10 +598,7 @@ function QueuedMessagePreview({
 
   return (
     <div
-      className={cn(
-        "min-w-0 overflow-hidden text-foreground",
-        !hasAttachments && "fade-clip-right",
-      )}
+      className="min-w-0 flex-1 overflow-hidden text-foreground"
       title={preview}
     >
       {markdownPreview.text.length > 0 ? (
@@ -648,6 +658,7 @@ const QueuedMessageRow = memo(function QueuedMessageRow({
       ref={setNodeRef}
       style={rowStyle}
       data-queued-message-row=""
+      data-queued-message-id={queuedMessage.id}
       data-queued-message-group-boundary-row={isGroupBoundary ? "" : undefined}
       className={cn(
         "group/row relative border-b border-border/35 px-2.5 py-0.5",
@@ -682,15 +693,9 @@ const QueuedMessageRow = memo(function QueuedMessageRow({
           />
         </Button>
         <div className="min-w-0 flex-1 py-1">
-          <div
-            className={cn(
-              "min-w-0",
-              compact ? "flex items-center gap-1" : "space-y-0.5",
-            )}
-          >
+          <div className="flex min-w-0 items-center gap-1">
             <QueuedMessagePreview
               compact={compact}
-              hasAttachments={attachmentCount > 0}
               queuedMessage={queuedMessage}
               resolveMentionLink={resolveMentionLink}
             />
@@ -914,22 +919,12 @@ function QueuedMessageInlineEditorSlot({
             variant="ghost"
             className="ml-auto size-6 text-subtle-foreground"
             onClick={editor.onDismiss}
-            aria-label="Move editor back to the prompt box"
+            aria-label="Stop editing queued message"
           >
             <Icon name="X" className="size-3" aria-hidden />
           </Button>
         </div>
-        {editor.ready ? (
-          <div
-            ref={editor.onComposerTargetChange}
-            className="relative min-h-28 duration-200 animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none"
-            data-queued-message-composer-target=""
-          />
-        ) : (
-          <div className="flex min-h-28 items-center justify-center rounded-xl border border-border bg-background text-xs text-muted-foreground shadow-lift">
-            Opening editor…
-          </div>
-        )}
+        {editor.content}
       </div>
       <OverflowFade placement="below" tone="surface-raised" className="z-10" />
     </li>
@@ -969,7 +964,16 @@ export function QueuedMessagesList({
   );
   const [surfaceDragging, setSurfaceDragging] = useState(false);
   const [surfaceDragOffset, setSurfaceDragOffset] = useState(0);
+  const [inlineEditorMaxHeight, setInlineEditorMaxHeight] = useState<
+    number | null
+  >(null);
+  const [inlineEditorDesiredHeight, setInlineEditorDesiredHeight] = useState<
+    number | null
+  >(null);
   const inlineEditorActive = inlineEditor !== undefined;
+  const getScrollElement = useBottomAnchoredScroll()?.getScrollElement;
+  const surfaceRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const surfaceDragStartYRef = useRef(0);
   const surfaceDragOffsetRef = useRef(0);
   const surfaceDraggingRef = useRef(false);
@@ -985,6 +989,152 @@ export function QueuedMessagesList({
   } = useScrollOverflowState<HTMLDivElement>({
     measureOverflow: true,
   });
+
+  const scrollInlineEditorNeighborhoodIntoView = useCallback(() => {
+    const list = listRef.current;
+    const scroll = scrollRef.current;
+    const editorElement = list?.querySelector<HTMLElement>(
+      "[data-queued-message-inline-editor]",
+    );
+    if (!list || !scroll || !editorElement) return;
+
+    const items = Array.from(list.children);
+    const editorIndex = items.indexOf(editorElement);
+    const previousRow = items
+      .slice(0, editorIndex)
+      .reverse()
+      .find((item) => item.hasAttribute("data-queued-message-row"));
+    const followingRow = items
+      .slice(editorIndex + 1)
+      .find((item) => item.hasAttribute("data-queued-message-row"));
+    const firstElement = (previousRow ?? editorElement) as HTMLElement;
+    const lastElement = (followingRow ?? editorElement) as HTMLElement;
+    const viewportRect = scroll.getBoundingClientRect();
+    const firstRect = firstElement.getBoundingClientRect();
+    const lastRect = lastElement.getBoundingClientRect();
+    const neighborhoodHeight = lastRect.bottom - firstRect.top;
+    let delta = 0;
+
+    if (neighborhoodHeight <= viewportRect.height) {
+      if (firstRect.top < viewportRect.top) {
+        delta = firstRect.top - viewportRect.top;
+      } else if (lastRect.bottom > viewportRect.bottom) {
+        delta = lastRect.bottom - viewportRect.bottom;
+      }
+    } else {
+      const editorRect = editorElement.getBoundingClientRect();
+      if (editorRect.height > viewportRect.height) {
+        delta = editorRect.top - viewportRect.top;
+      } else if (editorRect.top < viewportRect.top) {
+        delta = editorRect.top - viewportRect.top;
+      } else if (editorRect.bottom > viewportRect.bottom) {
+        delta = editorRect.bottom - viewportRect.bottom;
+      }
+    }
+    if (delta !== 0) {
+      scroll.scrollTop += delta;
+    }
+  }, [scrollRef]);
+
+  const measureInlineEditorMaxHeight = useCallback(() => {
+    if (!inlineEditorActive) {
+      setInlineEditorMaxHeight(null);
+      setInlineEditorDesiredHeight(null);
+      return;
+    }
+    const viewport = getScrollElement?.();
+    const surface = surfaceRef.current;
+    const composerShell = surface?.closest<HTMLElement>("[data-app-composer]");
+    const container = composerShell?.parentElement;
+    if (!viewport || !surface || !container) {
+      setInlineEditorMaxHeight(null);
+      return;
+    }
+
+    const nextHeight = getInlineEditorSurfaceMaxHeight({
+      containerHeight: container.getBoundingClientRect().height,
+      surfaceHeight: surface.getBoundingClientRect().height,
+      viewportHeight: viewport.clientHeight,
+    });
+    setInlineEditorMaxHeight((currentHeight) =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
+
+    const list = listRef.current;
+    const scroll = scrollRef.current;
+    const editorElement = list?.querySelector<HTMLElement>(
+      "[data-queued-message-inline-editor]",
+    );
+    if (!list || !scroll || !editorElement) {
+      setInlineEditorDesiredHeight(null);
+      return;
+    }
+    const items = Array.from(list.children);
+    const editorIndex = items.indexOf(editorElement);
+    const previousRow = items
+      .slice(0, editorIndex)
+      .reverse()
+      .find((item) => item.hasAttribute("data-queued-message-row"));
+    const followingRow = items
+      .slice(editorIndex + 1)
+      .find((item) => item.hasAttribute("data-queued-message-row"));
+    const firstElement = (previousRow ?? editorElement) as HTMLElement;
+    const lastElement = (followingRow ?? editorElement) as HTMLElement;
+    const surfaceRect = surface.getBoundingClientRect();
+    const scrollRect = scroll.getBoundingClientRect();
+    const contentHeight =
+      lastElement.getBoundingClientRect().bottom -
+      firstElement.getBoundingClientRect().top;
+    const chromeHeight = Math.max(0, surfaceRect.height - scrollRect.height);
+    const desiredHeight = Math.max(
+      WORKSPACE_MIN_HEIGHT,
+      Math.ceil(contentHeight + chromeHeight),
+    );
+    setInlineEditorDesiredHeight((currentHeight) =>
+      currentHeight === desiredHeight ? currentHeight : desiredHeight,
+    );
+    // The surface height is animated. ResizeObserver calls this throughout the
+    // transition, so re-align the neighborhood as usable space appears instead
+    // of leaving the editor pinned to the top based on the first, short frame.
+    scrollInlineEditorNeighborhoodIntoView();
+  }, [
+    getScrollElement,
+    inlineEditorActive,
+    scrollInlineEditorNeighborhoodIntoView,
+    scrollRef,
+  ]);
+
+  useLayoutEffect(() => {
+    measureInlineEditorMaxHeight();
+    if (!inlineEditorActive) return;
+
+    const viewport = getScrollElement?.();
+    const surface = surfaceRef.current;
+    const composerShell = surface?.closest<HTMLElement>("[data-app-composer]");
+    const container = composerShell?.parentElement;
+    const animationFrame = window.requestAnimationFrame(
+      measureInlineEditorMaxHeight,
+    );
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measureInlineEditorMaxHeight);
+    if (viewport) resizeObserver?.observe(viewport);
+    if (surface) resizeObserver?.observe(surface);
+    if (listRef.current) resizeObserver?.observe(listRef.current);
+    const editorElement = listRef.current?.querySelector<HTMLElement>(
+      "[data-queued-message-inline-editor]",
+    );
+    if (editorElement) resizeObserver?.observe(editorElement);
+    if (composerShell) resizeObserver?.observe(composerShell);
+    if (container) resizeObserver?.observe(container);
+    window.addEventListener("resize", measureInlineEditorMaxHeight);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureInlineEditorMaxHeight);
+    };
+  }, [getScrollElement, inlineEditorActive, measureInlineEditorMaxHeight]);
 
   // Render from a local order so a drag can reorder synchronously in the drop
   // event (no snap-back). The prop is re-adopted only when the queue's
@@ -1073,7 +1223,6 @@ export function QueuedMessagesList({
   );
   // Keep a dragged row inside both the visible viewport and the rendered list:
   // short queues should not gain scrollable overflow below the final row.
-  const listRef = useRef<HTMLUListElement>(null);
   const restrictToListBounds = useCallback<Modifier>(
     ({ draggingNodeRect, transform }) => {
       return clampQueuedMessageDragTransform({
@@ -1235,19 +1384,33 @@ export function QueuedMessagesList({
   const baseSurfaceHeight =
     inlineEditor || mode === "workspace"
       ? getWorkspaceHeight({
-          inlineEditing: inlineEditor !== undefined,
           messageCount: queuedMessages.length,
         })
       : mode === "drawer"
         ? Math.min(DRAWER_HEIGHT, 57 + Math.max(1, queuedMessages.length) * 33)
         : COLLAPSED_HEIGHT;
-  const surfaceHeight = surfaceDragging
+  const unconstrainedSurfaceHeight = surfaceDragging
     ? clamp(
         baseSurfaceHeight + surfaceDragOffset,
         COLLAPSED_HEIGHT,
         WORKSPACE_MAX_HEIGHT + 22,
       )
     : baseSurfaceHeight;
+  const surfaceHeight =
+    inlineEditor && inlineEditorMaxHeight !== null
+      ? Math.min(
+          inlineEditorDesiredHeight ?? unconstrainedSurfaceHeight,
+          inlineEditorMaxHeight,
+        )
+      : unconstrainedSurfaceHeight;
+
+  useLayoutEffect(() => {
+    if (!inlineEditor) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      scrollInlineEditorNeighborhoodIntoView();
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [inlineEditor, scrollInlineEditorNeighborhoodIntoView, surfaceHeight]);
 
   const queueItems: ReactNode[] = [];
   let messageIndex = 0;
@@ -1330,6 +1493,7 @@ export function QueuedMessagesList({
 
   return (
     <PromptStackCard
+      rootRef={surfaceRef}
       ariaLabel="Queued messages"
       style={{ height: surfaceHeight }}
       className={cn(
