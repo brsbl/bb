@@ -60,7 +60,9 @@ export interface PluginThreadPanelProps {
    * needed, centers the stable row, and resolves only after its canonical
    * prose root mounts. A message from another thread is reported as missing.
    */
-  revealMessage(messageId: string): Promise<"revealed" | "missing">;
+  experimental_revealMessage(
+    messageId: string,
+  ): Promise<"revealed" | "missing">;
 }
 
 export interface PluginPendingInteractionView {
@@ -315,14 +317,16 @@ export interface PluginMessageActionThreadPanelOptions {
 }
 
 /** Where a plugin message action is rendered by host chrome. */
-export type PluginMessageActionPlacement = "action-bar" | "selection-menu";
+export type experimental_PluginMessageActionPlacement =
+  | "action-bar"
+  | "selection-menu";
 
 /**
  * A stable rendered-text selector captured inside one canonical message prose
  * root. Offsets index the concatenation of descendant DOM text nodes in DOM
  * order and therefore survive Markdown element boundaries.
  */
-export interface PluginRenderedTextSelection {
+export interface experimental_PluginRenderedTextSelection {
   version: 1;
   coordinateSpace: "rendered-text-utf16";
   start: number;
@@ -353,9 +357,10 @@ export interface PluginMessageActionContext {
   selectedText?: string;
   /**
    * Present with `selectedText` for selection-menu invocations. Omitted for
-   * action-bar invocations. `selection.exact` always equals `selectedText`.
+   * action-bar invocations. `experimental_selection.exact` always equals
+   * `selectedText`.
    */
-  selection?: PluginRenderedTextSelection;
+  experimental_selection?: experimental_PluginRenderedTextSelection;
   /**
    * Open one of this plugin's `threadPanelAction` components in the current
    * thread's side panel — the registration-callback equivalent of
@@ -384,7 +389,7 @@ export interface PluginMessageActionRegistration {
    * behavior of rendering in both the per-message action bar and the floating
    * selection menu.
    */
-  placements?: readonly PluginMessageActionPlacement[];
+  experimental_placements?: readonly experimental_PluginMessageActionPlacement[];
   /**
    * Runs when the user activates the action. Errors (sync or async) are
    * contained and logged; they never break the timeline.
@@ -425,9 +430,9 @@ export interface PluginContentScriptContext {
   /** Aborted before cleanup begins on replacement, deactivation, or teardown. */
   readonly signal: AbortSignal;
   /** Plugin-scoped schema-validated RPC transport. */
-  readonly rpc: PluginRpcClient;
+  readonly experimental_rpc: PluginRpcClient;
   /** Plugin-scoped realtime signals and shared socket lifecycle. */
-  readonly realtime: {
+  readonly experimental_realtime: {
     subscribe(
       channel: string,
       handler: (payload: unknown) => void,
@@ -438,7 +443,7 @@ export interface PluginContentScriptContext {
     ): PluginContentScriptDisposer;
   };
   /** Imperative navigation available outside a React slot. */
-  readonly navigate: Pick<BbNavigate, "toCompose">;
+  readonly experimental_navigate: Pick<BbNavigate, "toCompose">;
 }
 
 /** Cleanup returned by a frontend content script. */

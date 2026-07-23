@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import type { PluginRenderedTextSelection } from "@bb/plugin-sdk";
+import type { experimental_PluginRenderedTextSelection } from "@bb/plugin-sdk";
 
 export interface SelectionAnchorPoint {
   x: number;
@@ -17,7 +17,7 @@ export interface MessageProseSelection {
   text: string;
   rect: DOMRect;
   /** Present for selections captured inside canonical message prose roots. */
-  renderedText?: PluginRenderedTextSelection;
+  renderedText?: experimental_PluginRenderedTextSelection;
   anchorPoint?: SelectionAnchorPoint;
   anchorSide?: SelectionAnchorSide;
   sourceSeqEnd?: number;
@@ -165,7 +165,7 @@ export function renderedTextSelectionFromRange(
   root: HTMLElement,
   range: Range,
   geometryRange: Range = range,
-): PluginRenderedTextSelection | null {
+): experimental_PluginRenderedTextSelection | null {
   const start = textOffsetAtBoundary(
     root,
     range.startContainer,
@@ -177,7 +177,7 @@ export function renderedTextSelectionFromRange(
   const text = root.textContent ?? "";
   const exact = text.slice(start, end);
   if (exact.trim().length === 0) return null;
-  const rects: PluginRenderedTextSelection["rects"][number][] = [];
+  const rects: experimental_PluginRenderedTextSelection["rects"][number][] = [];
   const clientRects = geometryRange.getClientRects();
   for (let index = 0; index < clientRects.length; index += 1) {
     const rect = clientRects.item(index);
@@ -221,7 +221,7 @@ function toMessageProseSelection({
 }: {
   anchor: SelectionAnchor | null;
   rect: DOMRect | null;
-  renderedText: PluginRenderedTextSelection | null;
+  renderedText: experimental_PluginRenderedTextSelection | null;
 }): MessageProseSelection | null {
   if (renderedText === null || rect === null) return null;
   const selection: MessageProseSelection = {
@@ -503,7 +503,7 @@ export function SelectableMessageProse({
       // inset. A long-press text selection uses the same touch sequence, so
       // keep sidebar swipe recognition out of selectable message prose.
       data-no-sidebar-swipe
-      data-bb-message-prose-root=""
+      data-bb-experimental-message-prose-root=""
     >
       {children}
     </div>

@@ -114,22 +114,22 @@ interface ContentScriptTestMountOptions {
     pluginId: string;
     /** Defaults to 1. Pass the host generation you want the plugin to observe. */
     generation?: number;
-    /** Backing handlers for `context.rpc.call`. */
-    rpc?: Record<string, (input: unknown) => unknown | Promise<unknown>>;
+    /** Backing handlers for `context.experimental_rpc.call`. */
+    experimental_rpc?: Record<string, (input: unknown) => unknown | Promise<unknown>>;
     /** Initial shared-socket lifecycle state. Defaults to connected. */
-    realtimeConnectionState?: PluginRealtimeConnectionState;
+    experimental_realtimeConnectionState?: PluginRealtimeConnectionState;
 }
 interface MountedPluginContentScripts {
     inspection: {
         readonly mountedIds: readonly string[];
         readonly signal: AbortSignal;
         readonly disposed: boolean;
-        readonly rpcCalls: readonly RpcCall[];
-        readonly navigateCalls: readonly NavigateCall[];
+        readonly experimental_rpcCalls: readonly RpcCall[];
+        readonly experimental_navigateCalls: readonly NavigateCall[];
     };
     behavior: {
-        publishRealtime(channel: string, payload: unknown): void;
-        setRealtimeConnectionState(state: PluginRealtimeConnectionState): void;
+        experimental_publishRealtime(channel: string, payload: unknown): void;
+        experimental_setRealtimeConnectionState(state: PluginRealtimeConnectionState): void;
     };
     lifecycle: {
         /** Abort, then run returned cleanup functions once in reverse order. */

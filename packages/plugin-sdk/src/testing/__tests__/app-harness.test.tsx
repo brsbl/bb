@@ -291,16 +291,22 @@ describe("loadPluginApp", () => {
       definePluginApp((builder) => {
         builder.experimental_contentScripts.register({
           id: "controller",
-          async mount({ rpc, realtime, navigate }) {
-            const result = await rpc.call("list", { threadId: "thr_1" });
+          async mount({
+            experimental_rpc,
+            experimental_realtime,
+            experimental_navigate,
+          }) {
+            const result = await experimental_rpc.call("list", {
+              threadId: "thr_1",
+            });
             events.push(`rpc:${String(result)}`);
-            realtime.subscribe("changed", (payload) => {
+            experimental_realtime.subscribe("changed", (payload) => {
               events.push(`signal:${String(payload)}`);
             });
-            realtime.subscribeConnectionState((state) => {
+            experimental_realtime.subscribeConnectionState((state) => {
               events.push(`connection:${state}`);
             });
-            navigate.toCompose({
+            experimental_navigate.toCompose({
               initialPrompt: "Follow up",
               focusPrompt: true,
             });
@@ -310,20 +316,20 @@ describe("loadPluginApp", () => {
     );
     const mounted = await mountPluginContentScripts(captured, {
       pluginId: "demo",
-      rpc: { list: () => "ready" },
+      experimental_rpc: { list: () => "ready" },
     });
 
-    expect(mounted.inspection.rpcCalls).toEqual([
+    expect(mounted.inspection.experimental_rpcCalls).toEqual([
       { method: "list", input: { threadId: "thr_1" } },
     ]);
-    expect(mounted.inspection.navigateCalls).toEqual([
+    expect(mounted.inspection.experimental_navigateCalls).toEqual([
       {
         method: "toCompose",
         options: { initialPrompt: "Follow up", focusPrompt: true },
       },
     ]);
-    mounted.behavior.publishRealtime("changed", "thread-1");
-    mounted.behavior.setRealtimeConnectionState("reconnecting");
+    mounted.behavior.experimental_publishRealtime("changed", "thread-1");
+    mounted.behavior.experimental_setRealtimeConnectionState("reconnecting");
     expect(events).toEqual([
       "rpc:ready",
       "signal:thread-1",
@@ -331,7 +337,7 @@ describe("loadPluginApp", () => {
     ]);
 
     await mounted.lifecycle.dispose();
-    mounted.behavior.publishRealtime("changed", "ignored");
+    mounted.behavior.experimental_publishRealtime("changed", "ignored");
     expect(events).toHaveLength(3);
   });
 

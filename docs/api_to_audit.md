@@ -28,6 +28,28 @@ Audit before stabilizing:
 - Is returning a disposer plus `AbortSignal` sufficient for partial mounts, or
   should a future context expose additive cleanup registration?
 
+### `PluginContentScriptContext.experimental_rpc`, `.experimental_realtime`, and `.experimental_navigate`
+
+Lifecycle-managed content scripts receive plugin-scoped RPC, realtime
+subscriptions plus connection state, and root-composer navigation without
+mounting React. The matching test harness controls are also experimental:
+`ContentScriptTestMountOptions.experimental_rpc`,
+`.experimental_realtimeConnectionState`,
+`inspection.experimental_rpcCalls`, `inspection.experimental_navigateCalls`,
+`behavior.experimental_publishRealtime`, and
+`behavior.experimental_setRealtimeConnectionState`.
+
+Audit before stabilizing:
+
+- Should content scripts receive the complete hook-equivalent clients, or a
+  smaller capability set tailored to imperative lifecycle code?
+- Are automatic abort-bound realtime disposers sufficient, or should the
+  context expose additive cleanup registration?
+- Should navigation remain limited to `toCompose`, and how should unavailable
+  navigation surfaces report failure?
+- Does the test harness expose the minimum controls needed to verify transport,
+  connection, and navigation behavior?
+
 ### `BbNavigate.experimental_openThreadPanel`
 
 A general plugin-navigation method that opens one of the current plugin's
@@ -85,11 +107,16 @@ Audit before stabilizing:
 
 A plugin-contributed action on chat messages: an icon button in the
 per-message action bar (user and assistant messages) and an entry in the
-assistant text-selection menu. Registration `{ id, title, icon?, run }`;
-`run(context)` receives `{ threadId, message: ThreadChatMessageReference,
-selectedText?, openPanel({ actionId, title?, params? }) }`. Errors are
-contained and logged. The side-chat plugin's "Reply in side chat" is the
-reference consumer.
+assistant text-selection menu. Registration
+`{ id, title, icon?, experimental_placements?, run }`; `run(context)` receives
+`{ threadId, message: ThreadChatMessageReference, selectedText?,
+experimental_selection?, openPanel({ actionId, title?, params? }) }`. The
+experimental selection contains rendered-text UTF-16 offsets, quote context,
+and viewport line-fragment geometry. Its exported helper types are
+`experimental_PluginMessageActionPlacement` and
+`experimental_PluginRenderedTextSelection`. Errors are contained and logged.
+The side-chat plugin's "Reply in side chat" and Timeline Comments are reference
+consumers.
 
 Audit before stabilizing:
 
@@ -97,7 +124,45 @@ Audit before stabilizing:
   `ThreadChatMessageAction` already does?
 - Is `openPanel`-only the right navigation affordance, or do actions also
   need `useBbNavigate`-style routing from `run`?
+- Is `experimental_placements` the right opt-in shape, including omission
+  meaning both action-bar and selection-menu placement?
+- Are rendered-text UTF-16 offsets plus prefix/suffix context sufficient for
+  durable re-anchoring across Markdown rerenders?
+- Should viewport rectangles stay in the activation payload, or should plugins
+  resolve geometry from a stable selector when needed?
 - Ordering/dedup policy when several plugins contribute actions.
+
+### `PluginThreadPanelProps.experimental_revealMessage`
+
+Reveals a native user or assistant message in the panel's thread. The host
+loads bounded older history, expands containing groups, centers the stable row,
+and resolves only after its canonical prose root mounts.
+
+Audit before stabilizing:
+
+- Is `"revealed" | "missing"` enough result detail for plugins to recover or
+  explain failures?
+- Should the method accept an explicit reveal alignment or animation policy?
+- Are the older-history bounds and five-second mount deadline appropriate for
+  large threads and slow clients?
+
+### Experimental native timeline DOM hooks
+
+Content scripts can locate native timeline boundaries and message prose through
+`data-bb-experimental-thread-window`,
+`data-bb-experimental-thread-scroll-root`,
+`data-bb-experimental-conversation-message-id`,
+`data-bb-experimental-message-role`, and
+`data-bb-experimental-message-prose-root`. Embedded plugin chats omit these
+hooks.
+
+Audit before stabilizing:
+
+- Can the selector set be reduced while still supporting annotation layout and
+  exact-range restoration?
+- Should message role remain a DOM attribute or come from the action payload?
+- Are the hooks unique and stable across grouped turns, older-history loading,
+  streaming, and embedded chat surfaces?
 
 ### `threadPanelAction.layout` (registration field)
 

@@ -858,23 +858,23 @@ async function revealMountedPluginMessage(
   while (!isDisposed() && window.performance.now() < deadline) {
     const threadWindow = findElementByDataValue(
       document,
-      "data-bb-thread-window",
+      "data-bb-experimental-thread-window",
       threadId,
     );
     if (threadWindow !== null) {
       const row = findElementByDataValue(
         threadWindow,
-        "data-bb-conversation-message-id",
+        "data-bb-experimental-conversation-message-id",
         messageId,
       );
       if (row !== null) {
         const proseRoots = row.querySelectorAll<HTMLElement>(
-          "[data-bb-message-prose-root]",
+          "[data-bb-experimental-message-prose-root]",
         );
         if (proseRoots.length !== 1) return false;
         const scrollRoot = findElementByDataValue(
           threadWindow,
-          "data-bb-thread-scroll-root",
+          "data-bb-experimental-thread-scroll-root",
           threadId,
         );
         if (scrollRoot !== null) {
@@ -899,7 +899,10 @@ function pluginMessageActionSupportsPlacement(
   slot: PluginMessageActionSlot,
   placement: "action-bar" | "selection-menu",
 ): boolean {
-  return slot.placements === undefined || slot.placements.includes(placement);
+  return (
+    slot.experimental_placements === undefined ||
+    slot.experimental_placements.includes(placement)
+  );
 }
 
 /**
@@ -1942,10 +1945,10 @@ function TimelineRowsList({
             <div
               key={item.row.id}
               data-timeline-row-id={item.row.id}
-              data-bb-conversation-message-id={
+              data-bb-experimental-conversation-message-id={
                 item.row.kind === "conversation" ? item.row.id : undefined
               }
-              data-bb-message-role={
+              data-bb-experimental-message-role={
                 item.row.kind === "conversation" ? item.row.role : undefined
               }
             >

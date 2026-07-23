@@ -132,8 +132,8 @@ function SearchOlderRowsHarness({
       ];
 
   return (
-    <div data-bb-thread-window="thr_main">
-      <div data-bb-thread-scroll-root="thr_main">
+    <div data-bb-experimental-thread-window="thr_main">
+      <div data-bb-experimental-thread-scroll-root="thr_main">
         <ThreadTimelineRows
           threadId="thr_main"
           timelineRows={rows}
@@ -1060,13 +1060,13 @@ describe("ThreadTimelineRows actions", () => {
     const reveal = revealPluginThreadMessage("thr_main", "older_match");
     const olderRow = await waitFor(() => {
       const row = container.querySelector(
-        '[data-bb-conversation-message-id="older_match"]',
+        '[data-bb-experimental-conversation-message-id="older_match"]',
       );
       if (row === null) throw new Error("Older plugin reveal row not mounted");
       return row;
     });
     expect(
-      olderRow?.querySelectorAll("[data-bb-message-prose-root]"),
+      olderRow?.querySelectorAll("[data-bb-experimental-message-prose-root]"),
     ).toHaveLength(1);
     await expect(reveal).resolves.toBe("revealed");
     expect(onLoadOlderRows).toHaveBeenCalledTimes(1);
@@ -1136,12 +1136,15 @@ describe("ThreadTimelineRows actions", () => {
     const userRow = container.querySelector(
       '[data-timeline-row-id="user_row"]',
     );
-    expect(userRow?.getAttribute("data-bb-conversation-message-id")).toBe(
-      "user_row",
-    );
-    expect(userRow?.getAttribute("data-bb-message-role")).toBe("user");
     expect(
-      userRow?.querySelectorAll("[data-bb-message-prose-root]").length,
+      userRow?.getAttribute("data-bb-experimental-conversation-message-id"),
+    ).toBe("user_row");
+    expect(userRow?.getAttribute("data-bb-experimental-message-role")).toBe(
+      "user",
+    );
+    expect(
+      userRow?.querySelectorAll("[data-bb-experimental-message-prose-root]")
+        .length,
     ).toBe(1);
     expect(userRow?.querySelector('[aria-label="Summarize"]')).not.toBeNull();
 
@@ -1149,7 +1152,9 @@ describe("ThreadTimelineRows actions", () => {
       '[data-timeline-row-id="assistant_row"]',
     );
     expect(
-      assistantRow?.querySelectorAll("[data-bb-message-prose-root]").length,
+      assistantRow?.querySelectorAll(
+        "[data-bb-experimental-message-prose-root]",
+      ).length,
     ).toBe(1);
     const assistantAction = assistantRow?.querySelector(
       '[aria-label="Summarize"]',
@@ -1393,7 +1398,7 @@ describe("ThreadTimelineRows actions", () => {
     expect(run).toHaveBeenCalledTimes(1);
     const context = run.mock.calls[0]![0];
     expect(context.selectedText).toBe("part of this answer");
-    expect(context.selection).toEqual({
+    expect(context.experimental_selection).toEqual({
       version: 1,
       coordinateSpace: "rendered-text-utf16",
       start: 7,
@@ -1422,7 +1427,7 @@ describe("ThreadTimelineRows actions", () => {
         {
           id: "comment",
           title: "Comment",
-          placements: ["selection-menu"],
+          experimental_placements: ["selection-menu"],
           run,
         },
       ]),
@@ -1467,7 +1472,7 @@ describe("ThreadTimelineRows actions", () => {
           id: "user_selectable",
           role: "user",
         }),
-        selection: expect.objectContaining({
+        experimental_selection: expect.objectContaining({
           exact: "this contract",
           start: 12,
         }),

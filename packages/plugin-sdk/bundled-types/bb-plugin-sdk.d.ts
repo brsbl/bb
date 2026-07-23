@@ -127,7 +127,7 @@ interface PluginThreadPanelProps {
      * needed, centers the stable row, and resolves only after its canonical
      * prose root mounts. A message from another thread is reported as missing.
      */
-    revealMessage(messageId: string): Promise<"revealed" | "missing">;
+    experimental_revealMessage(messageId: string): Promise<"revealed" | "missing">;
 }
 interface PluginPendingInteractionView {
     id: string;
@@ -361,13 +361,13 @@ interface PluginMessageActionThreadPanelOptions {
     params?: JsonValue$1;
 }
 /** Where a plugin message action is rendered by host chrome. */
-type PluginMessageActionPlacement = "action-bar" | "selection-menu";
+type experimental_PluginMessageActionPlacement = "action-bar" | "selection-menu";
 /**
  * A stable rendered-text selector captured inside one canonical message prose
  * root. Offsets index the concatenation of descendant DOM text nodes in DOM
  * order and therefore survive Markdown element boundaries.
  */
-interface PluginRenderedTextSelection {
+interface experimental_PluginRenderedTextSelection {
     version: 1;
     coordinateSpace: "rendered-text-utf16";
     start: number;
@@ -397,9 +397,10 @@ interface PluginMessageActionContext {
     selectedText?: string;
     /**
      * Present with `selectedText` for selection-menu invocations. Omitted for
-     * action-bar invocations. `selection.exact` always equals `selectedText`.
+     * action-bar invocations. `experimental_selection.exact` always equals
+     * `selectedText`.
      */
-    selection?: PluginRenderedTextSelection;
+    experimental_selection?: experimental_PluginRenderedTextSelection;
     /**
      * Open one of this plugin's `threadPanelAction` components in the current
      * thread's side panel — the registration-callback equivalent of
@@ -427,7 +428,7 @@ interface PluginMessageActionRegistration {
      * behavior of rendering in both the per-message action bar and the floating
      * selection menu.
      */
-    placements?: readonly PluginMessageActionPlacement[];
+    experimental_placements?: readonly experimental_PluginMessageActionPlacement[];
     /**
      * Runs when the user activates the action. Errors (sync or async) are
      * contained and logged; they never break the timeline.
@@ -457,15 +458,15 @@ interface PluginContentScriptContext {
     /** Aborted before cleanup begins on replacement, deactivation, or teardown. */
     readonly signal: AbortSignal;
     /** Plugin-scoped schema-validated RPC transport. */
-    readonly rpc: PluginRpcClient;
+    readonly experimental_rpc: PluginRpcClient;
     /** Plugin-scoped realtime signals and shared socket lifecycle. */
-    readonly realtime: {
+    readonly experimental_realtime: {
         subscribe(channel: string, handler: (payload: unknown) => void): PluginContentScriptDisposer;
         getConnectionState(): PluginRealtimeConnectionState;
         subscribeConnectionState(handler: (state: PluginRealtimeConnectionState) => void): PluginContentScriptDisposer;
     };
     /** Imperative navigation available outside a React slot. */
-    readonly navigate: Pick<BbNavigate, "toCompose">;
+    readonly experimental_navigate: Pick<BbNavigate, "toCompose">;
 }
 /** Cleanup returned by a frontend content script. */
 type PluginContentScriptDisposer = () => void | Promise<void>;
@@ -959,13 +960,13 @@ declare const changedMessageSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
     id: z$1.ZodOptional<z$1.ZodString>;
     metadata: z$1.ZodOptional<z$1.ZodObject<{
         backgroundActivityChanged: z$1.ZodOptional<z$1.ZodBoolean>;
-        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/toolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "provider/unhandled" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
+        eventTypes: z$1.ZodOptional<z$1.ZodReadonly<z$1.ZodArray<z$1.ZodString & z$1.ZodType<"provider/unhandled" | "item/toolCall/progress" | "thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string, z$1.core.$ZodTypeInternals<"provider/unhandled" | "item/toolCall/progress" | "thread/started" | "thread/identity" | "turn/started" | "turn/completed" | "turn/input/accepted" | "thread/name/updated" | "thread/compacted" | "thread/goal/updated" | "thread/goal/cleared" | "item/started" | "item/completed" | "item/agentMessage/delta" | "item/commandExecution/outputDelta" | "item/fileChange/outputDelta" | "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" | "item/plan/delta" | "item/mcpToolCall/progress" | "item/backgroundTask/progress" | "item/backgroundTask/completed" | "thread/tokenUsage/updated" | "thread/contextWindowUsage/updated" | "turn/plan/updated" | "turn/diff/updated" | "provider/error" | "provider/warning" | "provider/modelFallback" | "client/thread/start" | "client/turn/requested" | "client/turn/start" | "system/error" | "system/manager/user_message" | "system/thread/interrupted" | "system/operation" | "system/permissionGrant/lifecycle" | "system/userQuestion/lifecycle" | "system/thread-provisioning" | "system/provider-turn-watchdog", string>>>>>;
         hasPendingInteraction: z$1.ZodOptional<z$1.ZodBoolean>;
         projectId: z$1.ZodOptional<z$1.ZodString>;
     }, z$1.core.$strict>>;
     changes: z$1.ZodReadonly<z$1.ZodArray<z$1.ZodEnum<{
-        "thread-created": "thread-created";
         "thread-deleted": "thread-deleted";
+        "thread-created": "thread-created";
         "events-appended": "events-appended";
         "interactions-changed": "interactions-changed";
         "status-changed": "status-changed";
@@ -1130,9 +1131,9 @@ declare const providerPendingInteractionSchema: z$1.ZodObject<{
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
-        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
+        interrupted: "interrupted";
     }>;
     statusReason: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
@@ -1268,9 +1269,9 @@ declare const pluginPendingInteractionSchema: z$1.ZodObject<{
     threadId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
-        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
+        interrupted: "interrupted";
     }>;
     statusReason: z$1.ZodNullable<z$1.ZodString>;
     createdAt: z$1.ZodNumber;
@@ -1596,9 +1597,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         }>;
         taskStatus: z$1.ZodEnum<{
             pending: "pending";
+            completed: "completed";
             running: "running";
             paused: "paused";
-            completed: "completed";
             failed: "failed";
             killed: "killed";
             stopped: "stopped";
@@ -1824,9 +1825,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         }>;
         taskStatus: z$1.ZodEnum<{
             pending: "pending";
+            completed: "completed";
             running: "running";
             paused: "paused";
-            completed: "completed";
             failed: "failed";
             killed: "killed";
             stopped: "stopped";
@@ -1953,9 +1954,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         }>;
         taskStatus: z$1.ZodEnum<{
             pending: "pending";
+            completed: "completed";
             running: "running";
             paused: "paused";
-            completed: "completed";
             failed: "failed";
             killed: "killed";
             stopped: "stopped";
@@ -2025,9 +2026,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         }>;
         taskStatus: z$1.ZodEnum<{
             pending: "pending";
+            completed: "completed";
             running: "running";
             paused: "paused";
-            completed: "completed";
             failed: "failed";
             killed: "killed";
             stopped: "stopped";
@@ -2179,8 +2180,8 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     originalModel: z$1.ZodString;
     fallbackModel: z$1.ZodString;
     reason: z$1.ZodEnum<{
-        refusal: "refusal";
         provider: "provider";
+        refusal: "refusal";
     }>;
     message: z$1.ZodString;
 }, z$1.core.$strip>, z$1.ZodObject<{
@@ -2212,9 +2213,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         tell: "tell";
     }>;
     initiator: z$1.ZodEnum<{
-        system: "system";
         user: "user";
         agent: "agent";
+        system: "system";
     }>;
     request: z$1.ZodObject<{
         method: z$1.ZodEnum<{
@@ -2233,9 +2234,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         tell: "tell";
     }>;
     initiator: z$1.ZodEnum<{
-        system: "system";
         user: "user";
         agent: "agent";
+        system: "system";
     }>;
     senderThreadId: z$1.ZodNullable<z$1.ZodString>;
     systemMessageKind: z$1.ZodOptional<z$1.ZodEnum<{
@@ -2301,9 +2302,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                     skill: "skill";
                 }>;
                 origin: z$1.ZodEnum<{
-                    user: "user";
                     project: "project";
                     builtin: "builtin";
+                    user: "user";
                 }>;
                 label: z$1.ZodString;
                 argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -2382,9 +2383,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
                     skill: "skill";
                 }>;
                 origin: z$1.ZodEnum<{
-                    user: "user";
                     project: "project";
                     builtin: "builtin";
+                    user: "user";
                 }>;
                 label: z$1.ZodString;
                 argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -2475,9 +2476,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
         tell: "tell";
     }>;
     initiator: z$1.ZodEnum<{
-        system: "system";
         user: "user";
         agent: "agent";
+        system: "system";
     }>;
     request: z$1.ZodObject<{
         method: z$1.ZodEnum<{
@@ -2524,9 +2525,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
-        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
+        interrupted: "interrupted";
     }>;
     resolution: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         decision: z$1.ZodLiteral<"allow_once">;
@@ -2576,9 +2577,9 @@ declare const threadEventSchema: z$1.ZodPipe<z$1.ZodUnknown, z$1.ZodUnion<readon
     providerRequestId: z$1.ZodString;
     status: z$1.ZodEnum<{
         pending: "pending";
-        interrupted: "interrupted";
         resolving: "resolving";
         resolved: "resolved";
+        interrupted: "interrupted";
     }>;
     resolution: z$1.ZodDefault<z$1.ZodNullable<z$1.ZodObject<{
         kind: z$1.ZodLiteral<"user_answer">;
@@ -2746,8 +2747,8 @@ declare const threadTimelinePendingTodosSchema: z$1.ZodObject<{
         text: z$1.ZodString;
         status: z$1.ZodEnum<{
             pending: "pending";
-            completed: "completed";
             in_progress: "in_progress";
+            completed: "completed";
         }>;
     }, z$1.core.$strip>>;
 }, z$1.core.$strip>;
@@ -2800,9 +2801,9 @@ declare const threadQueuedMessageSchema: z$1.ZodObject<{
                     skill: "skill";
                 }>;
                 origin: z$1.ZodEnum<{
-                    user: "user";
                     project: "project";
                     builtin: "builtin";
+                    user: "user";
                 }>;
                 label: z$1.ZodString;
                 argumentHint: z$1.ZodNullable<z$1.ZodString>;
@@ -4082,8 +4083,8 @@ declare const hostDaemonCommandRegistry: {
         }, z$1.core.$strict>], "kind">>;
         disallowedTools: z$1.ZodOptional<z$1.ZodArray<z$1.ZodString>>;
         instructionMode: z$1.ZodEnum<{
-            append: "append";
             replace: "replace";
+            append: "append";
         }>;
         type: z$1.ZodLiteral<"thread.start">;
         requestId: z$1.ZodString;
@@ -4571,8 +4572,8 @@ declare const hostDaemonCommandRegistry: {
                 }>;
             }, z$1.core.$strip>;
             instructionMode: z$1.ZodEnum<{
-                append: "append";
                 replace: "replace";
+                append: "append";
             }>;
             projectId: z$1.ZodString;
             providerId: z$1.ZodString;
@@ -4867,8 +4868,8 @@ declare const hostDaemonCommandRegistry: {
                 }>;
             }, z$1.core.$strip>;
             instructionMode: z$1.ZodEnum<{
-                append: "append";
                 replace: "replace";
+                append: "append";
             }>;
             projectId: z$1.ZodString;
             providerId: z$1.ZodString;
@@ -5770,9 +5771,9 @@ declare const hostDaemonCommandRegistry: {
         executablePath: z$1.ZodNullable<z$1.ZodString>;
         installed: z$1.ZodBoolean;
         installSource: z$1.ZodEnum<{
-            external: "external";
             notInstalled: "notInstalled";
             npmGlobal: "npmGlobal";
+            external: "external";
         }>;
         currentVersion: z$1.ZodNullable<z$1.ZodString>;
         latestVersion: z$1.ZodNullable<z$1.ZodString>;
@@ -5945,13 +5946,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
+                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
-                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -5995,13 +5996,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
+                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
-                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6057,13 +6058,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
+                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
-                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6105,13 +6106,13 @@ declare const hostDaemonCommandRegistry: {
         outcome: z$1.ZodLiteral<"unavailable">;
         failure: z$1.ZodObject<{
             code: z$1.ZodEnum<{
+                unknown: "unknown";
                 path_not_found: "path_not_found";
                 not_git_repo: "not_git_repo";
                 not_worktree: "not_worktree";
                 workspace_type_mismatch: "workspace_type_mismatch";
                 permission_denied: "permission_denied";
                 unknown_environment: "unknown_environment";
-                unknown: "unknown";
             }>;
             workspacePath: z$1.ZodString;
             message: z$1.ZodString;
@@ -6229,9 +6230,9 @@ declare const providerCliStatusResponseSchema: z$1.ZodRecord<z$1.ZodEnum<{
     executablePath: z$1.ZodNullable<z$1.ZodString>;
     installed: z$1.ZodBoolean;
     installSource: z$1.ZodEnum<{
-        external: "external";
         notInstalled: "notInstalled";
         npmGlobal: "npmGlobal";
+        external: "external";
     }>;
     currentVersion: z$1.ZodNullable<z$1.ZodString>;
     latestVersion: z$1.ZodNullable<z$1.ZodString>;
@@ -7244,9 +7245,9 @@ declare const terminalSessionSchema: z$1.ZodObject<{
     cols: z$1.ZodNumber;
     rows: z$1.ZodNumber;
     status: z$1.ZodEnum<{
+        running: "running";
         starting: "starting";
         disconnected: "disconnected";
-        running: "running";
         exited: "exited";
     }>;
     exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -7275,9 +7276,9 @@ declare const terminalListResponseSchema: z$1.ZodObject<{
         cols: z$1.ZodNumber;
         rows: z$1.ZodNumber;
         status: z$1.ZodEnum<{
+            running: "running";
             starting: "starting";
             disconnected: "disconnected";
-            running: "running";
             exited: "exited";
         }>;
         exitCode: z$1.ZodNullable<z$1.ZodNumber>;
@@ -9849,8 +9850,8 @@ declare const threadTimelineResponseSchema: z$1.ZodObject<{
         updatedAt: z$1.ZodNumber;
         objective: z$1.ZodString;
         status: z$1.ZodEnum<{
-            active: "active";
             paused: "paused";
+            active: "active";
             budgetLimited: "budgetLimited";
             complete: "complete";
         }>;
@@ -11812,4 +11813,4 @@ interface BbPluginApi {
 }
 
 export { PLUGIN_CLI_OUTPUT_MAX_BYTES, defineRpcContract };
-export type { BbContext, BbNavigate, BbPluginApi, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue$1 as JsonValue, MarkdownProps, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolContentPart, PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult, PluginAgentToolSelection, PluginAgents, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginBackground, PluginCli, PluginCliCommandInfo, PluginCliContext, PluginCliExecutionResult, PluginCliOutputLimitError, PluginCliRegistration, PluginCliResult, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginEvents, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginHosts, PluginHttp, PluginHttpAuthMode, PluginHttpHandler, PluginInteractionCancelReason, PluginInteractionRequest, PluginInteractionResult, PluginKvStorage, PluginLogger, PluginMentionItem, PluginMentionProviderRegistration, PluginMentionSearchContext, PluginMentionTrigger, PluginMessageActionContext, PluginMessageActionPlacement, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtime, PluginRealtimeConnectionState, PluginRenderedTextSelection, PluginRpc, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginServerApi, PluginSettingDescriptor, PluginSettingDescriptors, PluginSettingValue, PluginSettings, PluginSettingsHandle, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSettingsValues, PluginSharedPortTunnelIdentity, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginStatusApi, PluginStorage, PluginThreadActionContext, PluginThreadActionRegistration, PluginThreadActionResult, PluginThreadActionToast, PluginThreadEventHandler, PluginThreadEventName, PluginThreadEventPayloads, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, PluginUi, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps };
+export type { BbContext, BbNavigate, BbPluginApi, ComposerCustomization, ComposerPlusMenuItem, ComposerRichTextSpec, ComposerStructuredDraft, ComposerView, JsonValue$1 as JsonValue, MarkdownProps, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolContentPart, PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult, PluginAgentToolSelection, PluginAgents, PluginAppBuilder, PluginAppComposer, PluginAppContentScripts, PluginAppDefinition, PluginAppSetup, PluginAppSlots, PluginBackground, PluginCli, PluginCliCommandInfo, PluginCliContext, PluginCliExecutionResult, PluginCliOutputLimitError, PluginCliRegistration, PluginCliResult, PluginComposerApi, PluginComposerMention, PluginComposerScope, PluginComposerTextEffect, PluginComposerThreadRowStatus, PluginContentScriptContext, PluginContentScriptDisposer, PluginContentScriptRegistration, PluginEvents, PluginFileOpenerProps, PluginFileOpenerRegistration, PluginFileOpenerSource, PluginHomepageSectionProps, PluginHomepageSectionRegistration, PluginHosts, PluginHttp, PluginHttpAuthMode, PluginHttpHandler, PluginInteractionCancelReason, PluginInteractionRequest, PluginInteractionResult, PluginKvStorage, PluginLogger, PluginMentionItem, PluginMentionProviderRegistration, PluginMentionSearchContext, PluginMentionTrigger, PluginMessageActionContext, PluginMessageActionRegistration, PluginMessageActionThreadPanelOptions, PluginMessageDirectiveMessage, PluginMessageDirectiveOpenWorkspaceFile, PluginMessageDirectiveProps, PluginMessageDirectiveRegistration, PluginNavPanelProps, PluginNavPanelRegistration, PluginPendingInteractionProps, PluginPendingInteractionRegistration, PluginPendingInteractionView, PluginRealtime, PluginRealtimeConnectionState, PluginRpc, PluginRpcCallArgs, PluginRpcClient, PluginRpcContract, PluginRpcError, PluginRpcErrorCode, PluginRpcHandlers, PluginRpcIssuePathSegment, PluginRpcMethodContract, PluginRpcResult, PluginRpcValidationIssue, PluginSdkApp, PluginServerApi, PluginSettingDescriptor, PluginSettingDescriptors, PluginSettingValue, PluginSettings, PluginSettingsHandle, PluginSettingsSectionProps, PluginSettingsSectionRegistration, PluginSettingsState, PluginSettingsValues, PluginSharedPortTunnelIdentity, PluginSidebarFooterActionContext, PluginSidebarFooterActionProps, PluginSidebarFooterActionRegistration, PluginStatusApi, PluginStorage, PluginThreadActionContext, PluginThreadActionRegistration, PluginThreadActionResult, PluginThreadActionToast, PluginThreadEventHandler, PluginThreadEventName, PluginThreadEventPayloads, PluginThreadPanelActionContext, PluginThreadPanelActionRegistration, PluginThreadPanelProps, PluginUi, StandardSchemaV1, StandardSchemaV1InferInput, StandardSchemaV1InferOutput, StandardSchemaV1Issue, StandardSchemaV1Result, ThreadChatMessageAction, ThreadChatMessageReference, ThreadChatProps, experimental_PluginMessageActionPlacement, experimental_PluginRenderedTextSelection };

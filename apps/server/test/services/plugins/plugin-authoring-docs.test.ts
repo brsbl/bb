@@ -182,9 +182,9 @@ const CONTENT_SCRIPT_CONTEXT_FIELDS = [
   "pluginId",
   "generation",
   "signal",
-  "rpc",
-  "realtime",
-  "navigate",
+  "experimental_rpc",
+  "experimental_realtime",
+  "experimental_navigate",
 ] as const satisfies readonly (keyof PluginContentScriptContext)[];
 
 type MissingContentScriptContextField = Exclude<
@@ -214,7 +214,7 @@ const FRONTEND_SLOT_PROP_FIELDS = {
   homepageSection: ["projectId"],
   settingsSection: [],
   navPanel: ["subPath"],
-  threadPanelAction: ["threadId", "params", "revealMessage"],
+  threadPanelAction: ["threadId", "params", "experimental_revealMessage"],
   pendingInteraction: ["interaction", "submit", "cancel"],
   sidebarFooterAction: [],
   fileOpener: ["path", "source"],
@@ -223,7 +223,7 @@ const FRONTEND_SLOT_PROP_FIELDS = {
     "threadId",
     "message",
     "selectedText",
-    "selection",
+    "experimental_selection",
     "openPanel",
   ],
 } as const satisfies {
@@ -284,7 +284,7 @@ const MESSAGE_ACTION_REGISTRATION_FIELDS = [
   "id",
   "title",
   "icon",
-  "placements",
+  "experimental_placements",
   "run",
 ] as const satisfies readonly (keyof PluginMessageActionRegistration)[];
 

@@ -182,7 +182,7 @@ function ActionTabContent({
         <action.component
           threadId={threadId}
           params={params}
-          revealMessage={(messageId) =>
+          experimental_revealMessage={(messageId) =>
             revealPluginThreadMessage(threadId, messageId)
           }
         />

@@ -71,8 +71,8 @@ export function createPluginContentScriptContext(args: {
     pluginId,
     generation,
     signal,
-    rpc,
-    realtime: {
+    experimental_rpc: rpc,
+    experimental_realtime: {
       subscribe(channel, handler) {
         return bindDisposerToSignal(
           signal,
@@ -95,6 +95,6 @@ export function createPluginContentScriptContext(args: {
         );
       },
     },
-    navigate: { toCompose },
+    experimental_navigate: { toCompose },
   };
 }

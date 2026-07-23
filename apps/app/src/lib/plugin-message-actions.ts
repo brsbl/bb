@@ -1,6 +1,6 @@
 import type {
   PluginMessageActionContext,
-  PluginRenderedTextSelection,
+  experimental_PluginRenderedTextSelection,
   ThreadChatMessageReference,
 } from "@bb/plugin-sdk";
 import type { MarkdownMessageDirectiveOpenThreadPanel } from "@/components/ui/markdown-message-directives";
@@ -21,7 +21,7 @@ export interface RunPluginMessageActionArgs {
   /** Present only for selection-menu invocations. */
   selectedText?: string;
   /** Rich rendered-text selector paired with `selectedText`. */
-  selection?: PluginRenderedTextSelection;
+  selection?: experimental_PluginRenderedTextSelection;
   /**
    * The surface's thread-panel opener (same one message directives use), or
    * undefined on surfaces without a side panel — `openPanel` then reports
@@ -42,7 +42,7 @@ export function runPluginMessageAction({
     threadId,
     message,
     ...(selectedText !== undefined ? { selectedText } : {}),
-    ...(selection !== undefined ? { selection } : {}),
+    ...(selection !== undefined ? { experimental_selection: selection } : {}),
     openPanel: (options) => {
       if (openThreadPanel === undefined) return false;
       return openThreadPanel({ ...options, pluginId: slot.pluginId });

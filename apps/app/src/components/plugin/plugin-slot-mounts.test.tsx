@@ -1565,12 +1565,12 @@ describe("plugin thread panel actions", () => {
     );
   }
 
-  function RevealProbe({ revealMessage }: PluginThreadPanelProps) {
+  function RevealProbe({ experimental_revealMessage }: PluginThreadPanelProps) {
     const [result, setResult] = useState("idle");
     return (
       <button
         type="button"
-        onClick={() => void revealMessage("msg_1").then(setResult)}
+        onClick={() => void experimental_revealMessage("msg_1").then(setResult)}
       >
         reveal:{result}
       </button>

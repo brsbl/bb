@@ -77,7 +77,7 @@ describe("collectPluginAppRegistrations", () => {
         id: "summarize",
         title: "Summarize",
         icon: "Zap",
-        placements: ["selection-menu"],
+        experimental_placements: ["selection-menu"],
         run,
       });
       app.slots.experimental_messageAction({
@@ -149,7 +149,7 @@ describe("collectPluginAppRegistrations", () => {
         id: "summarize",
         title: "Summarize",
         icon: "Zap",
-        placements: ["selection-menu"],
+        experimental_placements: ["selection-menu"],
         run,
       },
       { id: "legacy", title: "Legacy", run },
@@ -400,7 +400,7 @@ describe("collectPluginAppRegistrations", () => {
           app.slots.experimental_messageAction({
             id: "bad-placement",
             title: "Bad placement",
-            placements: ["sidebar" as never],
+            experimental_placements: ["sidebar" as never],
             run: () => {},
           });
         }),

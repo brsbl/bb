@@ -247,24 +247,24 @@ export function collectPluginAppRegistrations(
         if (typeof registration.run !== "function") {
           throw new Error(`${kind}: "run" must be a function`);
         }
-        const rawPlacements = registration.placements;
+        const rawPlacements = registration.experimental_placements;
         let placements: ("action-bar" | "selection-menu")[] | undefined;
         if (rawPlacements !== undefined) {
           if (!Array.isArray(rawPlacements) || rawPlacements.length === 0) {
             throw new Error(
-              `${kind}: "placements" must be a non-empty array when set`,
+              `${kind}: "experimental_placements" must be a non-empty array when set`,
             );
           }
           placements = [];
           for (const placement of rawPlacements) {
             if (placement !== "action-bar" && placement !== "selection-menu") {
               throw new Error(
-                `${kind}: "placements" entries must be "action-bar" or "selection-menu"`,
+                `${kind}: "experimental_placements" entries must be "action-bar" or "selection-menu"`,
               );
             }
             if (placements.includes(placement)) {
               throw new Error(
-                `${kind}: "placements" must not contain duplicates`,
+                `${kind}: "experimental_placements" must not contain duplicates`,
               );
             }
             placements.push(placement);
@@ -278,7 +278,9 @@ export function collectPluginAppRegistrations(
                 icon: requireNonEmptyString(kind, "icon", registration.icon),
               }
             : {}),
-          ...(placements !== undefined ? { placements } : {}),
+          ...(placements !== undefined
+            ? { experimental_placements: placements }
+            : {}),
           run: registration.run,
         });
       },

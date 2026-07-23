@@ -32,13 +32,13 @@ controls to actions or the plus menu and larger content to banners.
 Use `app.experimental_contentScripts.register({ id, mount })` for ordinary
 bundled TypeScript/JavaScript that enhances the bb app shell without rendering
 a React slot. The host supplies
-`{ pluginId, generation, signal, rpc, realtime, navigate }`, awaits mount
-setup, and owns abort plus exact-once reverse-order disposal across hash reload,
-disable, removal, failed replacement, and app-window teardown. RPC is
-plugin-scoped and schema-validated; realtime subscriptions return disposers;
-navigation exposes `toCompose`. The old generation is disposed before
-candidate mounts, so generations never overlap. Content scripts are trusted
-same-origin page code, not a sandbox.
+`{ pluginId, generation, signal, experimental_rpc, experimental_realtime,
+experimental_navigate }`, awaits mount setup, and owns abort plus exact-once
+reverse-order disposal across hash reload, disable, removal, failed replacement,
+and app-window teardown. RPC is plugin-scoped and schema-validated; realtime
+subscriptions return disposers; navigation exposes `toCompose`. The old
+generation is disposed before candidate mounts, so generations never overlap.
+Content scripts are trusted same-origin page code, not a sandbox.
 
 Static styles should stay in the normal imported `app.css`; scripts may own
 dynamic DOM/style nodes when their disposer removes them. See the

@@ -97,7 +97,7 @@ export function PageShell({
     <div className={cn(SHELL_BLEED_CLASS, shellClassName)}>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
-          data-bb-thread-scroll-root={pluginThreadScrollRootId}
+          data-bb-experimental-thread-scroll-root={pluginThreadScrollRootId}
           className={cn(
             "@container/page min-h-0 flex-1 overflow-y-auto",
             scrollAreaClassName,

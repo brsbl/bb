@@ -261,7 +261,9 @@ function EmbeddedThreadChatHostedFooter({
   return (
     <div
       data-thread-window=""
-      data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
+      data-bb-experimental-thread-window={
+        exposePluginTimelineHooks ? threadId : undefined
+      }
       className="flex h-full min-h-0 min-w-0 flex-col overflow-clip"
     >
       <PageShell
@@ -1170,7 +1172,9 @@ function EmbeddedThreadChatWithComposer({
       <div
         key={surfaceKey}
         data-thread-window=""
-        data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
+        data-bb-experimental-thread-window={
+          exposePluginTimelineHooks ? threadId : undefined
+        }
         className="flex min-w-0 flex-col bg-background"
       >
         <div
@@ -1190,7 +1194,9 @@ function EmbeddedThreadChatWithComposer({
   return (
     <div
       data-thread-window=""
-      data-bb-thread-window={exposePluginTimelineHooks ? threadId : undefined}
+      data-bb-experimental-thread-window={
+        exposePluginTimelineHooks ? threadId : undefined
+      }
       className="flex min-h-0 flex-1 flex-col"
     >
       <BottomAnchoredScrollBody

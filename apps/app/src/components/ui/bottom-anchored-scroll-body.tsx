@@ -760,7 +760,7 @@ export function BottomAnchoredScrollBody({
       <div className="grid min-h-0 flex-1 overflow-hidden">
         <div
           ref={scrollAreaRef}
-          data-bb-thread-scroll-root={pluginThreadScrollRootId}
+          data-bb-experimental-thread-scroll-root={pluginThreadScrollRootId}
           className={cn(
             "@container/page col-start-1 row-start-1 min-h-0 overflow-x-hidden overflow-y-auto",
             scrollAreaClassName,

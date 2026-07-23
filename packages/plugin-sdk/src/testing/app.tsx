@@ -586,24 +586,24 @@ function collectRegistrations(
         if (typeof registration.run !== "function") {
           throw new Error(`${kind}: "run" must be a function`);
         }
-        const rawPlacements = registration.placements;
+        const rawPlacements = registration.experimental_placements;
         let placements: ("action-bar" | "selection-menu")[] | undefined;
         if (rawPlacements !== undefined) {
           if (!Array.isArray(rawPlacements) || rawPlacements.length === 0) {
             throw new Error(
-              `${kind}: "placements" must be a non-empty array when set`,
+              `${kind}: "experimental_placements" must be a non-empty array when set`,
             );
           }
           placements = [];
           for (const placement of rawPlacements) {
             if (placement !== "action-bar" && placement !== "selection-menu") {
               throw new Error(
-                `${kind}: "placements" entries must be "action-bar" or "selection-menu"`,
+                `${kind}: "experimental_placements" entries must be "action-bar" or "selection-menu"`,
               );
             }
             if (placements.includes(placement)) {
               throw new Error(
-                `${kind}: "placements" must not contain duplicates`,
+                `${kind}: "experimental_placements" must not contain duplicates`,
               );
             }
             placements.push(placement);
@@ -615,7 +615,9 @@ function collectRegistrations(
           ...(registration.icon !== undefined
             ? { icon: requireNonEmptyString(kind, "icon", registration.icon) }
             : {}),
-          ...(placements !== undefined ? { placements } : {}),
+          ...(placements !== undefined
+            ? { experimental_placements: placements }
+            : {}),
           run: registration.run,
         });
       },
@@ -674,10 +676,13 @@ export interface ContentScriptTestMountOptions {
   pluginId: string;
   /** Defaults to 1. Pass the host generation you want the plugin to observe. */
   generation?: number;
-  /** Backing handlers for `context.rpc.call`. */
-  rpc?: Record<string, (input: unknown) => unknown | Promise<unknown>>;
+  /** Backing handlers for `context.experimental_rpc.call`. */
+  experimental_rpc?: Record<
+    string,
+    (input: unknown) => unknown | Promise<unknown>
+  >;
   /** Initial shared-socket lifecycle state. Defaults to connected. */
-  realtimeConnectionState?: PluginRealtimeConnectionState;
+  experimental_realtimeConnectionState?: PluginRealtimeConnectionState;
 }
 
 export interface MountedPluginContentScripts {
@@ -685,12 +690,14 @@ export interface MountedPluginContentScripts {
     readonly mountedIds: readonly string[];
     readonly signal: AbortSignal;
     readonly disposed: boolean;
-    readonly rpcCalls: readonly RpcCall[];
-    readonly navigateCalls: readonly NavigateCall[];
+    readonly experimental_rpcCalls: readonly RpcCall[];
+    readonly experimental_navigateCalls: readonly NavigateCall[];
   };
   behavior: {
-    publishRealtime(channel: string, payload: unknown): void;
-    setRealtimeConnectionState(state: PluginRealtimeConnectionState): void;
+    experimental_publishRealtime(channel: string, payload: unknown): void;
+    experimental_setRealtimeConnectionState(
+      state: PluginRealtimeConnectionState,
+    ): void;
   };
   lifecycle: {
     /** Abort, then run returned cleanup functions once in reverse order. */
@@ -719,7 +726,8 @@ export async function mountPluginContentScripts(
   const connectionStateHandlers = new Set<
     (state: PluginRealtimeConnectionState) => void
   >();
-  let connectionState = options.realtimeConnectionState ?? "connected";
+  let connectionState =
+    options.experimental_realtimeConnectionState ?? "connected";
   let disposed = false;
 
   const dispose = async (): Promise<void> => {
@@ -743,7 +751,7 @@ export async function mountPluginContentScripts(
       const rpc = {
         async call(method: string, input?: unknown) {
           rpcCalls.push({ method, input: input ?? null });
-          const handler = options.rpc?.[method];
+          const handler = options.experimental_rpc?.[method];
           if (handler === undefined) {
             throw new Error(`No content-script RPC handler for "${method}"`);
           }
@@ -754,8 +762,8 @@ export async function mountPluginContentScripts(
         pluginId: options.pluginId,
         generation,
         signal: controller.signal,
-        rpc,
-        realtime: {
+        experimental_rpc: rpc,
+        experimental_realtime: {
           subscribe(channel, handler) {
             const handlers = realtimeHandlers.get(channel) ?? new Set();
             handlers.add(handler);
@@ -787,7 +795,7 @@ export async function mountPluginContentScripts(
             return unsubscribe;
           },
         },
-        navigate: {
+        experimental_navigate: {
           toCompose(navigateOptions) {
             navigateCalls.push({
               method: "toCompose",
@@ -819,16 +827,16 @@ export async function mountPluginContentScripts(
       get disposed() {
         return disposed;
       },
-      rpcCalls,
-      navigateCalls,
+      experimental_rpcCalls: rpcCalls,
+      experimental_navigateCalls: navigateCalls,
     },
     behavior: {
-      publishRealtime(channel, payload) {
+      experimental_publishRealtime(channel, payload) {
         for (const handler of realtimeHandlers.get(channel) ?? []) {
           handler(payload);
         }
       },
-      setRealtimeConnectionState(state) {
+      experimental_setRealtimeConnectionState(state) {
         connectionState = state;
         for (const handler of connectionStateHandlers) handler(state);
       },
