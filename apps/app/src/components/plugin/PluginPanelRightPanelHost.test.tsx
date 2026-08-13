@@ -491,6 +491,30 @@ describe("PluginPanelRightPanelHost", () => {
     expect(host?.classList.contains("md:h-[calc(100%+2.5rem)]")).toBe(true);
   });
 
+  it("flushes page insets when a right-panel registration finishes loading", () => {
+    hostState.rightPanelAvailable = false;
+    const view = render(<HostFixture flushPageInsets />);
+
+    expect(view.container.firstElementChild?.classList.contains("h-full")).toBe(
+      true,
+    );
+    expect(
+      view.container.firstElementChild?.classList.contains("-m-4"),
+    ).toBe(false);
+
+    hostState.rightPanelAvailable = true;
+    view.rerender(<HostFixture flushPageInsets />);
+
+    expect(
+      view.container.firstElementChild?.classList.contains("-m-4"),
+    ).toBe(true);
+    expect(
+      view.container.firstElementChild?.classList.contains(
+        "md:h-[calc(100%+2.5rem)]",
+      ),
+    ).toBe(true);
+  });
+
   it("scopes persisted state by owning split pane", () => {
     expect(
       getPluginPanelRightPanelStateId({

@@ -263,6 +263,8 @@ export function PluginPanelRightPanelHost({
         candidate.pluginId === pluginId && candidate.path === panelPath,
     ) ?? null;
   const rightPanel = panel?.experimental_rightPanel;
+  const shouldFlushPageInsets =
+    flushPageInsets && rightPanel !== undefined;
   const paneContext = useOptionalPaneContext();
   const panelStateId = getPluginPanelRightPanelStateId({
     panelPath,
@@ -922,7 +924,7 @@ export function PluginPanelRightPanelHost({
           : null}
         <div
           className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${
-            flushPageInsets
+            shouldFlushPageInsets
               ? "-m-4 h-[calc(100%+2rem)] md:-m-5 md:h-[calc(100%+2.5rem)]"
               : "h-full"
           }`}

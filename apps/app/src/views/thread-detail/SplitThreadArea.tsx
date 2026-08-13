@@ -1052,7 +1052,7 @@ function StandalonePaneContent({
   );
   return (
     <PluginPanelRightPanelHostBoundary
-      flushPageInsets={hasRightPanel}
+      flushPageInsets
       pluginId={content.pluginId}
       panelPath={content.panelPath}
       paneId={paneId}
