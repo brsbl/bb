@@ -1258,6 +1258,7 @@ function NonThreadPaneContent({
 
   return content.kind === "plugin-panel" ? (
     <PluginPanelRightPanelHostBoundary
+      flushPageInsets
       pluginId={content.pluginId}
       panelPath={content.panelPath}
       subPath={content.subPath}

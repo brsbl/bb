@@ -227,15 +227,18 @@ vi.mock("@/components/plugin/PluginPanelRightPanelHost", () => ({
   PluginPanelRightPanelToggleButton: () => null,
   PluginPanelRightPanelHost: ({
     children,
+    flushPageInsets,
     panelPath,
     pluginId,
   }: {
     children: ReactNode;
+    flushPageInsets?: boolean;
     panelPath: string;
     pluginId: string;
   }) => (
     <div
       data-testid="plugin-browser-host"
+      data-flush-page-insets={String(flushPageInsets === true)}
       data-panel-path={panelPath}
       data-plugin-id={pluginId}
     >
@@ -1674,6 +1677,11 @@ describe("SplitThreadArea", () => {
       "Docs content with notes sidebar",
     );
     expect(docsPanelContent).toBeTruthy();
+    expect(
+      screen
+        .getAllByTestId("plugin-browser-host")
+        .every((host) => host.dataset.flushPageInsets === "true"),
+    ).toBe(true);
     expect(docsPanelContent.closest(".isolate")).not.toBeNull();
     expect(
       screen.getByRole("button", { name: "Collapse notes sidebar" }),
