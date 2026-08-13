@@ -220,6 +220,7 @@ interface NodeSurface {
 
 type ExpectedBbSdkKey =
   | "environments"
+  | "environmentServices"
   | "files"
   | "guide"
   | "hosts"

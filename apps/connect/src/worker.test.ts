@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { decodeFrame, encodeFrame, type Frame } from "@bb/tunnel-contract";
+import {
+  CONNECT_VIEWER_ACCESS_HEADER,
+  decodeFrame,
+  encodeFrame,
+  type Frame,
+} from "@bb/tunnel-contract";
 import { machine } from "@bb/connect-db";
 
 import { cacheKey } from "./cache";
@@ -64,11 +69,13 @@ describe("requestForTunnelDo", () => {
       headers: {
         [GATE_AUTH_HEADER]: "machine",
         [GATE_MACHINE_ID_HEADER]: "forged-machine",
+        [CONNECT_VIEWER_ACCESS_HEADER]: "forged-viewer-token",
       },
     });
     const out = requestForTunnelDo(req, null, "session");
     expect(out.headers.get(GATE_AUTH_HEADER)).toBe("session");
     expect(out.headers.get(GATE_MACHINE_ID_HEADER)).toBeNull();
+    expect(out.headers.get(CONNECT_VIEWER_ACCESS_HEADER)).toBeNull();
   });
 });
 

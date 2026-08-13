@@ -3299,6 +3299,29 @@ declare const environmentDiffPatchRequestSchema: z$1.ZodObject<{
 type EnvironmentDiffPatchRequest = z$1.infer<typeof environmentDiffPatchRequestSchema>;
 type EnvironmentStatusResponse = z$1.infer<typeof environmentStatusResponseSchema>;
 
+/**
+ * A durable reference to an HTTP service owned by a BB environment host.
+ *
+ * This deliberately describes the service instead of one viewer's network
+ * route. The app resolves it when someone opens the corresponding BB route.
+ */
+declare const environmentServiceReferenceSchema: z$1.ZodObject<{
+    hostId: z$1.ZodString;
+    port: z$1.ZodNumber;
+    path: z$1.ZodString;
+    query: z$1.ZodOptional<z$1.ZodString>;
+    hash: z$1.ZodOptional<z$1.ZodString>;
+}, z$1.core.$strict>;
+type EnvironmentServiceReference = z$1.infer<typeof environmentServiceReferenceSchema>;
+declare const environmentServiceLinkResolutionSchema: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"destination">;
+    url: z$1.ZodString;
+}, z$1.core.$strict>, z$1.ZodObject<{
+    kind: z$1.ZodLiteral<"unavailable">;
+    reason: z$1.ZodString;
+}, z$1.core.$strict>], "kind">;
+type EnvironmentServiceLinkResolution = z$1.infer<typeof environmentServiceLinkResolutionSchema>;
+
 declare const providerUsageResponseSchema: z$1.ZodObject<{
     codex: z$1.ZodDiscriminatedUnion<[z$1.ZodObject<{
         status: z$1.ZodLiteral<"ok">;
@@ -11846,6 +11869,17 @@ interface EnvironmentsArea {
     update(args: EnvironmentUpdateArgs): Promise<EnvironmentUpdateResult>;
 }
 
+interface ResolveEnvironmentServiceArgs {
+    reference: EnvironmentServiceReference;
+    signal?: AbortSignal;
+}
+interface EnvironmentServicesArea {
+    /** Create the portable relative BB link that belongs in persisted Markdown. */
+    link(reference: EnvironmentServiceReference): string;
+    /** Resolve a portable link for the current SDK caller. */
+    resolve(args: ResolveEnvironmentServiceArgs): Promise<EnvironmentServiceLinkResolution>;
+}
+
 /**
  * Host file primitives. `hostId` may be omitted to target the server's
  * primary (local) host. `rootPath`, when set, confines the target beneath
@@ -12986,6 +13020,7 @@ interface ThreadSectionsArea {
 
 interface BbSdk extends BbRealtime {
     environments: EnvironmentsArea;
+    environmentServices: EnvironmentServicesArea;
     files: FilesArea;
     guide: GuideArea;
     hosts: HostsArea;

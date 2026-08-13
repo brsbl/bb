@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { defineRpcContract, type PluginRpcHandlers } from "@bb/plugin-sdk";
 import {
+  environmentServiceLinkResolutionSchema,
+  environmentServiceReferenceSchema,
+} from "@bb/server-contract";
+import {
   ConnectListError,
   type DesktopSession,
   type ListAccountServersResult,
@@ -11,6 +15,14 @@ import type { ConnectStatus } from "./types.js";
 import { MachineCodeError, type MachineCode } from "./machine-code.js";
 import type { ShareHostResolver } from "./hosts.js";
 import type { ShareListing } from "./shares.js";
+import { hasViewerAccessToken } from "./viewer-access.js";
+
+const resolveEnvironmentServiceInputSchema = z
+  .object({
+    reference: environmentServiceReferenceSchema,
+    viewerAccessToken: z.string().min(1),
+  })
+  .strict();
 
 // Panel-facing rpc surface. `server` is optional: the dashboard command
 // carries both --code and --server, but the panel's paste-a-code field only
@@ -123,6 +135,11 @@ export const connectRpcContract = defineRpcContract({
       .strict(),
   },
   listShares: { input: z.null(), output: z.array(shareListingSchema) },
+  /** Core BB asks this for an existing registry entry; it never synthesizes one. */
+  resolveEnvironmentService: {
+    input: resolveEnvironmentServiceInputSchema,
+    output: environmentServiceLinkResolutionSchema,
+  },
   listAccountServers: {
     input: z.null(),
     output: listAccountServersResultSchema,
@@ -140,6 +157,7 @@ export type ConnectRpcHandlers = PluginRpcHandlers<typeof connectRpcContract>;
 export function createRpcHandlers(
   tunnel: ConnectTunnel,
   hostResolver: ShareHostResolver,
+  viewerAccessToken: string,
 ): ConnectRpcHandlers {
   return {
     async pair(args) {
@@ -179,6 +197,36 @@ export function createRpcHandlers(
     },
     async listShares() {
       return tunnel.listShares();
+    },
+    async resolveEnvironmentService(args) {
+      if (!hasViewerAccessToken(viewerAccessToken, args.viewerAccessToken)) {
+        return {
+          kind: "unavailable" as const,
+          reason:
+            "This service link must be opened through an authenticated BB Connect viewer.",
+        };
+      }
+      const { reference } = args;
+      const listing = (await tunnel.listShares()).find(
+        (share) =>
+          share.hostId === reference.hostId && share.port === reference.port,
+      );
+      if (listing === undefined) {
+        return {
+          kind: "unavailable" as const,
+          reason:
+            "This service is not currently shared through BB Connect. Start the service, then run `bb connect expose <port>` from its thread.",
+        };
+      }
+      if (listing.url.length === 0) {
+        return {
+          kind: "unavailable" as const,
+          reason:
+            listing.unavailableReason ??
+            "This service's BB Connect share is currently unavailable.",
+        };
+      }
+      return { kind: "destination" as const, url: listing.url };
     },
     async listAccountServers() {
       try {

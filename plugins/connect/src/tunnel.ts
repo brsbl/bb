@@ -72,6 +72,8 @@ export interface ConnectTunnelOptions {
    */
   getLoopbackBaseUrl: () => string;
   log: PluginLogger;
+  /** Private per-install marker for authenticated Connect browser traffic. */
+  connectViewerAccessToken?: string;
   /** Fired on every state/handle/error/shares/presence transition. */
   onStatusChange?: (status: ConnectStatus) => void;
 }
@@ -470,6 +472,11 @@ export class ConnectTunnel {
         tunnel,
         log: this.options.log,
         resolveOrigin: (target) => this.resolveStreamOrigin(target),
+        ...(this.options.connectViewerAccessToken !== undefined
+          ? {
+              connectViewerAccessToken: this.options.connectViewerAccessToken,
+            }
+          : {}),
         onRemoteClientsChange: (count) => {
           this.remoteClients = count;
           this.publish();

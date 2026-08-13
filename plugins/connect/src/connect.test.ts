@@ -1435,15 +1435,9 @@ describe("connect plugin", () => {
     );
   });
 
-  it("registers contributeInstructions", async () => {
+  it("does not register global viewer-dependent agent instructions", async () => {
     const { harness } = await loadPlugin();
-    expect(harness.registrations.instructionProvider).not.toBeNull();
-    expect(
-      harness.registrations.instructionProvider?.({
-        threadId: "th_1",
-        projectId: "proj_1",
-      }),
-    ).toBeNull();
+    expect(harness.registrations.instructionProvider).toBeNull();
   });
 
   it("pair redeems, persists the credential to kv, and reports paired", async () => {
@@ -2545,7 +2539,8 @@ describe("connect CLI", () => {
           ),
       ),
     );
-    const { harness } = await loadCli();
+    const testHost = await loadCli();
+    const { harness } = testHost;
     await harness.runCli([
       "--code",
       "ABCD",
@@ -2557,6 +2552,36 @@ describe("connect CLI", () => {
     const exposed = await harness.runCli(["expose", "8000"]);
     expect(exposed.exitCode).toBe(0);
     expect(exposed.stdout).toContain(shareUrl);
+
+    await expect(
+      harness.callRpc("resolveEnvironmentService", {
+        reference: { hostId: SERVER_HOST_ID, port: 8000, path: "/preview" },
+        viewerAccessToken: "forged-viewer-token",
+      }),
+    ).resolves.toEqual({
+      kind: "unavailable",
+      reason: expect.stringContaining("authenticated BB Connect viewer"),
+    });
+
+    const viewerAccessToken = (await testHost.bb.storage.kv.get(
+      "viewer-access-token",
+    )) as string;
+    await expect(
+      harness.callRpc("resolveEnvironmentService", {
+        reference: { hostId: SERVER_HOST_ID, port: 8000, path: "/preview" },
+        viewerAccessToken,
+      }),
+    ).resolves.toEqual({ kind: "destination", url: shareUrl });
+
+    await expect(
+      harness.callRpc("resolveEnvironmentService", {
+        reference: { hostId: REMOTE_HOST_ID, port: 8000, path: "/preview" },
+        viewerAccessToken,
+      }),
+    ).resolves.toEqual({
+      kind: "unavailable",
+      reason: expect.stringContaining("not currently shared"),
+    });
 
     const shares = await harness.runCli(["shares"]);
     expect(shares.exitCode).toBe(0);
@@ -2611,6 +2636,16 @@ describe("connect CLI", () => {
     expect(fromThread).toMatchObject({
       exitCode: 0,
       stdout: "https://sawyer-air--3000.getbb.app\n",
+    });
+
+    const canonicalLink = await host.harness.runCli(
+      ["link", "3000", "--path", "/preview?theme=dark#ready"],
+      { threadId: "thread-air" },
+    );
+    expect(canonicalLink).toMatchObject({
+      exitCode: 0,
+      stdout:
+        "/services/host-air/3000?path=%2Fpreview&query=theme%3Ddark&hash=ready\n",
     });
 
     const overridden = await host.harness.runCli(

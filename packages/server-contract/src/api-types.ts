@@ -2,6 +2,7 @@ export * from "./api/shared.js";
 export * from "./api/projects.js";
 export * from "./api/skills.js";
 export * from "./api/environments.js";
+export * from "./api/environment-services.js";
 export * from "./api/files.js";
 export * from "./api/hosts.js";
 export * from "./api/plugins.js";

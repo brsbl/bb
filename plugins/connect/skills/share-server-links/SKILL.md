@@ -5,19 +5,21 @@ description: Share a local HTTP server with the user over bb connect. Use when a
 
 # Share local server links via bb connect
 
-When you start an HTTP server the user should open, give them a connect share
-URL — not a localhost URL. Shares work from threads running on any enrolled
-host, and the command resolves the thread's host automatically.
+When you start an HTTP server the user should open, give them a portable BB
+service link instead of choosing a localhost or Connect URL. BB resolves that
+one link when it is opened: local BB uses loopback; BB Connect uses the
+verified share for the environment host.
 
-1. Check pairing: run `bb connect status --json`. If not paired / not
-   connected, give the localhost URL and mention that `bb connect` enables
-   remote URLs once paired from the getbb.app dashboard.
-2. From the thread that started the HTTP server, run `bb connect expose
-<port>`. It prints that host's share URL. Use `--host <name-or-id>` only
-   when you intentionally need another enrolled host; outside a thread,
-   sharing defaults to the machine running the bb server.
-3. Give the returned URL to the user as a markdown link. It works for viewers
-   who have the owner's getbb.app session; it is not a public internet link.
+1. From the thread that started the HTTP server, run `bb connect expose
+<port>` when Connect viewers need it. Use `--host <name-or-id>` only when you
+   intentionally need another enrolled host; outside a thread, sharing
+   defaults to the machine running the bb server.
+2. Run `bb connect link <port> [--path /optional/path?query#hash]` from the
+   same thread. It prints the canonical relative BB link for that environment
+   host. Give that returned path to the user as a Markdown link.
+3. If Connect is unavailable, the canonical link still works for a local
+   viewer on the service host. A remote viewer gets a clear unavailable state
+   until the service is shared; never substitute a guessed Connect URL.
 4. When the server stops, run `bb connect unexpose <port>` from the same
    thread (or with the same `--host`) so the share is cleaned up. Use
    `bb connect shares [--host <name-or-id>]` to inspect that host's shares.

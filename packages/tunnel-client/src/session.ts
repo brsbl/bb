@@ -136,6 +136,8 @@ export interface TunnelSessionOptions {
    * origin. Called for every open-http / open-ws.
    */
   resolveOrigin: (target: string | undefined) => StreamOriginResult;
+  /** Private marker for authenticated Connect requests to BB's own origin. */
+  connectViewerAccessToken?: string;
   /** Fired when remoteClients transitions 0↔nonzero. */
   onRemoteClientsChange?: (remoteClients: number) => void;
   /** Fired on every relayed frame (any type). */
@@ -307,6 +309,10 @@ export class TunnelSession {
       publicOrigin: resolved.publicOrigin,
       loopbackOrigin: new URL(resolved.origin).origin,
       ...(resolved.host !== undefined ? { host: resolved.host } : {}),
+      ...(resolved.host === undefined &&
+      this.options.connectViewerAccessToken !== undefined
+        ? { connectViewerAccessToken: this.options.connectViewerAccessToken }
+        : {}),
     });
     try {
       const startedAt = performance.now();
@@ -389,6 +395,10 @@ export class TunnelSession {
       publicOrigin: resolved.publicOrigin,
       loopbackOrigin: new URL(resolved.origin).origin,
       ...(resolved.host !== undefined ? { host: resolved.host } : {}),
+      ...(resolved.host === undefined &&
+      this.options.connectViewerAccessToken !== undefined
+        ? { connectViewerAccessToken: this.options.connectViewerAccessToken }
+        : {}),
     });
     const countsAsRemoteClient = isBareBbRealtimeWs(frame.path, frame.target);
     let socket: NodeWebSocket;

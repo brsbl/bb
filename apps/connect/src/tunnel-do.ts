@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { machine, server } from "@bb/connect-db";
 import {
+  CONNECT_VIEWER_ACCESS_HEADER,
   HEARTBEAT_REQUEST,
   HEARTBEAT_RESPONSE,
   TUNNEL_PROTOCOL_QUERY_PARAM,
@@ -53,6 +54,7 @@ const HOP_HEADERS = new Set([
   "sec-websocket-version",
   "sec-websocket-extensions",
   TUNNEL_TARGET_HEADER,
+  CONNECT_VIEWER_ACCESS_HEADER,
 ]);
 
 function forwardableHeaders(headers: Headers): HeaderPair[] {

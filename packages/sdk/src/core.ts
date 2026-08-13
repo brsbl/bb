@@ -3,6 +3,10 @@ import {
   createEnvironmentsArea,
   type EnvironmentsArea,
 } from "./areas/environments.js";
+import {
+  createEnvironmentServicesArea,
+  type EnvironmentServicesArea,
+} from "./areas/environment-services.js";
 import { createFilesArea, type FilesArea } from "./areas/files.js";
 import { createGuideArea, type GuideArea } from "./areas/guide.js";
 import { createHostsArea, type HostsArea } from "./areas/hosts.js";
@@ -31,6 +35,7 @@ export interface CreateBbSdkArgs {
 
 export interface BbSdk extends BbRealtime {
   environments: EnvironmentsArea;
+  environmentServices: EnvironmentServicesArea;
   files: FilesArea;
   guide: GuideArea;
   hosts: HostsArea;
@@ -54,6 +59,7 @@ export function createBbSdk(args: CreateBbSdkArgs): BbSdk {
   });
   return {
     environments: createEnvironmentsArea(sdkContext),
+    environmentServices: createEnvironmentServicesArea(sdkContext),
     files: createFilesArea(sdkContext),
     guide: createGuideArea(),
     hosts: createHostsArea(sdkContext),

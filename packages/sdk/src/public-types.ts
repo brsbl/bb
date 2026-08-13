@@ -23,6 +23,7 @@ export type {
 
 export type * from "./realtime.js";
 export type * from "./areas/environments.js";
+export type * from "./areas/environment-services.js";
 export type * from "./areas/files.js";
 export type * from "./areas/guide.js";
 export type * from "./areas/hosts.js";

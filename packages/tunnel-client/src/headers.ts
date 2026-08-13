@@ -1,6 +1,14 @@
-import type { HeaderPair } from "@bb/tunnel-contract";
+import {
+  CONNECT_VIEWER_ACCESS_HEADER,
+  type HeaderPair,
+} from "@bb/tunnel-contract";
 
-const SKIP_REQUEST_HEADERS = new Set(["host", "content-length", "connection"]);
+const SKIP_REQUEST_HEADERS = new Set([
+  "host",
+  "content-length",
+  "connection",
+  CONNECT_VIEWER_ACCESS_HEADER,
+]);
 
 export interface LoopbackHeaderRewrite {
   publicOrigin: string;
@@ -10,6 +18,11 @@ export interface LoopbackHeaderRewrite {
    * dropped — bare-handle behavior, byte-identical to pre-share.
    */
   host?: string;
+  /**
+   * A per-install secret appended only to authenticated Connect requests for
+   * BB's own origin. Share origins must never receive it.
+   */
+  connectViewerAccessToken?: string;
 }
 
 export function headersForLoopbackRequest(
@@ -27,6 +40,9 @@ export function headersForLoopbackRequest(
   }
   if (rewrite.host !== undefined) {
     forwarded.Host = rewrite.host;
+  }
+  if (rewrite.connectViewerAccessToken !== undefined) {
+    forwarded[CONNECT_VIEWER_ACCESS_HEADER] = rewrite.connectViewerAccessToken;
   }
   return forwarded;
 }

@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import { RESERVED_HANDLES, parseVisitorHost, schema } from "@bb/connect-db";
+import { CONNECT_VIEWER_ACCESS_HEADER } from "@bb/tunnel-contract";
 import { TUNNEL_OFFLINE_HEADER, TunnelDO, type Env } from "./tunnel-do.js";
 import {
   parseCookie,
@@ -230,6 +231,7 @@ export function requestForTunnelDo(
   headers.delete(MACHINE_CREDENTIAL_HEADER);
   headers.delete(GATE_AUTH_HEADER);
   headers.delete(GATE_MACHINE_ID_HEADER);
+  headers.delete(CONNECT_VIEWER_ACCESS_HEADER);
   stripCloudDevHeader(headers);
   if (target !== null) {
     headers.set(TUNNEL_TARGET_HEADER, target);

@@ -83,6 +83,8 @@ import type {
   EnvironmentPullRequestResponse,
   EnvironmentStatusQuery,
   EnvironmentStatusResponse,
+  EnvironmentServiceLinkResolution,
+  EnvironmentServiceReferenceQuery,
   HostDirectoryListing,
   HostDirectoryQuery,
   HostCloneDefaultPathQuery,
@@ -246,6 +248,7 @@ import {
   environmentDiffQuerySchema,
   environmentPathsQuerySchema,
   environmentStatusQuerySchema,
+  environmentServiceReferenceQuerySchema,
   hostDirectoryQuerySchema,
   hostCloneDefaultPathQuerySchema,
   hostFileListRequestSchema,
@@ -688,6 +691,17 @@ export const publicApiRoutes = {
         hostProviderCliInstallRequestSchema,
       ),
       response: textResponse<HostProviderCliInstallEvent>(),
+    }),
+  },
+
+  environmentServices: {
+    resolve: defineRoute({
+      path: "/environment-services/resolve",
+      method: "get",
+      request: queryRequest<EmptyInput, EnvironmentServiceReferenceQuery>(
+        environmentServiceReferenceQuerySchema,
+      ),
+      response: jsonResponse<EnvironmentServiceLinkResolution>(),
     }),
   },
 

@@ -573,7 +573,7 @@ export function RewriteLocalhostLinksSettingsControl({
   return (
     <SettingsWithControl
       label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
-      description="Point localhost links at this host."
+      description="Point localhost links at a direct IP address."
     >
       <Switch
         checked={enabled}

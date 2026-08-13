@@ -143,6 +143,7 @@ Remote access (bb connect):
   bb connect status                       Show the server's connect status
   bb connect off                          Disconnect and forget the pairing
   bb connect expose <port> [--host <name-or-id>]    Share a host's HTTP port
+  bb connect link <port> [--host <name-or-id>] [--path </path>]  Create a viewer-resolved BB service link
   bb connect unexpose <port> [--host <name-or-id>]  Stop sharing on that host
   bb connect shares [--host <name-or-id>]           List that host's shares
   bb connect servers                      List every bb on this account (handle, url, live)
@@ -155,8 +156,12 @@ Remote access (bb connect):
   `https://<machine-label>--<port>.getbb.app` and proxy directly through that
   machine's daemon. Access is owner-session-gated — only viewers signed into
   the owner's getbb.app account can open the URL; it is not a public internet
-  link. Agents should run expose from the thread that started the server, share
-  the returned URL, and unexpose from the same thread when it stops.
+  link. `bb connect link <port>` prints a portable relative BB route for the
+  thread environment host, port, and optional path/query/hash. Put that route
+  in Markdown instead of choosing localhost or a Connect URL: local viewers
+  resolve loopback and Connect viewers resolve the verified active share.
+  Agents should run expose and link from the thread that started the server,
+  then unexpose from the same thread when it stops.
   `bb connect status` shows all shares with host + URL. `shares --json` returns
   the resolved `host` and rows with `hostId`, `hostName`, `port`, and `url`.
 

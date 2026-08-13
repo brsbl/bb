@@ -24,6 +24,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@bb/server-contract": "workspace:*",
     "@bb/connect-client": "workspace:*",
     "@bb/shared-ui": "workspace:*",
     "@bb/tunnel-client": "workspace:*",

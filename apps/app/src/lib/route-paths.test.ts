@@ -7,6 +7,7 @@ import {
   getAutomationDetailRoutePath,
   getAutomationEditRoutePath,
   getAutomationsRoutePath,
+  ENVIRONMENT_SERVICE_ROUTE_PATH,
   getSkillDetailRoutePath,
   getSkillsRoutePath,
   getThreadRoutePath,
@@ -57,6 +58,15 @@ describe("route path helpers", () => {
 
   it("recognizes the global settings route", () => {
     expect(isRoutePath({ path: "/settings" })).toBe(true);
+  });
+
+  it("recognizes the durable environment service route", () => {
+    expect(ENVIRONMENT_SERVICE_ROUTE_PATH).toBe("/services/:hostId/:port");
+    expect(
+      isRoutePath({
+        path: "/services/host_environment/4173?path=%2Fpreview",
+      }),
+    ).toBe(true);
   });
 
   it("builds and recognizes the Extensions routes", () => {

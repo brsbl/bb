@@ -1,4 +1,8 @@
 import type { BbPluginApi, PluginCliResult } from "@bb/plugin-sdk";
+import {
+  environmentServiceReferenceFromPath,
+  getEnvironmentServiceLinkPath,
+} from "@bb/server-contract";
 import type { ShareHostResolver } from "./hosts.js";
 import { parseSharePort } from "./shares.js";
 import type { ConnectTunnel } from "./tunnel.js";
@@ -73,6 +77,7 @@ function helpText(): string {
     "  bb connect status              Show remote-access status",
     "  bb connect off                 Disconnect and forget the pairing (re-pairing needs a new code)",
     "  bb connect expose <port> [--host <name-or-id>]    Share a port from the thread's host",
+    "  bb connect link <port> [--host <name-or-id>] [--path </path>]  Create a portable BB service link",
     "  bb connect unexpose <port> [--host <name-or-id>]  Stop sharing a port on that host",
     "  bb connect shares [--host <name-or-id>]           List shares for the thread's host",
     "  bb connect servers             List every bb on this account (from getbb.app)",
@@ -133,6 +138,12 @@ export function registerConnectCli(args: {
         name: "expose",
         summary: "Share an HTTP port from an enrolled host",
         usage: "bb connect expose <port> [--host <name-or-id>] [--json]",
+      },
+      {
+        name: "link",
+        summary: "Create a viewer-resolved link to an environment service",
+        usage:
+          "bb connect link <port> [--host <name-or-id>] [--path </path>] [--json]",
       },
       {
         name: "unexpose",
@@ -203,6 +214,37 @@ export function registerConnectCli(args: {
           return {
             exitCode: 0,
             stdout: `${listing.url}\n`,
+          };
+        }
+        if (first === "link") {
+          const portArg = argv[1];
+          if (portArg === undefined || portArg.startsWith("--")) {
+            return {
+              exitCode: 1,
+              stderr:
+                "Usage: bb connect link <port> [--host <name-or-id>] [--path </path>] [--json]\n",
+            };
+          }
+          const parsed = parseFlags(argv.slice(2));
+          validateFlags(parsed, {
+            boolean: ["json"],
+            value: ["host", "path"],
+          });
+          const host = await hostResolver.resolve(
+            ctx,
+            stringFlag(parsed, "host"),
+          );
+          const reference = environmentServiceReferenceFromPath({
+            hostId: host.id,
+            port: parseSharePort(portArg),
+            path: stringFlag(parsed, "path") ?? "/",
+          });
+          const href = getEnvironmentServiceLinkPath(reference);
+          return {
+            exitCode: 0,
+            stdout: parsed.flags.has("json")
+              ? asJson({ ...reference, href })
+              : `${href}\n`,
           };
         }
         if (first === "unexpose") {

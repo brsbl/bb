@@ -2449,6 +2449,9 @@ importers:
       '@bb/connect-client':
         specifier: workspace:*
         version: link:../../packages/connect-client
+      '@bb/server-contract':
+        specifier: workspace:*
+        version: link:../../packages/server-contract
       '@bb/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui

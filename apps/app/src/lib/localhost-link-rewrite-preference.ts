@@ -13,6 +13,29 @@ interface RewriteLocalhostLinkHrefArgs {
 
 const LOOPBACK_LINK_HOSTNAMES = new Set(["127.0.0.1", "localhost"]);
 
+function isIpv4Hostname(value: string): boolean {
+  const segments = value.split(".");
+  return (
+    segments.length === 4 &&
+    segments.every((segment) => {
+      if (!/^\d+$/u.test(segment)) return false;
+      const parsed = Number(segment);
+      return Number.isInteger(parsed) && parsed >= 0 && parsed <= 255;
+    })
+  );
+}
+
+/**
+ * A named public host could be BB Connect (or another proxy), where replacing
+ * only the hostname produces a non-existent host:port route. Keep legacy
+ * loopback links literal there. Direct numeric LAN access retains the legacy
+ * convenience without guessing a public tunnel URL.
+ */
+function canSubstituteLoopbackHostname(currentHostname: string): boolean {
+  const hostname = currentHostname.toLowerCase();
+  return LOOPBACK_LINK_HOSTNAMES.has(hostname) || isIpv4Hostname(hostname);
+}
+
 function isRewriteableLoopbackLink(url: URL): boolean {
   return (
     (url.protocol === "http:" || url.protocol === "https:") &&
@@ -37,6 +60,10 @@ export function rewriteLocalhostLinkHref({
   }
 
   if (!isRewriteableLoopbackLink(url)) {
+    return href;
+  }
+
+  if (!canSubstituteLoopbackHostname(currentHostname)) {
     return href;
   }
 

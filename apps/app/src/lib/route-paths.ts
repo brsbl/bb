@@ -1,5 +1,8 @@
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
+import { ENVIRONMENT_SERVICE_ROUTE_PATH } from "@bb/server-contract";
 import { matchPath } from "react-router-dom";
+
+export { ENVIRONMENT_SERVICE_ROUTE_PATH };
 
 export const APP_ROOT_ROUTE_PATH = "/";
 export const AUTH_CALLBACK_ROUTE_PATH = "/auth/callback";
@@ -267,6 +270,7 @@ const baseRoutePatterns: readonly string[] = [
   PROJECTLESS_ARCHIVED_ROUTE_PATH,
   PROJECT_SETTINGS_ROUTE_PATH,
   PROJECT_ARCHIVED_ROUTE_PATH,
+  ENVIRONMENT_SERVICE_ROUTE_PATH,
   PROJECTLESS_THREAD_DETAIL_ROUTE_PATH,
   THREAD_DETAIL_ROUTE_PATH,
   PLUGIN_PANEL_ROUTE_PATH,

@@ -205,10 +205,15 @@ isolated|reuse`, or anchor with `--source-seq-end`. Permission mode inherits
   through its daemon. Shares are owner-session-gated, not public.
   `bb connect status` shows every share's host and URL; `shares --json` includes
   the resolved host plus `hostId`, `hostName`, `port`, and `url` per row.
+  `bb connect link <port> [--path </path>]` prints a portable relative BB
+  service link for the thread environment host. Put that route in Markdown
+  instead of selecting localhost or a Connect URL: local viewers resolve
+  loopback and Connect viewers resolve the verified active share.
   `bb connect servers` lists every bb on the paired account (handle,
   name, url, live) so callers can discover siblings; `--json` includes
   `selfHandle` for deduping this server. When you start a local server the user
-  should open remotely, expose the port and give them the share URL. Remote
+  should open, expose the port, then use `bb connect link <port>` for the
+  Markdown link. Remote
   access is owned by the builtin `connect` plugin: `bb plugin disable connect`
   cuts it off entirely; with bb connect still enabled, `bb plugin enable
   connect` restores the command. Plugins → Connect shows the current URL, QR

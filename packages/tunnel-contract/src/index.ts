@@ -22,6 +22,14 @@ export const PROTOCOL_VERSION = 1;
  */
 export const TUNNEL_PROTOCOL_QUERY_PARAM = "v";
 
+/**
+ * Private marker injected by an enrolled tunnel after the Connect Worker has
+ * authenticated a browser session. It is never accepted from the public
+ * request and is used only by the local BB server to distinguish that viewer
+ * from a direct loopback caller.
+ */
+export const CONNECT_VIEWER_ACCESS_HEADER = "x-bb-connect-viewer-access";
+
 /** Heartbeat text messages (eligible for DO auto-response). */
 export const HEARTBEAT_REQUEST = "bbt:hb";
 export const HEARTBEAT_RESPONSE = "bbt:hb-ack";

@@ -46,4 +46,21 @@ describe("rewriteLocalhostLinkHref", () => {
       ).toBe(href);
     }
   });
+
+  it("preserves legacy loopback links on named hosts instead of inventing a proxy port", () => {
+    expect(
+      rewriteLocalhostLinkHref({
+        currentHostname: "brsbl.getbb.app",
+        enabled: true,
+        href: "http://localhost:5173/preview",
+      }),
+    ).toBe("http://localhost:5173/preview");
+    expect(
+      rewriteLocalhostLinkHref({
+        currentHostname: "brsbl.getbb.app",
+        enabled: true,
+        href: "http://127.0.0.1:5173/preview",
+      }),
+    ).toBe("http://127.0.0.1:5173/preview");
+  });
 });

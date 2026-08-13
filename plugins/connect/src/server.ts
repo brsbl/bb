@@ -7,13 +7,12 @@ import { ConnectTunnel } from "./tunnel.js";
 import { ShareHostResolver } from "./hosts.js";
 import { resolveLocalCloudLoopbackUrl } from "./local-loopback.js";
 import { resolveDefaultConnectBaseUrl } from "./redeem.js";
-import {
-  CONNECT_REALTIME_CHANNEL,
-  REMOTE_ACTIVITY_INSTRUCTIONS_MS,
-} from "./types.js";
+import { CONNECT_REALTIME_CHANNEL } from "./types.js";
+import { readOrCreateViewerAccessToken } from "./viewer-access.js";
 
 export default async function plugin(bb: BbPluginApi) {
   const store = createKvCredentialStore(bb.storage.kv);
+  const viewerAccessToken = await readOrCreateViewerAccessToken(bb.storage.kv);
   // Tunnel is assigned below; ShareRegistry reads the live credential via this.
   let tunnel!: ConnectTunnel;
   const hostResolver = new ShareHostResolver(() => bb.sdk);
@@ -41,28 +40,16 @@ export default async function plugin(bb: BbPluginApi) {
     defaultBaseUrl: resolveDefaultConnectBaseUrl(process.env),
     getLoopbackBaseUrl,
     log: bb.log,
+    connectViewerAccessToken: viewerAccessToken,
     onStatusChange: (status) =>
       bb.realtime.publish(CONNECT_REALTIME_CHANNEL, status),
   });
 
-  bb.rpc.register(connectRpcContract, createRpcHandlers(tunnel, hostResolver));
+  bb.rpc.register(
+    connectRpcContract,
+    createRpcHandlers(tunnel, hostResolver, viewerAccessToken),
+  );
   registerConnectCli({ bb, tunnel, hostResolver });
-
-  bb.agents.contributeInstructions(() => {
-    const status = tunnel.status();
-    if (!status.paired || status.url === null) return null;
-    const recent =
-      status.remoteClients > 0 ||
-      (status.lastRemoteActivityAt !== null &&
-        Date.now() - status.lastRemoteActivityAt <
-          REMOTE_ACTIVITY_INSTRUCTIONS_MS);
-    if (!recent) return null;
-    return (
-      `The user is currently viewing this bb remotely at ${status.url}. ` +
-      "Port shares work from a thread on any enrolled host: when you start an HTTP server they should see, run `bb connect expose <port>` from that thread. " +
-      "The command returns the correct public URL for the thread's host; give it to them as a markdown link because a localhost URL will not work remotely."
-    );
-  });
 
   // The tunnel lives inside this service: idle while unpaired, dialing when
   // a credential exists, torn down on abort (reload/disable/shutdown) —
