@@ -18,5 +18,6 @@ describe("bb-app public SDK", () => {
     expect(typeof sdk.threads.queuedMessages.create).toBe("function");
     expect(typeof sdk.threads.queuedMessages.update).toBe("function");
     expect(typeof sdk.environments.mergePullRequest).toBe("function");
+    expect(typeof sdk.environmentServices.link).toBe("function");
   });
 });

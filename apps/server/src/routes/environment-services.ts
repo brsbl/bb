@@ -8,7 +8,7 @@ import {
   type PublicApiSchema,
 } from "@bb/server-contract";
 import { CONNECT_VIEWER_ACCESS_HEADER } from "@bb/tunnel-contract";
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 import { ApiError } from "../errors.js";
 import type { AppDeps } from "../types.js";
 import {
@@ -129,7 +129,7 @@ export function registerEnvironmentServiceRoutes(
       new ApiError(400, "invalid_request", message),
   });
   const routes = publicApiRoutes.environmentServices;
-  get(routes.resolve, async (context: Context, reference) => {
+  get(routes.resolve, async (context, reference) => {
     const viewerAccessToken = environmentServiceViewerAccessToken(context);
     return context.json(
       await resolveEnvironmentServiceDestination({
