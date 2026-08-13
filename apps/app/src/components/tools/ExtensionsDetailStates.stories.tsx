@@ -54,7 +54,7 @@ import {
  * These are the whole Extensions detail story surface, deliberately. Anything a running
  * server would show you is better seen in the running app, and anything that
  * must not regress belongs in a test — `detail-page-recipes.test.tsx` pins
- * section order and labels, `SkillsView.test.tsx` and `ToolsSidebar.test.tsx`
+ * section order and labels, `SkillsView.test.tsx`
  * pin routing. What is left, and what these cover, is the states a healthy
  * local server will not produce on demand: loading, missing, failed, empty,
  * and disabled — plus content ugly enough to break a layout.
@@ -691,6 +691,7 @@ function CatalogPlugin({
           entryId: entry.entryId,
           displayName: entry.displayName,
           icon: entry.icon,
+          source: entry.source,
         }}
         onOpenChange={setInstallOpen}
       />

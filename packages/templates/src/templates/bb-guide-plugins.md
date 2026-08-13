@@ -371,7 +371,7 @@ least `icon` or `logo.light`, `bb.server`
 into agent threads unless filtered by `bb.agents.configure`; default
 `skills/`), `engines.bb` (supported bb range),
 and optional `engines.bbPluginSdk` (supported plugin SDK range; scaffold
-writes `"^0.4.2"` for SDK 0.4.2). Use `bb-plugin-hello` for the package name by
+writes `"^0.5.0"` for SDK 0.5.0). Use `bb-plugin-hello` for the package name by
 default. Scoped names such as `@acme/bb-plugin-hello` are also supported. The
 plugin id is the final package-name component minus `bb-plugin-`, so both forms
 use `hello`.
@@ -470,4 +470,5 @@ The `plugins/` directory contains every bundled plugin: the auto-installed
 builtins and the store-only BB Official GitHub, Docs, Memory, and Tasks
 plugins. The `examples/plugins/` reference plugins cover slack-bot (webhook
 bot), agent-enrichment (agent surfaces), composer-customization (all composer
-regions), and t3sidebar (a replacement sidebar thread list).
+regions), and t3sidebar (a replacement sidebar thread list). Thread Hover
+Cards installs from the BB Official catalog (source: the bb-plugins repo).

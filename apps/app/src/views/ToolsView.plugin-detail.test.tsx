@@ -83,17 +83,22 @@ afterEach(() => {
 });
 
 describe("ToolsScrollPage layout", () => {
-  it("gives bounded collection pages a definite viewport height", () => {
+  it("gives bounded collection pages a definite, full-pane viewport", () => {
     render(
       <ToolsScrollPage fillViewport>
         <div>Skills collection</div>
       </ToolsScrollPage>,
     );
 
+    // The child owns the scrolling, so the page must hand it the full pane:
+    // a definite height for the inner viewport to bound itself against, and
+    // no width cap — the centered column would leave the gutters wheel-dead.
     const content = screen.getByText("Skills collection").parentElement;
     const classes = content?.className.split(/\s+/) ?? [];
     expect(classes).toContain("h-full");
-    expect(classes).toContain("min-h-full");
+    expect(classes).toContain("w-full");
+    expect(classes).not.toContain("max-w-5xl");
+    expect(classes).not.toContain("overflow-y-auto");
   });
 
   it("keeps bottom padding after detail content that exceeds the viewport", () => {
@@ -232,9 +237,7 @@ describe("PluginDetail official catalog lifecycle", () => {
     // The in-app browser is a thread-panel surface, so even with the in-app
     // link preference ON, this Tools-route action must open externally.
     window.localStorage.setItem("bb.openLinksInAppBrowser", "true");
-    const openSpy = vi
-      .spyOn(window, "open")
-      .mockImplementation(() => null);
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
 
     render(detail(directPlugin));
     fireEvent.pointerDown(
@@ -625,9 +628,9 @@ describe("BB Official plugin detail routing", () => {
 
     const { wrapper: QueryClientWrapper } = createQueryClientTestHarness();
     render(
-      <MemoryRouter initialEntries={["/tools/plugins/github"]}>
+      <MemoryRouter initialEntries={["/extensions/plugins/github"]}>
         <Routes>
-          <Route path="/tools/plugins/:pluginId" element={<ToolsView />} />
+          <Route path="/extensions/plugins/:pluginId" element={<ToolsView />} />
         </Routes>
       </MemoryRouter>,
       { wrapper: QueryClientWrapper },
@@ -954,7 +957,7 @@ describe("PluginDetail runtime health", () => {
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("An API token is required.");
     expect(alert.textContent).toContain(
-      "Complete the Settings section; bb reloads the plugin after you save.",
+      "Complete the Configuration section; bb reloads the plugin after you save.",
     );
     expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
   });
