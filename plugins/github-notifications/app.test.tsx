@@ -106,10 +106,22 @@ describe("GitHub Activity panel", () => {
     expect(reviewStatus.textContent).toBe("");
     expect(reviewStatus.className).toContain("text-foreground");
     expect(reviewStatus.className).not.toContain("rounded");
+    expect(reviewStatus.querySelector("svg")?.dataset.icon).toBe(
+      "ChatFeedback",
+    );
     const mentionStatus = screen.getByLabelText("Mention");
     expect(mentionStatus.textContent).toBe("");
-    expect(mentionStatus.className).toContain("text-warning-text");
+    expect(mentionStatus.className).toContain("text-foreground");
+    expect(mentionStatus.className).not.toContain("text-warning");
     expect(mentionStatus.className).not.toContain("rounded");
+    expect(mentionStatus.querySelector("svg")?.dataset.icon).toBe(
+      "MailAtSign",
+    );
+    fireEvent.blur(approvedStatus);
+    fireEvent.focus(mentionStatus);
+    await waitFor(() => {
+      expect(screen.getByRole("tooltip").textContent).toBe("Mention");
+    });
     const updatedTime = screen.getAllByLabelText(/^Updated /u)[0]!;
     expect(updatedTime.getAttribute("title")).toMatch(/^Updated /u);
     expect(updatedTime.querySelector("svg")).not.toBeNull();
@@ -124,8 +136,16 @@ describe("GitHub Activity panel", () => {
       "https://github.com/get-bb/bb/pull/42",
     );
     expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.querySelector("svg")?.classList.contains("text-success")).toBe(
+    expect(link.querySelector("svg")?.dataset.icon).toBe("GitPullRequest");
+    expect(
+      link
+        .querySelector("svg")
+        ?.classList.contains("text-muted-foreground"),
+    ).toBe(
       true,
+    );
+    expect(link.querySelector("svg")?.classList.contains("text-success")).toBe(
+      false,
     );
     fireEvent.click(link);
     expect(slot.inspection.navigateCalls).toContainEqual({

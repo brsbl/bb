@@ -122,14 +122,14 @@ function updatePresentation(kind: GithubNotificationItem["activityKind"]): {
       };
     case "mention":
       return {
-        icon: "Mail",
-        iconClass: "text-warning-text",
+        icon: "MailAtSign",
+        iconClass: "text-foreground",
         label: "Mention",
         verb: "mentioned you",
       };
     case "review":
       return {
-        icon: "Eye",
+        icon: "ChatFeedback",
         iconClass: "text-foreground",
         label: "Review",
         verb: "reviewed",
@@ -176,11 +176,7 @@ function NotificationLink({ item }: { item: GithubNotificationItem }) {
         <Icon
           name={item.resourceKind === "pr" ? "GitPullRequest" : "Circle"}
           aria-hidden
-          className={`size-3.5 shrink-0 ${
-            item.resourceKind === "pr"
-              ? "text-success"
-              : "text-muted-foreground"
-          }`}
+          className="size-3.5 shrink-0 text-muted-foreground"
         />
         <span className="font-medium text-foreground">
           {item.resourceKind === "pr" ? "PR" : "Issue"} #{item.number}
