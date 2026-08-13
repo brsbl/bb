@@ -260,6 +260,21 @@ export class ShareRegistry {
       : listings.filter((share) => share.hostId === hostId);
   }
 
+  /** Resolve one durable host-and-port registry entry without touching siblings. */
+  async find(hostId: string, port: number): Promise<ShareListing | undefined> {
+    await this.load();
+    const validated = parseSharePort(port);
+    const share =
+      this.shares.get(shareKey(hostId, validated)) ??
+      this.shares.get(restoredShareKey(null, validated));
+    if (share === undefined) return undefined;
+
+    const listing = await this.resolveListing(share);
+    if (listing.hostId !== hostId) return undefined;
+    this.updateSnapshot(listing, share.hostId === null);
+    return listing;
+  }
+
   /** Synchronous cached view for realtime/status paths that cannot await.
    * Refreshed wholesale by list() and incrementally by add()/remove(). */
   snapshot(): ShareListing[] {

@@ -17,7 +17,6 @@ import { usePluginFrontendBoot } from "./hooks/usePluginFrontendBoot";
 import { useWebSocket } from "./hooks/useWebSocket";
 import {
   AUTH_CALLBACK_ROUTE_PATH,
-  ENVIRONMENT_SERVICE_ROUTE_PATH,
   LEGACY_AUTOMATION_DETAIL_ROUTE_PATH,
   LEGACY_AUTOMATIONS_ROUTE_PATH,
   LEGACY_SKILLS_ROUTE_PATH,
@@ -54,7 +53,6 @@ import { OnboardingHost } from "@/components/onboarding/OnboardingHost";
 import { ProviderCliInstallLogDialogHost } from "./components/provider-cli/provider-cli-install";
 import { ToolsExperimentGate } from "./components/tools/ToolsExperimentGate";
 import { PluginSettingsCompatibilityRoute } from "./components/settings/PluginSettingsCompatibilityRoute";
-import { EnvironmentServiceRoute } from "./views/EnvironmentServiceRoute";
 
 const SettingsView = lazy(() =>
   import("./views/SettingsView").then((m) => ({
@@ -140,10 +138,6 @@ function AppRoutes() {
     <AppLayout>
       <Suspense fallback={null}>
         <Routes>
-          <Route
-            path={ENVIRONMENT_SERVICE_ROUTE_PATH}
-            element={<EnvironmentServiceRoute />}
-          />
           <Route path={SETTINGS_ROUTE_PATH} element={<SettingsView />} />
           <Route
             path={SETTINGS_SECTION_ROUTE_PATH}

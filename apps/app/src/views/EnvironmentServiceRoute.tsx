@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   environmentServiceReferenceQuerySchema,
   type EnvironmentServiceLinkResolution,
 } from "@bb/server-contract";
 import { Button } from "@bb/shared-ui/button";
 import { PageShell } from "@/components/ui/page-shell";
-import { getRootComposeRoutePath } from "@/lib/route-paths";
+import {
+  ENVIRONMENT_SERVICE_ROUTE_PATH,
+  getRootComposeRoutePath,
+} from "@/lib/route-paths";
 import { sdk } from "@/lib/sdk";
 
 type ResolutionState =
@@ -18,7 +21,11 @@ type ResolutionState =
 export function EnvironmentServiceRoute() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { hostId, port } = useParams<{ hostId?: string; port?: string }>();
+  const serviceMatch = matchPath(
+    ENVIRONMENT_SERVICE_ROUTE_PATH,
+    location.pathname,
+  );
+  const { hostId, port } = serviceMatch?.params ?? {};
   const reference = useMemo(() => {
     const query = new URLSearchParams(location.search);
     return environmentServiceReferenceQuerySchema.safeParse({

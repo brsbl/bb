@@ -1,11 +1,11 @@
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
-import { ENVIRONMENT_SERVICE_ROUTE_PATH } from "@bb/server-contract";
 import { matchPath } from "react-router-dom";
-
-export { ENVIRONMENT_SERVICE_ROUTE_PATH };
 
 export const APP_ROOT_ROUTE_PATH = "/";
 export const AUTH_CALLBACK_ROUTE_PATH = "/auth/callback";
+// Keep this frontend route literal local: importing the server contract here
+// would eagerly load its runtime validation schemas into the boot bundle.
+export const ENVIRONMENT_SERVICE_ROUTE_PATH = "/services/:hostId/:port";
 export const SETTINGS_ROUTE_PATH = "/settings";
 // Settings buckets (general, files, …) plus legacy plugin routes that redirect
 // to the canonical Tools → Plugins surfaces. The static "plugins" segment must

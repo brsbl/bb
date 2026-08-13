@@ -213,6 +213,14 @@ export class ConnectTunnel {
     return this.options.shares.list(hostId);
   }
 
+  /** Resolve one exact durable share without refreshing every registry entry. */
+  async findShare(
+    hostId: string,
+    port: number,
+  ): Promise<ShareListing | undefined> {
+    return this.options.shares.find(hostId, port);
+  }
+
   /**
    * List every bb server on the paired account (via the connect gate).
    * Returns this server's handle so callers can dedupe self. Each row includes

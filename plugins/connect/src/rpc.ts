@@ -207,10 +207,7 @@ export function createRpcHandlers(
         };
       }
       const { reference } = args;
-      const listing = (await tunnel.listShares()).find(
-        (share) =>
-          share.hostId === reference.hostId && share.port === reference.port,
-      );
+      const listing = await tunnel.findShare(reference.hostId, reference.port);
       if (listing === undefined) {
         return {
           kind: "unavailable" as const,

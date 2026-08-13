@@ -2,12 +2,14 @@ import { useMemo } from "react";
 import { matchPath, Navigate, useLocation } from "react-router-dom";
 import {
   APP_ROOT_ROUTE_PATH,
+  ENVIRONMENT_SERVICE_ROUTE_PATH,
   LEGACY_PROJECT_COMPOSE_ROUTE_PATH,
   PLUGIN_PANEL_ROUTE_PATH,
 } from "@/lib/route-paths";
 import type { PaneContent } from "@/lib/split-layout";
 import { useRouteState } from "@/hooks/useRouteState";
 import { LegacyProjectComposeRedirect } from "./RootComposeView";
+import { EnvironmentServiceRoute } from "./EnvironmentServiceRoute";
 import { SplitThreadArea } from "./thread-detail/SplitThreadArea";
 
 const ROOT_COMPOSE_CONTENT = { kind: "new-thread" } as const;
@@ -25,6 +27,10 @@ export default function SplitWorkspaceRoute() {
   const pluginMatch = matchPath(PLUGIN_PANEL_ROUTE_PATH, location.pathname);
   const legacyProjectMatch = matchPath(
     LEGACY_PROJECT_COMPOSE_ROUTE_PATH,
+    location.pathname,
+  );
+  const environmentServiceMatch = matchPath(
+    ENVIRONMENT_SERVICE_ROUTE_PATH,
     location.pathname,
   );
   const pluginId = pluginMatch?.params.pluginId;
@@ -60,6 +66,9 @@ export default function SplitWorkspaceRoute() {
   const legacyProjectId = legacyProjectMatch?.params.projectId;
   if (legacyProjectId) {
     return <LegacyProjectComposeRedirect projectId={legacyProjectId} />;
+  }
+  if (environmentServiceMatch !== null) {
+    return <EnvironmentServiceRoute />;
   }
   if (routeContent === null) {
     return <Navigate to={APP_ROOT_ROUTE_PATH} replace />;

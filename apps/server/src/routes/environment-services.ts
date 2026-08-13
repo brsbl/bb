@@ -7,13 +7,17 @@ import {
   type EnvironmentServiceReference,
   type PublicApiSchema,
 } from "@bb/server-contract";
+import { isIP } from "node:net";
+import { isLoopbackAddress, isLoopbackHostname } from "@bb/config/loopback";
 import { CONNECT_VIEWER_ACCESS_HEADER } from "@bb/tunnel-contract";
 import type { Hono } from "hono";
 import { ApiError } from "../errors.js";
 import type { AppDeps } from "../types.js";
 import {
   getGateAuthKind,
+  getTrustedRemoteAddress,
   type GateAuthHeaderReader,
+  type TrustedRemoteAddressReader,
 } from "../request-context.js";
 import { resolvePrimaryHostId } from "../services/hosts/primary-host.js";
 import type { PluginService } from "../services/plugins/plugin-service.js";
@@ -21,7 +25,11 @@ import type { PluginService } from "../services/plugins/plugin-service.js";
 const CONNECT_PLUGIN_ID = "connect";
 const CONNECT_SERVICE_RESOLVER_METHOD = "resolveEnvironmentService";
 
-export type EnvironmentServiceViewer = "connect" | "local";
+export type EnvironmentServiceViewer =
+  | "connect"
+  | "loopback"
+  | "direct"
+  | "unknown";
 
 export interface ResolveEnvironmentServiceDestinationArgs {
   primaryHostId: string | null;
@@ -43,6 +51,16 @@ export async function resolveEnvironmentServiceDestination(
     return {
       kind: "destination",
       url: resolveEnvironmentServiceUrl(share.url, args.reference),
+    };
+  }
+
+  if (args.viewer !== "loopback") {
+    return {
+      kind: "unavailable",
+      reason:
+        args.viewer === "direct"
+          ? "This service link was opened through a direct network address. Open BB at localhost on the service host, or open the link through BB Connect."
+          : "BB could not verify that this viewer is on the service host. Open BB at localhost on the service host, or open the link through BB Connect.",
     };
   }
 
@@ -78,6 +96,55 @@ export function environmentServiceViewerAccessToken(
   if (getGateAuthKind(context) !== "session") return null;
   const token = context.req.header(CONNECT_VIEWER_ACCESS_HEADER)?.trim();
   return token ? token : null;
+}
+
+function requestHostname(context: GateAuthHeaderReader): string | null {
+  const host = context.req.header("host")?.trim();
+  if (!host) return null;
+  try {
+    return new URL(`http://${host}`).hostname;
+  } catch {
+    return null;
+  }
+}
+
+export interface EnvironmentServiceViewerAccess {
+  viewer: EnvironmentServiceViewer;
+  viewerAccessToken: string | null;
+}
+
+/**
+ * A local service URL is safe only for a direct loopback request using a
+ * loopback host. Direct-IP and proxy requests cannot prove that the viewer is
+ * on the service host, so they intentionally get an explicit safe fallback.
+ */
+export function classifyEnvironmentServiceViewer(
+  context: GateAuthHeaderReader & TrustedRemoteAddressReader,
+): EnvironmentServiceViewerAccess {
+  const viewerAccessToken = environmentServiceViewerAccessToken(context);
+  if (viewerAccessToken !== null) {
+    return { viewer: "connect", viewerAccessToken };
+  }
+
+  const remoteAddress = getTrustedRemoteAddress(context);
+  const hostname = requestHostname(context);
+  if (
+    remoteAddress !== undefined &&
+    isLoopbackAddress(remoteAddress) &&
+    hostname !== null &&
+    isLoopbackHostname(hostname)
+  ) {
+    return { viewer: "loopback", viewerAccessToken: null };
+  }
+  if (
+    remoteAddress !== undefined &&
+    !isLoopbackAddress(remoteAddress) &&
+    hostname !== null &&
+    isIP(hostname) !== 0
+  ) {
+    return { viewer: "direct", viewerAccessToken: null };
+  }
+  return { viewer: "unknown", viewerAccessToken: null };
 }
 
 async function resolveConnectShare(
@@ -130,14 +197,18 @@ export function registerEnvironmentServiceRoutes(
   });
   const routes = publicApiRoutes.environmentServices;
   get(routes.resolve, async (context, reference) => {
-    const viewerAccessToken = environmentServiceViewerAccessToken(context);
+    const viewer = classifyEnvironmentServiceViewer(context);
     return context.json(
       await resolveEnvironmentServiceDestination({
         primaryHostId: resolvePrimaryHostId(deps),
         reference,
         resolveConnectShare: () =>
-          resolveConnectShare(plugins, reference, viewerAccessToken ?? ""),
-        viewer: viewerAccessToken === null ? "local" : "connect",
+          resolveConnectShare(
+            plugins,
+            reference,
+            viewer.viewerAccessToken ?? "",
+          ),
+        viewer: viewer.viewer,
       }),
     );
   });

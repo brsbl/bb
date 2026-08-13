@@ -318,6 +318,70 @@ describe("ShareRegistry", () => {
     await fakeHost.harness.dispose();
   });
 
+  it("resolves only the requested host-and-port share", async () => {
+    const kv = new Map<string, unknown>([
+      [
+        SHARES_KV_KEY,
+        {
+          [`${SERVER_HOST_ID}:8000`]: {
+            hostId: SERVER_HOST_ID,
+            port: 8000,
+            createdAt: 1,
+          },
+          [`${REMOTE_HOST_ID}:3000`]: {
+            hostId: REMOTE_HOST_ID,
+            port: 3000,
+            createdAt: 2,
+          },
+        },
+      ],
+    ]);
+    const fakeHost = createConnectFakeHost();
+    const pluginBb = fakeHost.bb as unknown as Parameters<typeof plugin>[0];
+    const ensureIdentity = vi.fn(async () => {
+      throw new Error("the unrelated remote host must not resolve");
+    });
+    const registry = new ShareRegistry({
+      kv: {
+        async get<T>(key: string) {
+          return kv.get(key) as T | undefined;
+        },
+        async set(key: string, value: unknown) {
+          kv.set(key, value);
+        },
+        async delete(key: string) {
+          kv.delete(key);
+        },
+      },
+      hosts: {
+        ensureSharedPortTunnel: ensureIdentity,
+        declareSharedPorts: pluginBb.hosts.declareSharedPorts,
+      },
+      hostResolver: new ShareHostResolver(() => pluginBb.sdk),
+      getLoopbackBaseUrl: () => "http://127.0.0.1:38886",
+      getCredential: () => ({
+        serverUrl: "https://sawyer.getbb.app",
+        handle: "sawyer",
+        credential: "bbcred_x",
+      }),
+      log: pluginBb.log,
+    });
+
+    await expect(registry.find(SERVER_HOST_ID, 8000)).resolves.toEqual({
+      hostId: SERVER_HOST_ID,
+      hostName: SERVER_HOST_NAME,
+      port: 8000,
+      createdAt: 1,
+      url: "https://sawyer--8000.getbb.app",
+    });
+    expect(ensureIdentity).not.toHaveBeenCalled();
+    expect(fakeHost.harness.sdk.callsTo("hosts.get")).toEqual([
+      [expect.objectContaining({ hostId: SERVER_HOST_ID })],
+      [expect.objectContaining({ hostId: SERVER_HOST_ID })],
+    ]);
+    await fakeHost.harness.dispose();
+  });
+
   it("loads legacy entries without hostId as server-host shares", async () => {
     const kv = new Map<string, unknown>([
       [SHARES_KV_KEY, { "3000": { port: 3000, createdAt: 123 } }],

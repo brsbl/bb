@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  classifyEnvironmentServiceViewer,
   environmentServiceViewerAccessToken,
   resolveEnvironmentServiceDestination,
 } from "./environment-services.js";
@@ -12,10 +13,14 @@ const reference = {
   hash: "ready",
 } as const;
 
-const requestContext = (headers: Record<string, string>) => ({
+const requestContext = (
+  headers: Record<string, string>,
+  remoteAddress?: string,
+) => ({
   req: {
     header: (name: string) => headers[name],
   },
+  get: () => remoteAddress,
 });
 
 describe("environment service destinations", () => {
@@ -26,7 +31,7 @@ describe("environment service destinations", () => {
         primaryHostId: "host-environment",
         reference,
         resolveConnectShare,
-        viewer: "local",
+        viewer: "loopback",
       }),
     ).resolves.toEqual({
       kind: "destination",
@@ -59,7 +64,7 @@ describe("environment service destinations", () => {
         primaryHostId: "host-server",
         reference,
         resolveConnectShare: vi.fn(),
-        viewer: "local",
+        viewer: "loopback",
       }),
     ).resolves.toEqual({
       kind: "unavailable",
@@ -82,6 +87,27 @@ describe("environment service destinations", () => {
     });
   });
 
+  it("does not send direct or unverified proxy viewers to any localhost service", async () => {
+    for (const viewer of ["direct", "unknown"] as const) {
+      const resolveConnectShare = vi.fn();
+      await expect(
+        resolveEnvironmentServiceDestination({
+          primaryHostId: "host-environment",
+          reference,
+          resolveConnectShare,
+          viewer,
+        }),
+      ).resolves.toEqual({
+        kind: "unavailable",
+        reason:
+          viewer === "direct"
+            ? "This service link was opened through a direct network address. Open BB at localhost on the service host, or open the link through BB Connect."
+            : "BB could not verify that this viewer is on the service host. Open BB at localhost on the service host, or open the link through BB Connect.",
+      });
+      expect(resolveConnectShare).not.toHaveBeenCalled();
+    }
+  });
+
   it("requires the private tunnel marker as well as the gate-stamped session", () => {
     expect(environmentServiceViewerAccessToken(requestContext({}))).toBe(null);
     expect(
@@ -102,5 +128,52 @@ describe("environment service destinations", () => {
         }),
       ),
     ).toBe("tunnel-private-token");
+  });
+
+  it("classifies loopback, direct-IP, Connect, and unknown proxy viewers separately", () => {
+    expect(
+      classifyEnvironmentServiceViewer(
+        requestContext({ host: "localhost:17176" }, "127.0.0.1"),
+      ),
+    ).toEqual({ viewer: "loopback", viewerAccessToken: null });
+    expect(
+      classifyEnvironmentServiceViewer(
+        requestContext({ host: "192.168.1.20:17176" }, "192.168.1.44"),
+      ),
+    ).toEqual({ viewer: "direct", viewerAccessToken: null });
+    expect(
+      classifyEnvironmentServiceViewer(
+        requestContext({ host: "bb.example.test" }, "127.0.0.1"),
+      ),
+    ).toEqual({ viewer: "unknown", viewerAccessToken: null });
+    expect(
+      classifyEnvironmentServiceViewer(
+        requestContext(
+          {
+            host: "brsbl.getbb.app",
+            "x-bb-gate-auth": "session",
+            "x-bb-connect-viewer-access": "tunnel-private-token",
+          },
+          "127.0.0.1",
+        ),
+      ),
+    ).toEqual({
+      viewer: "connect",
+      viewerAccessToken: "tunnel-private-token",
+    });
+  });
+
+  it("does not trust a forged Connect marker without the gate-stamped session", () => {
+    expect(
+      classifyEnvironmentServiceViewer(
+        requestContext(
+          {
+            host: "192.168.1.20:17176",
+            "x-bb-connect-viewer-access": "forged-token",
+          },
+          "192.168.1.44",
+        ),
+      ),
+    ).toEqual({ viewer: "direct", viewerAccessToken: null });
   });
 });
