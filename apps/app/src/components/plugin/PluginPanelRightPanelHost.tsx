@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -7,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Panel, PanelGroup } from "react-resizable-panels";
 import { atom, useAtom } from "jotai";
 import { atomFamily } from "jotai-family";
@@ -24,14 +27,10 @@ import { Icon } from "@bb/shared-ui/icon";
 import { Button } from "@bb/shared-ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@bb/shared-ui/tooltip";
 import { EmptyStatePanel } from "@bb/shared-ui/empty-state";
-import { HEADER_PANE_ACTION_ICON_BUTTON_CLASS } from "@/components/layout/AppPageHeader";
-import { CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS } from "@/components/ui/chromeStyleTokens";
 import { BrowserTabDeck } from "@/components/secondary-panel/BrowserTabDeck";
-import { ThreadSecondaryPanel } from "@/components/secondary-panel/ThreadSecondaryPanel";
 import { useThreadFileTabs } from "@/components/secondary-panel/useThreadFileTabs";
 import { PANEL_COLLAPSE_TRANSITION_CLASS } from "@/components/secondary-panel/panelTransitionTokens";
 import { terminalStatusLabel } from "@/components/thread/terminal/useThreadTerminalController";
-import { ThreadTerminalPanel } from "@/components/thread/terminal/ThreadTerminalPanel";
 import {
   useCloseFixedSecondaryPanel,
   useFixedPanelTabsState,
@@ -57,30 +56,35 @@ import {
 import { usePluginSlots, type PluginNavPanelSlot } from "@/lib/plugin-slots";
 import { useOptionalPaneContext } from "@/views/thread-detail/PaneContext";
 import {
+  getPluginPanelRightPanelStateId,
   PluginRightPanelNavigationProvider,
   useRegisterPluginRightPanelOpenHandler,
 } from "./plugin-right-panel-navigation";
 import { PluginSlotMount } from "./PluginSlotMount";
 import { PluginIcon } from "./PluginIcon";
 
+export { getPluginPanelRightPanelStateId } from "./plugin-right-panel-navigation";
+
 const MAIN_PANEL_MIN_SIZE_PERCENT = 30;
 const TERMINAL_COLS = 100;
 const TERMINAL_ROWS = 30;
+// Match AppPageHeader's reduced-glyph action without importing the eager page
+// header implementation into this on-demand panel chunk.
+const RIGHT_PANEL_TOGGLE_CLASS =
+  "h-[28px] w-[28px] rounded-md p-0 max-md:pointer-coarse:h-[36px] max-md:pointer-coarse:w-[36px] [&_svg]:size-[13px] max-md:pointer-coarse:[&_svg]:size-[16px] text-subtle-foreground/75 hover:text-muted-foreground data-[state=open]:text-subtle-foreground/75";
+const LazyThreadSecondaryPanel = lazy(() =>
+  import("@/components/secondary-panel/ThreadSecondaryPanel").then(
+    ({ ThreadSecondaryPanel }) => ({ default: ThreadSecondaryPanel }),
+  ),
+);
+const LazyThreadTerminalPanel = lazy(() =>
+  import("@/components/thread/terminal/ThreadTerminalPanel").then(
+    ({ ThreadTerminalPanel }) => ({ default: ThreadTerminalPanel }),
+  ),
+);
 const compactDrawerOpenAtomFamily = atomFamily((_panelStateId: string) =>
   atom(false),
 );
-
-export function getPluginPanelRightPanelStateId({
-  panelPath,
-  paneId,
-  pluginId,
-}: {
-  panelPath: string;
-  paneId?: string;
-  pluginId: string;
-}): string {
-  return `plugin-panel:${pluginId}:${panelPath}:${paneId ?? "standalone"}`;
-}
 
 function parsePluginBrowserUrl(url: string): URL | null {
   if (url.length > BB_DESKTOP_BROWSER_MAX_URL_LENGTH) return null;
@@ -95,22 +99,35 @@ function parsePluginBrowserUrl(url: string): URL | null {
 }
 
 function normalizeTerminalTarget(
-  target: PluginNavPanelRightPanelTerminalTarget,
+  target: PluginNavPanelRightPanelTerminalTarget | null | undefined,
 ): TerminalFixedPanelTarget | null {
+  if (target === null || typeof target !== "object") return null;
   switch (target.kind) {
     case "thread": {
+      if (typeof target.threadId !== "string") return null;
       const threadId = target.threadId.trim();
       return threadId ? { kind: "thread", threadId } : null;
     }
     case "environment": {
+      if (typeof target.environmentId !== "string") return null;
       const environmentId = target.environmentId.trim();
       return environmentId ? { kind: "environment", environmentId } : null;
     }
     case "host_path": {
+      if (
+        typeof target.hostId !== "string" ||
+        (target.cwd !== undefined &&
+          target.cwd !== null &&
+          typeof target.cwd !== "string")
+      ) {
+        return null;
+      }
       const hostId = target.hostId.trim();
       const cwd = target.cwd?.trim() || null;
       return hostId ? { kind: "host_path", hostId, cwd } : null;
     }
+    default:
+      return null;
   }
 }
 
@@ -167,15 +184,14 @@ export function reconcilePluginRightPanelState(
   const rightPanel = panel.experimental_rightPanel;
   const viewIds = new Set(rightPanel?.views?.map((view) => view.id) ?? []);
   const permitsBrowser = rightPanel?.tools?.includes("browser") ?? false;
-  const permitsTerminal = rightPanel?.tools?.includes("terminal") ?? false;
   const tabs = state.secondary.tabs.filter((tab) => {
     if (tab.kind === "plugin-panel") {
       return tab.pluginId === panel.pluginId && viewIds.has(tab.actionId);
     }
     if (tab.kind === "browser") return permitsBrowser;
-    if (tab.kind === "terminal") {
-      return permitsTerminal && tab.target !== undefined;
-    }
+    // Revoked Terminal tabs remain until the host process confirms closure.
+    // Removing them here would strand a session if closeTerminal fails.
+    if (tab.kind === "terminal") return true;
     return false;
   });
   if (tabs.length === state.secondary.tabs.length) return state;
@@ -225,88 +241,6 @@ function openPluginRightPanelState(
   };
 }
 
-export function usePluginPanelRightPanelToggle(
-  panel: PluginNavPanelSlot,
-  paneId?: string,
-) {
-  const paneContext = useOptionalPaneContext();
-  const panelStateId = getPluginPanelRightPanelStateId({
-    panelPath: panel.path,
-    paneId: paneId ?? paneContext?.paneId,
-    pluginId: panel.pluginId,
-  });
-  const state = useFixedPanelTabsState(panelStateId, null);
-  const updateState = useUpdateFixedPanelTabsState(panelStateId, null);
-  const renderAsDrawer = useIsCompactViewport();
-  const [isCompactDrawerOpen, setCompactDrawerOpen] = useAtom(
-    compactDrawerOpenAtomFamily(panelStateId),
-  );
-  const hasActiveTab = state.secondary.activeTabId !== null;
-  const isOpen = renderAsDrawer
-    ? isCompactDrawerOpen && hasActiveTab
-    : state.secondary.isOpen && hasActiveTab;
-  const canToggle =
-    defaultViewTab(panel) !== null || state.secondary.tabs.length > 0;
-  const toggle = useCallback(() => {
-    if (renderAsDrawer) {
-      if (isCompactDrawerOpen) {
-        setCompactDrawerOpen(false);
-      } else {
-        updateState((current) =>
-          openPluginRightPanelState(current, panel, false),
-        );
-        setCompactDrawerOpen(true);
-      }
-      return;
-    }
-    updateState((current) =>
-      current.secondary.isOpen
-        ? {
-            ...current,
-            secondary: { ...current.secondary, isOpen: false },
-          }
-        : openPluginRightPanelState(current, panel),
-    );
-  }, [
-    isCompactDrawerOpen,
-    panel,
-    renderAsDrawer,
-    setCompactDrawerOpen,
-    updateState,
-  ]);
-  return { canToggle, isOpen, toggle };
-}
-
-export function PluginPanelRightPanelToggleButton({
-  panel,
-  paneId,
-}: {
-  panel: PluginNavPanelSlot;
-  paneId?: string;
-}) {
-  const rightPanel = usePluginPanelRightPanelToggle(panel, paneId);
-  if (!rightPanel.canToggle) return null;
-  const label = rightPanel.isOpen ? "Hide right panel" : "Show right panel";
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={`${HEADER_PANE_ACTION_ICON_BUTTON_CLASS} ${CHROME_SUBTLE_ICON_BUTTON_FOREGROUND_CLASS}`}
-          aria-label={label}
-          aria-pressed={rightPanel.isOpen}
-          onClick={rightPanel.toggle}
-        >
-          <Icon name="PanelRight" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function PluginPanelRightPanelHost({
   children,
   panelPath,
@@ -343,9 +277,7 @@ export function PluginPanelRightPanelHost({
       (tab) => tab.id === panelState.secondary.activeTabId,
     ) ?? null;
   const activeTerminalTab =
-    rightPanel?.tools?.includes("terminal") &&
-    activeTab?.kind === "terminal" &&
-    activeTab.target !== undefined
+    activeTab?.kind === "terminal" && activeTab.target !== undefined
       ? activeTab
       : null;
   const renderAsDrawer = useIsCompactViewport();
@@ -363,7 +295,6 @@ export function PluginPanelRightPanelHost({
       : terminalTarget;
   const terminalQuery = useTerminals(terminalScope, {
     enabled:
-      rightPanel?.tools?.includes("terminal") === true &&
       (renderAsDrawer ? isCompactDrawerOpen : panelState.secondary.isOpen) &&
       terminalTarget !== null,
   });
@@ -392,38 +323,97 @@ export function PluginPanelRightPanelHost({
     terminalSessions: undefined,
   });
   const createTerminal = useCreateTerminal();
-  const closeTerminal = useCloseTerminal();
+  const { mutate: closeTerminalMutate } = useCloseTerminal();
   const isOpen =
-    rightPanel !== undefined &&
+    (rightPanel !== undefined || activeTerminalTab !== null) &&
     (renderAsDrawer ? isCompactDrawerOpen : panelState.secondary.isOpen) &&
     activeTab !== null;
+  const canToggle =
+    panel !== null &&
+    (defaultViewTab(panel) !== null || panelState.secondary.tabs.length > 0);
+  const toggleRightPanel = useCallback(() => {
+    if (panel === null || rightPanel === undefined) return;
+    if (renderAsDrawer) {
+      if (isCompactDrawerOpen) {
+        setCompactDrawerOpen(false);
+      } else {
+        updatePanelState((current) =>
+          openPluginRightPanelState(current, panel, false),
+        );
+        setCompactDrawerOpen(true);
+      }
+      return;
+    }
+    updatePanelState((current) =>
+      current.secondary.isOpen
+        ? {
+            ...current,
+            secondary: { ...current.secondary, isOpen: false },
+          }
+        : openPluginRightPanelState(current, panel),
+    );
+  }, [
+    isCompactDrawerOpen,
+    panel,
+    renderAsDrawer,
+    rightPanel,
+    setCompactDrawerOpen,
+    updatePanelState,
+  ]);
+  const togglePortalTarget = document.querySelector<HTMLElement>(
+    "[data-plugin-right-panel-toggle-portal]",
+  );
   const canShowWideNativeBrowserView =
     paneContext === null || !paneContext.isSplitPane || paneContext.isFocused;
-  const revokedTerminalIds = useMemo(
+  const hasObservedPanelRef = useRef(panel !== null);
+  if (panel !== null) hasObservedPanelRef.current = true;
+  const revokedTerminalTabs = useMemo(
     () =>
       panelState.secondary.tabs.flatMap((tab) =>
-        panel !== null &&
         tab.kind === "terminal" &&
-        (!rightPanel?.tools?.includes("terminal") || tab.target === undefined)
-          ? [tab.terminalId]
+        ((panel === null && hasObservedPanelRef.current) ||
+          (panel !== null &&
+            (!rightPanel?.tools?.includes("terminal") ||
+              tab.target === undefined)))
+          ? [{ tabId: tab.id, terminalId: tab.terminalId }]
           : [],
       ),
     [panel, panelState.secondary.tabs, rightPanel],
   );
   const closedRevokedTerminalIdsRef = useRef(new Set<string>());
+  const closingRevokedTerminalIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    for (const terminalId of revokedTerminalIds) {
-      if (closedRevokedTerminalIdsRef.current.has(terminalId)) continue;
-      closedRevokedTerminalIdsRef.current.add(terminalId);
-      closeTerminal.mutate({ mode: "force", terminalId });
+    for (const { tabId, terminalId } of revokedTerminalTabs) {
+      if (
+        closedRevokedTerminalIdsRef.current.has(terminalId) ||
+        closingRevokedTerminalIdsRef.current.has(terminalId)
+      ) {
+        continue;
+      }
+      closingRevokedTerminalIdsRef.current.add(terminalId);
+      closeTerminalMutate(
+        { mode: "force", terminalId },
+        {
+          onSuccess: () => {
+            closedRevokedTerminalIdsRef.current.add(terminalId);
+            closeTab(tabId);
+          },
+          onSettled: () => {
+            closingRevokedTerminalIdsRef.current.delete(terminalId);
+          },
+        },
+      );
     }
+    const revokedTerminalIds = new Set(
+      revokedTerminalTabs.map(({ terminalId }) => terminalId),
+    );
     for (const terminalId of closedRevokedTerminalIdsRef.current) {
-      if (!revokedTerminalIds.includes(terminalId)) {
+      if (!revokedTerminalIds.has(terminalId)) {
         closedRevokedTerminalIdsRef.current.delete(terminalId);
       }
     }
-  }, [closeTerminal, revokedTerminalIds]);
+  }, [closeTab, closeTerminalMutate, revokedTerminalTabs]);
 
   useEffect(() => {
     if (panel === null) return;
@@ -551,8 +541,22 @@ export function PluginPanelRightPanelHost({
     BbNavigate["experimental_openRightPanel"]
   >(
     (request) => {
-      if (panel === null || rightPanel === undefined) return false;
+      if (
+        panel === null ||
+        rightPanel === undefined ||
+        request === null ||
+        typeof request !== "object" ||
+        typeof request.kind !== "string"
+      ) {
+        return false;
+      }
       if (request.kind === "view") {
+        if (
+          typeof request.viewId !== "string" ||
+          (request.title !== undefined && typeof request.title !== "string")
+        ) {
+          return false;
+        }
         const view = rightPanel.views?.find(
           (candidate) => candidate.id === request.viewId,
         );
@@ -585,6 +589,7 @@ export function PluginPanelRightPanelHost({
       if (!rightPanel.tools?.includes(request.kind)) return false;
       if (request.kind === "browser") {
         if (
+          typeof request.url !== "string" ||
           !isDesktopBrowserAvailable() ||
           parsePluginBrowserUrl(request.url) === null
         ) {
@@ -592,8 +597,18 @@ export function PluginPanelRightPanelHost({
         }
         const existing = browserTabs.find((tab) => tab.url === request.url);
         const preserveWideVisibility = panelState.secondary.isOpen;
-        if (existing) activateTab(existing.id);
-        else openTab({ kind: "browser", url: request.url });
+        if (existing) {
+          updatePanelState((state) => ({
+            ...state,
+            secondary: {
+              ...state.secondary,
+              activeTabId: existing.id,
+              isOpen: renderAsDrawer ? state.secondary.isOpen : true,
+            },
+          }));
+        } else {
+          openTab({ kind: "browser", url: request.url });
+        }
         if (renderAsDrawer) {
           updatePanelState((state) => ({
             ...state,
@@ -605,6 +620,9 @@ export function PluginPanelRightPanelHost({
           setCompactDrawerOpen(true);
         }
         return true;
+      }
+      if (request.title !== undefined && typeof request.title !== "string") {
+        return false;
       }
       const target = normalizeTerminalTarget(request.target);
       if (target === null || createTerminal.isPending) return false;
@@ -729,15 +747,17 @@ export function PluginPanelRightPanelHost({
     ) : null;
   const terminalContent =
     activeTerminalTab && terminalTarget ? (
-      <ThreadTerminalPanel
-        canCreateTerminal
-        fixedPanelTarget={terminalTarget}
-        fixedTerminalId={activeTerminalTab.terminalId}
-        isPanelOpen={isOpen}
-        isPanelPersistedOpen={panelState.secondary.isOpen}
-        panelStateId={panelStateId}
-        target={terminalTarget}
-      />
+      <Suspense fallback={null}>
+        <LazyThreadTerminalPanel
+          canCreateTerminal={rightPanel?.tools?.includes("terminal") === true}
+          fixedPanelTarget={terminalTarget}
+          fixedTerminalId={activeTerminalTab.terminalId}
+          isPanelOpen={isOpen}
+          isPanelPersistedOpen={panelState.secondary.isOpen}
+          panelStateId={panelStateId}
+          target={terminalTarget}
+        />
+      </Suspense>
     ) : null;
 
   const fileTabs = useMemo(
@@ -789,7 +809,6 @@ export function PluginPanelRightPanelHost({
           ];
         }
         if (tab.kind === "terminal" && tab.target !== undefined) {
-          if (!rightPanel?.tools?.includes("terminal")) return [];
           const session = terminalsById.get(tab.terminalId);
           return [
             {
@@ -805,7 +824,7 @@ export function PluginPanelRightPanelHost({
                   : terminalStatusLabel(session),
               onSelect: () => activateTab(tab.id),
               onClose: () => {
-                closeTerminal.mutate(
+                closeTerminalMutate(
                   { mode: "force", terminalId: tab.terminalId },
                   { onSuccess: () => closeTab(tab.id) },
                 );
@@ -819,7 +838,7 @@ export function PluginPanelRightPanelHost({
       activateTab,
       activeTab?.id,
       closeTab,
-      closeTerminal,
+      closeTerminalMutate,
       orderedSecondaryFileTabs,
       panel?.icon,
       pluginId,
@@ -830,37 +849,39 @@ export function PluginPanelRightPanelHost({
 
   const rightPanelMarkup =
     fileTabs.length > 0 ? (
-      <ThreadSecondaryPanel
-        activeTab={activeTab}
-        canUseGitUi={false}
-        metadataContent={null}
-        fileTabs={fileTabs}
-        fileTabContent={terminalContent ?? activeViewContent}
-        fileTabContentFillsRegion={
-          terminalContent !== null || activeView?.layout === "flush"
-        }
-        onFileTabReorder={reorderFileTab}
-        browserDeck={browserDeck}
-        isBrowserTabActive={activeBrowserTab !== null}
-        isOpen={isOpen}
-        showConversationCollapseControl={false}
-        showGitDiffTab={false}
-        showInfoTab={false}
-        showNewTabButton={false}
-        topChromeSurface="page"
-        onPanelFocus={() => {}}
-        onPanelChange={() => {}}
-        onCollapse={() =>
-          renderAsDrawer ? setCompactDrawerOpen(false) : closePanel()
-        }
-        onClose={() =>
-          renderAsDrawer ? setCompactDrawerOpen(false) : closePanel()
-        }
-        onOpenNewTab={() => {}}
-        isConversationCollapsed={false}
-        onToggleConversationCollapse={() => {}}
-        renderAsDrawer={renderAsDrawer}
-      />
+      <Suspense fallback={browserDeck}>
+        <LazyThreadSecondaryPanel
+          activeTab={activeTab}
+          canUseGitUi={false}
+          metadataContent={null}
+          fileTabs={fileTabs}
+          fileTabContent={terminalContent ?? activeViewContent}
+          fileTabContentFillsRegion={
+            terminalContent !== null || activeView?.layout === "flush"
+          }
+          onFileTabReorder={reorderFileTab}
+          browserDeck={browserDeck}
+          isBrowserTabActive={activeBrowserTab !== null}
+          isOpen={isOpen}
+          showConversationCollapseControl={false}
+          showGitDiffTab={false}
+          showInfoTab={false}
+          showNewTabButton={false}
+          topChromeSurface="page"
+          onPanelFocus={() => {}}
+          onPanelChange={() => {}}
+          onCollapse={() =>
+            renderAsDrawer ? setCompactDrawerOpen(false) : closePanel()
+          }
+          onClose={() =>
+            renderAsDrawer ? setCompactDrawerOpen(false) : closePanel()
+          }
+          onOpenNewTab={() => {}}
+          isConversationCollapsed={false}
+          onToggleConversationCollapse={() => {}}
+          renderAsDrawer={renderAsDrawer}
+        />
+      </Suspense>
     ) : (
       browserDeck
     );
@@ -869,45 +890,72 @@ export function PluginPanelRightPanelHost({
     <PluginRightPanelNavigationProvider
       experimentalOpenRightPanel={experimentalOpenRightPanel}
     >
-      <div
-        className={`flex h-full min-h-0 min-w-0 flex-1 overflow-hidden ${flushPageInsets ? "-m-4 md:-m-5" : ""}`}
-      >
-        {renderAsDrawer ? (
-          children
-        ) : (
-          <PanelGroup
-            direction="horizontal"
-            className="@container h-full min-w-0 flex-1"
-            style={{ overflow: "clip" }}
-          >
-            <Panel
-              id={`plugin-panel-main-${pluginId}-${panelPath}`}
-              defaultSize={isOpen ? 65 : 100}
-              minSize={MAIN_PANEL_MIN_SIZE_PERCENT}
-              order={1}
-              className={`min-w-0 overflow-clip transition-[flex-grow,flex-basis] ${PANEL_COLLAPSE_TRANSITION_CLASS}`}
+      <>
+        {canToggle && togglePortalTarget
+          ? createPortal(
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={RIGHT_PANEL_TOGGLE_CLASS}
+                    aria-label={
+                      isOpen ? "Hide right panel" : "Show right panel"
+                    }
+                    aria-pressed={isOpen}
+                    onClick={toggleRightPanel}
+                  >
+                    <Icon name="PanelRight" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isOpen ? "Hide right panel" : "Show right panel"}
+                </TooltipContent>
+              </Tooltip>,
+              togglePortalTarget,
+            )
+          : null}
+        <div
+          className={`flex h-full min-h-0 min-w-0 flex-1 overflow-hidden ${flushPageInsets ? "-m-4 md:-m-5" : ""}`}
+        >
+          {renderAsDrawer ? (
+            children
+          ) : (
+            <PanelGroup
+              direction="horizontal"
+              className="@container h-full min-w-0 flex-1"
+              style={{ overflow: "clip" }}
             >
-              {children}
-            </Panel>
-            {rightPanelMarkup}
-          </PanelGroup>
-        )}
-        {renderAsDrawer ? (
-          <PersistentResponsiveDrawerShell
-            open={isOpen}
-            onOpenChange={(open) => {
-              if (!open) setCompactDrawerOpen(false);
-            }}
-            srLabel="Right panel"
-            contentClassName="h-[92dvh] max-h-[92dvh]"
-            onContentAnimationEnd={handleDrawerContentAnimationEnd}
-          >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {isPanelRealized ? rightPanelMarkup : null}
-            </div>
-          </PersistentResponsiveDrawerShell>
-        ) : null}
-      </div>
+              <Panel
+                id={`plugin-panel-main-${pluginId}-${panelPath}`}
+                defaultSize={isOpen ? 65 : 100}
+                minSize={MAIN_PANEL_MIN_SIZE_PERCENT}
+                order={1}
+                className={`min-w-0 overflow-clip transition-[flex-grow,flex-basis] ${PANEL_COLLAPSE_TRANSITION_CLASS}`}
+              >
+                {children}
+              </Panel>
+              {rightPanelMarkup}
+            </PanelGroup>
+          )}
+          {renderAsDrawer ? (
+            <PersistentResponsiveDrawerShell
+              open={isOpen}
+              onOpenChange={(open) => {
+                if (!open) setCompactDrawerOpen(false);
+              }}
+              srLabel="Right panel"
+              contentClassName="h-[92dvh] max-h-[92dvh]"
+              onContentAnimationEnd={handleDrawerContentAnimationEnd}
+            >
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {isPanelRealized ? rightPanelMarkup : null}
+              </div>
+            </PersistentResponsiveDrawerShell>
+          ) : null}
+        </div>
+      </>
     </PluginRightPanelNavigationProvider>
   );
 }

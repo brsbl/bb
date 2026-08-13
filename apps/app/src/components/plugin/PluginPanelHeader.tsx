@@ -2,9 +2,10 @@ import { Component, type ReactNode } from "react";
 import type { PluginNavPanelSlot } from "@/lib/plugin-slots";
 import { PluginIcon } from "./PluginIcon";
 import { PluginContext } from "./plugin-context";
-import { PluginPanelRightPanelToggleButton } from "./PluginPanelRightPanelHost";
-import { getPluginPanelRightPanelStateId } from "./PluginPanelRightPanelHost";
-import { PluginRightPanelNavigationBridgeProvider } from "./plugin-right-panel-navigation";
+import {
+  getPluginPanelRightPanelStateId,
+  PluginRightPanelNavigationBridgeProvider,
+} from "./plugin-right-panel-navigation";
 import { useOptionalPaneContext } from "@/views/thread-detail/PaneContext";
 
 /**
@@ -107,9 +108,7 @@ export function PluginPanelHeaderActions({
           </PluginRightPanelNavigationBridgeProvider>
         </HeaderContentBoundary>
       )}
-      {hasRightPanel ? (
-        <PluginPanelRightPanelToggleButton panel={panel} paneId={paneId} />
-      ) : null}
+      {hasRightPanel ? <div data-plugin-right-panel-toggle-portal="" /> : null}
     </div>
   );
 }

@@ -15,6 +15,18 @@ export type PluginRightPanelOpenHandler = (
 const PluginRightPanelNavigationContext =
   createContext<PluginRightPanelOpenHandler | null>(null);
 
+export function getPluginPanelRightPanelStateId({
+  panelPath,
+  paneId,
+  pluginId,
+}: {
+  panelPath: string;
+  paneId?: string;
+  pluginId: string;
+}): string {
+  return `plugin-panel:${pluginId}:${panelPath}:${paneId ?? "standalone"}`;
+}
+
 const registeredOpeners = new Map<
   string,
   Map<symbol, PluginRightPanelOpenHandler>

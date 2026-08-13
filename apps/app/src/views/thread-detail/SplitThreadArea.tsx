@@ -3,6 +3,8 @@ import { PANE_FOCUS_APP_COMMAND_IDS } from "@bb/domain";
 import { useAtom, useAtomValue, useStore } from "jotai";
 import {
   Fragment,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -11,6 +13,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   type SetStateAction,
 } from "react";
 import { useNavigate } from "react-router-dom";
@@ -71,7 +74,6 @@ import {
 import { ThreadDetailView } from "./ThreadDetailView";
 import { RootComposeView } from "@/views/RootComposeView";
 import { PluginPanelView } from "@/views/PluginPanelView";
-import { PluginPanelRightPanelHost } from "@/components/plugin/PluginPanelRightPanelHost";
 import {
   AppPageHeader,
   HEADER_ICON_BUTTON_CLASS,
@@ -115,6 +117,32 @@ import {
 import { PaneMaximizeButton } from "./PaneMaximizeButton";
 import { SplitDimmingButton } from "./SplitDimmingButton";
 import { wsManager } from "@/lib/ws";
+
+const LazyPluginPanelRightPanelHost = lazy(() =>
+  import("@/components/plugin/PluginPanelRightPanelHost").then(
+    ({ PluginPanelRightPanelHost }) => ({ default: PluginPanelRightPanelHost }),
+  ),
+);
+
+function PluginPanelRightPanelHostBoundary({
+  children,
+  ...props
+}: {
+  children: ReactNode;
+  flushPageInsets?: boolean;
+  paneId?: string;
+  panelPath: string;
+  pluginId: string;
+  subPath: string;
+}) {
+  return (
+    <Suspense fallback={children}>
+      <LazyPluginPanelRightPanelHost {...props}>
+        {children}
+      </LazyPluginPanelRightPanelHost>
+    </Suspense>
+  );
+}
 
 // A `pointerdown`-relative move threshold before a pane-header drag engages.
 const PANE_DRAG_ENGAGE_DISTANCE_PX = 7;
@@ -1023,7 +1051,7 @@ function StandalonePaneContent({
     />
   );
   return (
-    <PluginPanelRightPanelHost
+    <PluginPanelRightPanelHostBoundary
       flushPageInsets={hasRightPanel}
       pluginId={content.pluginId}
       panelPath={content.panelPath}
@@ -1047,7 +1075,7 @@ function StandalonePaneContent({
       ) : (
         body
       )}
-    </PluginPanelRightPanelHost>
+    </PluginPanelRightPanelHostBoundary>
   );
 }
 
@@ -1229,13 +1257,13 @@ function NonThreadPaneContent({
   );
 
   return content.kind === "plugin-panel" ? (
-    <PluginPanelRightPanelHost
+    <PluginPanelRightPanelHostBoundary
       pluginId={content.pluginId}
       panelPath={content.panelPath}
       subPath={content.subPath}
     >
       {contentMarkup}
-    </PluginPanelRightPanelHost>
+    </PluginPanelRightPanelHostBoundary>
   ) : (
     contentMarkup
   );
