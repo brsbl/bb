@@ -50,6 +50,7 @@ const hostState = vi.hoisted(() => ({
   }>,
   compact: false,
   panelAvailable: true,
+  rightPanelAvailable: true,
   panelOpen: true,
   activeTerminalTab: null as {
     id: string;
@@ -179,29 +180,31 @@ vi.mock("@/lib/plugin-slots", async () => {
               icon: "FileText",
               path: "docs",
               component: () => null,
-              experimental_rightPanel: {
-                views: [
-                  {
-                    id: "navigation",
-                    title: "Navigation",
-                    component: ({
-                      params,
-                      subPath,
-                    }: {
-                      params: unknown;
-                      subPath: string;
-                    }) =>
-                      React.createElement(
-                        "div",
-                        { "data-testid": "custom-view" },
-                        `${subPath}:${JSON.stringify(params)}`,
-                      ),
-                    layout: "flush",
-                  },
-                ],
-                defaultViewId: "navigation",
-                tools: hostState.tools,
-              },
+              experimental_rightPanel: hostState.rightPanelAvailable
+                ? {
+                    views: [
+                      {
+                        id: "navigation",
+                        title: "Navigation",
+                        component: ({
+                          params,
+                          subPath,
+                        }: {
+                          params: unknown;
+                          subPath: string;
+                        }) =>
+                          React.createElement(
+                            "div",
+                            { "data-testid": "custom-view" },
+                            `${subPath}:${JSON.stringify(params)}`,
+                          ),
+                        layout: "flush",
+                      },
+                    ],
+                    defaultViewId: "navigation",
+                    tools: hostState.tools,
+                  }
+                : undefined,
             },
           ]
         : [],
@@ -434,6 +437,7 @@ beforeEach(() => {
   hostState.browserTabs = [];
   hostState.compact = false;
   hostState.panelAvailable = true;
+  hostState.rightPanelAvailable = true;
   hostState.panelOpen = true;
   hostState.activeTerminalTab = null;
   hostState.terminalSessions = undefined;
@@ -813,6 +817,50 @@ describe("PluginPanelRightPanelHost", () => {
         terminalId: "terminal-revoked",
       }),
     );
+  });
+
+  it("clears persisted tabs when the entire right-panel registration is removed", async () => {
+    hostState.rightPanelAvailable = false;
+    render(<HostFixture />);
+
+    const update = updatePanelState.mock.calls[0]?.[0];
+    const browser = browserTab();
+    const terminal = {
+      id: "terminal:terminal-removed",
+      kind: "terminal" as const,
+      terminalId: "terminal-removed",
+      target: { kind: "host_path" as const, hostId: "host-1", cwd: null },
+    };
+    const next = update(
+      createEmptyFixedPanelTabsState({
+        secondary: {
+          tabs: [browser, terminal],
+          activeTabId: terminal.id,
+          isOpen: true,
+        },
+      }),
+    );
+
+    expect(next.secondary).toMatchObject({
+      tabs: [],
+      activeTabId: null,
+      isOpen: false,
+    });
+  });
+
+  it("does not close restored sessions while the plugin slot is still loading", () => {
+    hostState.panelAvailable = false;
+    hostState.activeTerminalTab = {
+      id: "terminal:terminal-restoring",
+      kind: "terminal",
+      terminalId: "terminal-restoring",
+      target: { kind: "host_path", hostId: "host-1", cwd: null },
+    };
+
+    render(<HostFixture />);
+
+    expect(closeTerminalMutate).not.toHaveBeenCalled();
+    expect(updatePanelState).not.toHaveBeenCalled();
   });
 
   it("keeps the Browser deck mounted when the final tab is removed", () => {

@@ -402,25 +402,35 @@ export function PluginPanelRightPanelHost({
   const revokedTerminalIds = useMemo(
     () =>
       panelState.secondary.tabs.flatMap((tab) =>
+        panel !== null &&
         tab.kind === "terminal" &&
         (!rightPanel?.tools?.includes("terminal") || tab.target === undefined)
           ? [tab.terminalId]
           : [],
       ),
-    [panelState.secondary.tabs, rightPanel],
+    [panel, panelState.secondary.tabs, rightPanel],
   );
+  const closedRevokedTerminalIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     for (const terminalId of revokedTerminalIds) {
+      if (closedRevokedTerminalIdsRef.current.has(terminalId)) continue;
+      closedRevokedTerminalIdsRef.current.add(terminalId);
       closeTerminal.mutate({ mode: "force", terminalId });
+    }
+    for (const terminalId of closedRevokedTerminalIdsRef.current) {
+      if (!revokedTerminalIds.includes(terminalId)) {
+        closedRevokedTerminalIdsRef.current.delete(terminalId);
+      }
     }
   }, [closeTerminal, revokedTerminalIds]);
 
   useEffect(() => {
-    if (panel === null || rightPanel === undefined) return;
+    if (panel === null) return;
     updatePanelState((state) => {
       const hadRegisteredTabs = state.secondary.tabs.length > 0;
       const reconciled = reconcilePluginRightPanelState(state, panel);
+      if (rightPanel === undefined) return reconciled;
       return ensurePluginRightPanelDefaultView(
         reconciled,
         panel,
