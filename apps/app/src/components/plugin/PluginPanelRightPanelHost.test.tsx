@@ -420,10 +420,12 @@ function NavigationProbe({ url }: { url: string }) {
 }
 
 function HostFixture({
+  flushPageInsets = false,
   paneContext = basePaneContext,
   subPath = "",
   url = "https://example.com",
 }: {
+  flushPageInsets?: boolean;
   paneContext?: PaneContextValue;
   subPath?: string;
   url?: string;
@@ -435,6 +437,7 @@ function HostFixture({
           pluginId="docs"
           panelPath="docs"
           subPath={subPath}
+          flushPageInsets={flushPageInsets}
         >
           <PluginSlotMount pluginId="docs" slotKind="test" slotId="browser">
             <NavigationProbe url={url} />
@@ -478,6 +481,16 @@ afterEach(() => {
 });
 
 describe("PluginPanelRightPanelHost", () => {
+  it("extends flushed panel seams through both page insets", () => {
+    const view = render(<HostFixture flushPageInsets />);
+    const host = view.container.firstElementChild;
+
+    expect(host?.classList.contains("-m-4")).toBe(true);
+    expect(host?.classList.contains("h-[calc(100%+2rem)]")).toBe(true);
+    expect(host?.classList.contains("md:-m-5")).toBe(true);
+    expect(host?.classList.contains("md:h-[calc(100%+2.5rem)]")).toBe(true);
+  });
+
   it("scopes persisted state by owning split pane", () => {
     expect(
       getPluginPanelRightPanelStateId({

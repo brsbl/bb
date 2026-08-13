@@ -366,24 +366,23 @@ export function PluginPanelRightPanelHost({
   const canShowWideNativeBrowserView =
     paneContext === null || !paneContext.isSplitPane || paneContext.isFocused;
   const hasObservedPanelRef = useRef(panel !== null);
-  if (panel !== null) hasObservedPanelRef.current = true;
-  const revokedTerminalTabs = useMemo(
-    () =>
-      panelState.secondary.tabs.flatMap((tab) =>
-        tab.kind === "terminal" &&
-        ((panel === null && hasObservedPanelRef.current) ||
-          (panel !== null &&
-            (!rightPanel?.tools?.includes("terminal") ||
-              tab.target === undefined)))
-          ? [{ tabId: tab.id, terminalId: tab.terminalId }]
-          : [],
-      ),
-    [panel, panelState.secondary.tabs, rightPanel],
-  );
   const closedRevokedTerminalIdsRef = useRef(new Set<string>());
   const closingRevokedTerminalIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
+    if (panel !== null) hasObservedPanelRef.current = true;
+  }, [panel]);
+
+  useEffect(() => {
+    const revokedTerminalTabs = panelState.secondary.tabs.flatMap((tab) =>
+      tab.kind === "terminal" &&
+      ((panel === null && hasObservedPanelRef.current) ||
+        (panel !== null &&
+          (!rightPanel?.tools?.includes("terminal") ||
+            tab.target === undefined)))
+        ? [{ tabId: tab.id, terminalId: tab.terminalId }]
+        : [],
+    );
     for (const { tabId, terminalId } of revokedTerminalTabs) {
       if (
         closedRevokedTerminalIdsRef.current.has(terminalId) ||
@@ -413,7 +412,13 @@ export function PluginPanelRightPanelHost({
         closedRevokedTerminalIdsRef.current.delete(terminalId);
       }
     }
-  }, [closeTab, closeTerminalMutate, revokedTerminalTabs]);
+  }, [
+    closeTab,
+    closeTerminalMutate,
+    panel,
+    panelState.secondary.tabs,
+    rightPanel,
+  ]);
 
   useEffect(() => {
     if (panel === null) return;
@@ -655,7 +660,6 @@ export function PluginPanelRightPanelHost({
       return true;
     },
     [
-      activateTab,
       browserTabs,
       createTerminal,
       openPluginPanel,
@@ -917,7 +921,11 @@ export function PluginPanelRightPanelHost({
             )
           : null}
         <div
-          className={`flex h-full min-h-0 min-w-0 flex-1 overflow-hidden ${flushPageInsets ? "-m-4 md:-m-5" : ""}`}
+          className={`flex min-h-0 min-w-0 flex-1 overflow-hidden ${
+            flushPageInsets
+              ? "-m-4 h-[calc(100%+2rem)] md:-m-5 md:h-[calc(100%+2.5rem)]"
+              : "h-full"
+          }`}
         >
           {renderAsDrawer ? (
             children
