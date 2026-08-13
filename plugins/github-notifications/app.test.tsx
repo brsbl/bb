@@ -147,6 +147,15 @@ describe("GitHub Activity panel", () => {
     expect(link.querySelector("svg")?.classList.contains("text-success")).toBe(
       false,
     );
+    const issueLink = screen.getByRole("link", {
+      name: /Issue brsbl\/moss number 7/u,
+    });
+    expect(issueLink.querySelector("svg")?.dataset.icon).toBe("CircleDot");
+    expect(
+      issueLink
+        .querySelector("svg")
+        ?.classList.contains("text-muted-foreground"),
+    ).toBe(true);
     fireEvent.click(link);
     expect(slot.inspection.navigateCalls).toContainEqual({
       method: "experimental_openRightPanel",

@@ -174,7 +174,7 @@ function NotificationLink({ item }: { item: GithubNotificationItem }) {
       </span>
       <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
         <Icon
-          name={item.resourceKind === "pr" ? "GitPullRequest" : "Circle"}
+          name={item.resourceKind === "pr" ? "GitPullRequest" : "CircleDot"}
           aria-hidden
           className="size-3.5 shrink-0 text-muted-foreground"
         />
