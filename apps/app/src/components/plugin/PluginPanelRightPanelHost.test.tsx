@@ -702,7 +702,7 @@ describe("PluginPanelRightPanelHost", () => {
   });
 
   it("opens registered custom views with persisted JSON params", () => {
-    const view = render(<HostFixture />);
+    render(<HostFixture />);
     fireEvent.click(screen.getByRole("button", { name: "Open View" }));
     expect(document.body.dataset.viewRequestAccepted).toBe("true");
     expect(openPluginPanel).toHaveBeenCalledWith({
@@ -732,7 +732,7 @@ describe("PluginPanelRightPanelHost", () => {
   });
 
   it("creates an enabled Terminal and records its target on the panel tab", () => {
-    const view = render(<HostFixture />);
+    render(<HostFixture />);
     fireEvent.click(screen.getByRole("button", { name: "Open Terminal" }));
     expect(document.body.dataset.terminalRequestAccepted).toBe("true");
     expect(createTerminalMutate).toHaveBeenCalledWith(
