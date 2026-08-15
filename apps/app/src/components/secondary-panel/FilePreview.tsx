@@ -36,6 +36,7 @@ import { TruncateStart } from "@/components/ui/truncate-start.js";
 import { usePreferredTheme } from "@/hooks/useTheme";
 import { useResolvedCodeThemePair } from "@/lib/code-theme";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
+import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
 import type {
   FilePreviewLineRange,
   WorkspaceFilePreviewStatusLabel,
@@ -118,6 +119,7 @@ interface FilePreviewHeaderProps {
   path: string;
   copyPath: string | null;
   rawContents: string | null;
+  externalUrl: string | null;
   onOpenInEditor?: (path: string) => void;
   onRefresh?: () => void;
   isRefreshing: boolean;
@@ -234,6 +236,28 @@ const HTML_FILE_PREVIEW_IFRAME_STYLE = {
 const IFRAME_LOADING_INDICATOR_DELAY_MS = 160;
 const FILE_PREVIEW_HEADER_ICON_BUTTON_CLASS =
   "h-5 w-5 rounded-sm p-0 [&_svg]:size-3 max-md:pointer-coarse:h-9 max-md:pointer-coarse:w-9 max-md:pointer-coarse:[&_svg]:size-5";
+
+// The rendered HTML previews (a plain iframe target, or the html kind whose
+// preview tab wraps one) are the only states with a page a browser can open on
+// its own. Everything else is text we render ourselves.
+function getFilePreviewExternalUrl(state: FilePreviewState): string | null {
+  if (state.kind === "iframe") {
+    return state.url;
+  }
+  if (state.kind === "html") {
+    return state.iframe.url;
+  }
+  return null;
+}
+
+// The preview URL is a same-origin app path; the external browser needs the
+// whole address.
+function toAbsolutePreviewUrl(url: string): string {
+  if (typeof window === "undefined") {
+    return url;
+  }
+  return new URL(url, window.location.href).toString();
+}
 
 function getFilePreviewToggleKind(
   state: FilePreviewState,
@@ -451,6 +475,7 @@ export function FilePreview({
   const toggleKind = getFilePreviewToggleKind(state);
   const filePreviewLineRange = getFilePreviewLineRange(state);
   const rawContents = getRawFilePreviewContents(state);
+  const externalUrl = getFilePreviewExternalUrl(state);
   const [viewMode, setViewMode] = useState<FilePreviewViewMode>(
     getInitialFilePreviewViewMode({
       lineRange: filePreviewLineRange,
@@ -517,6 +542,7 @@ export function FilePreview({
           path={path}
           copyPath={copyPath}
           rawContents={rawContents}
+          externalUrl={externalUrl}
           onOpenInEditor={onOpenInEditor}
           onRefresh={onRefresh}
           isRefreshing={isRefreshing}
@@ -624,6 +650,7 @@ function FilePreviewHeader({
   path,
   copyPath,
   rawContents,
+  externalUrl,
   onOpenInEditor,
   onRefresh,
   isRefreshing,
@@ -702,6 +729,35 @@ function FilePreviewHeader({
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   {copyFileContentsLabel}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {externalUrl === null ? null : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      FILE_PREVIEW_HEADER_ICON_BUTTON_CLASS,
+                      "shrink-0 text-muted-foreground hover:bg-state-hover hover:text-foreground",
+                    )}
+                    onClick={() => {
+                      openUrlInExternalBrowser(
+                        toAbsolutePreviewUrl(externalUrl),
+                      );
+                    }}
+                    aria-label="Open in external browser"
+                  >
+                    {/* Globe, not ExternalLink: the neighbouring
+                        OpenInEditorButton already spends ExternalLink on a
+                        different destination. */}
+                    <Icon name="Globe" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Open in external browser
                 </TooltipContent>
               </Tooltip>
             )}

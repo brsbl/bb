@@ -379,6 +379,88 @@ describe("FilePreview", () => {
     });
   });
 
+  it("opens a rendered HTML preview in the external browser", () => {
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+
+    render(
+      <FilePreview
+        path="docs/progress-vis.html"
+        state={{
+          kind: "html",
+          file: { name: "progress-vis.html", contents: "<p>chart</p>" },
+          iframe: {
+            sandbox: "allow-scripts",
+            title: "docs/progress-vis.html",
+            url: "/api/v1/threads/thr_1/worktree/files/docs/progress-vis.html",
+          },
+          lineRange: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open in external browser" }),
+    );
+
+    expect(openSpy).toHaveBeenCalledWith(
+      `${window.location.origin}/api/v1/threads/thr_1/worktree/files/docs/progress-vis.html`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    openSpy.mockRestore();
+  });
+
+  it("hands the desktop shell an absolute preview url", () => {
+    const openExternalUrl = vi.fn();
+    // The desktop main process drops a relative path, so the button has to
+    // resolve the app-relative preview route before handing it over.
+    (window as unknown as { bbDesktop: unknown }).bbDesktop = {
+      openExternalUrl,
+    };
+
+    try {
+      render(
+        <FilePreview
+          path="docs/progress-vis.html"
+          state={{
+            kind: "iframe",
+            sandbox: "allow-scripts",
+            title: "docs/progress-vis.html",
+            url: "/api/v1/threads/thr_1/worktree/files/docs/progress-vis.html",
+          }}
+        />,
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Open in external browser" }),
+      );
+
+      expect(openExternalUrl).toHaveBeenCalledWith(
+        `${window.location.origin}/api/v1/threads/thr_1/worktree/files/docs/progress-vis.html`,
+      );
+    } finally {
+      delete (window as unknown as { bbDesktop?: unknown }).bbDesktop;
+    }
+  });
+
+  it("offers no external browser action for a preview with no rendered page", () => {
+    render(
+      <FilePreview
+        path="README.md"
+        state={{
+          kind: "ready",
+          file: { name: "README.md", contents: "# Preview" },
+          lineRange: null,
+          textPreviewKind: "markdown",
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Open in external browser" }),
+    ).toBeNull();
+  });
+
   it("toggles source line wrap from the header button", async () => {
     render(
       <FilePreview
